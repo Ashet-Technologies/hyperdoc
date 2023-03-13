@@ -206,3 +206,41 @@ test "code block" {
         \\pre "zig" { span "const std = @import(\"std\");" }
     );
 }
+
+test "example document" {
+    try testAcceptDocument(
+        \\hdoc "1.0"
+        \\h1 "intro" "Introduction"
+        \\toc { }
+        \\p {
+        \\  span "Hello, World!\n"
+        \\  link "http://google.com" "Visit Google!"
+        \\  span "\n"
+        \\  emph "This is fat!"
+        \\  span "\n"
+        \\  mono "int main()"
+        \\  span "\n"
+        \\}
+        \\enumerate {
+        \\  p { span "first" }
+        \\  p { span "second" }
+        \\  p { span "third" }
+        \\}
+        \\itemize {
+        \\  p { span "first" }
+        \\  p { span "second" }
+        \\  p { span "third" }
+        \\}
+        \\quote {
+        \\  span "Life is what happens when you're busy making other plans.\n - John Lennon"
+        \\}
+        \\pre "zig" {
+        \\  span "const std = @import(\"std\");\n"
+        \\  span "\n"
+        \\  span "pub fn main() !void {\n"
+        \\  span "    std.debug.print(\"Hello, World!\\n\", .{});\n"
+        \\  span "}\n"
+        \\}
+        \\image "dog.png"
+    );
+}

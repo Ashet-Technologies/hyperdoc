@@ -31,3 +31,17 @@ pre "zig" {
   span "}\n"
 }
 image "dog.png"
+
+h2 "" "Nested lists"
+itemize {
+  p { span "first" }
+  p { span "second" }
+  itemize {
+    p { span "third.first" }
+    p { span "third.second" }
+  }
+  enumerate {
+    p { span "fourth.first" }
+    p { span "fourth.second" }
+  }
+}

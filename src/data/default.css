@@ -1,0 +1,40 @@
+* {
+  box-sizing: border-box;
+}
+
+
+body {
+  max-width: 60em;
+  margin-left: auto;
+  margin-right: auto;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+blockquote {
+  margin: 0;
+  padding: 0.5em;
+  border-left: 4px solid green;
+  background: rgba(0.7, 0.7, 0.7, 17%);
+}
+
+pre {
+  padding: 0.5em;
+  border: 3px solid black;
+  font-family: 'Courier New', Courier, monospace
+}
+
+ol,
+ul {
+  margin: 0;
+  padding: 0;
+  padding-left: 1em;
+}
+
+em {
+  font-style: normal;
+  font-weight: bold;
+}
+
+code {
+  font-family: 'Courier New', Courier, monospace
+}

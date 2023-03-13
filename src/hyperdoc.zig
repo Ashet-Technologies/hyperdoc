@@ -75,6 +75,7 @@ pub const Link = struct {
     text: []const u8,
 };
 
+/// Parses a HyperDoc document.
 pub fn parse(allocator: std.mem.Allocator, plain_text: []const u8) !Document {
     var arena = std.heap.ArenaAllocator.init(allocator);
     errdefer arena.deinit();
@@ -128,21 +129,26 @@ const Parser = struct {
     }
 
     const Identifier = enum {
+        // management
         hdoc,
+
+        // blocks
         h1,
         h2,
         h3,
         toc,
         p,
-        span,
-        link,
-        emph,
-        mono,
         enumerate,
         itemize,
         quote,
         pre,
         image,
+
+        // spans
+        span,
+        link,
+        emph,
+        mono,
     };
     fn acceptIdentifier(parser: *Parser) !Identifier {
         var tok = try parser.accept(.identifier);
