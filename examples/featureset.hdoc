@@ -8,7 +8,6 @@ p {
   emph "This is fat!"
   span "\n"
   mono "int main()"
-  span "\n"
 }
 enumerate {
   p { span "first" }
