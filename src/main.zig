@@ -24,11 +24,28 @@ pub fn main() !u8 {
         return 1;
     }
 
+    var error_location: hdoc.ErrorLocation = undefined;
+
     var document: hdoc.Document = blk: {
         const source_text = try std.fs.cwd().readFileAlloc(allocator, cli.positionals[0], 512 << 20); // 512MB
         defer allocator.free(source_text);
 
-        break :blk try hdoc.parse(allocator, source_text);
+        break :blk hdoc.parse(allocator, source_text, &error_location) catch |err| {
+            error_location.source = cli.positionals[0];
+            std.log.err("{}: Failed to parse document: {s}", .{
+                error_location,
+                switch (err) {
+                    error.InvalidFormat => "not a HyperDocument file",
+                    error.InvalidVersion => "unsupported file version",
+                    error.UnexpectedToken, error.InvalidIdentifier, error.UnexpectedCharacter, error.InvalidTopLevelItem, error.InvalidSpan => "syntax error",
+                    error.OutOfMemory => "out of memory",
+                    error.EndOfFile => "unexpected end of file",
+                    error.InvalidEscapeSequence => "illegal escape sequence",
+                    // else => |e|   @errorName(e),
+                },
+            });
+            return 1;
+        };
     };
     defer document.deinit();
 
@@ -49,7 +66,6 @@ pub fn main() !u8 {
     return 0;
 }
 
-
 const TargetFormat = enum {
     hdoc,
     html,
@@ -64,6 +80,7 @@ const CliOptions = struct {
     pub const shorthands = .{
         .h = "help",
         .f = "format",
+        .o = "output",
     };
 };
 

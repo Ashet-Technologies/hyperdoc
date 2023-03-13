@@ -75,8 +75,10 @@ pub const Link = struct {
     text: []const u8,
 };
 
+pub const ErrorLocation = parser_toolkit.Location;
+
 /// Parses a HyperDoc document.
-pub fn parse(allocator: std.mem.Allocator, plain_text: []const u8) !Document {
+pub fn parse(allocator: std.mem.Allocator, plain_text: []const u8, error_location: ?*ErrorLocation) !Document {
     var arena = std.heap.ArenaAllocator.init(allocator);
     errdefer arena.deinit();
 
@@ -85,6 +87,10 @@ pub fn parse(allocator: std.mem.Allocator, plain_text: []const u8) !Document {
     var parser = Parser{
         .allocator = arena.allocator(),
         .core = ParserCore.init(&tokenizer),
+    };
+
+    defer if (error_location) |err| {
+        err.* = tokenizer.current_location;
     };
 
     const root_id = parser.acceptIdentifier() catch return error.InvalidFormat;
