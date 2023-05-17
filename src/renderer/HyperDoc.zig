@@ -120,24 +120,23 @@ fn renderSpan(file: std.fs.File, span: hdoc.Span, indent: usize) !void {
     }
 }
 
-fn escape(string: []const u8) HtmlEscaper {
-    return HtmlEscaper{ .string = string };
+fn escape(string: []const u8) HDocEscaper {
+    return HDocEscaper{ .string = string };
 }
 
-const HtmlEscaper = struct {
+const HDocEscaper = struct {
     string: []const u8,
 
-    pub fn format(html: HtmlEscaper, fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+    pub fn format(html: HDocEscaper, fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt;
         _ = options;
         for (html.string) |char| {
             switch (char) {
-                '&' => try writer.writeAll("&amp;"),
-                '<' => try writer.writeAll("&lt;"),
-                '>' => try writer.writeAll("&gt;"),
-                '\"' => try writer.writeAll("&quot;"),
-                '\'' => try writer.writeAll("&#39;"),
-                '\n' => try writer.writeAll("<br/>"),
+                '\n' => try writer.writeAll("\\n"),
+                '\r' => try writer.writeAll("\\r"),
+                '\x1B' => try writer.writeAll("\\e"),
+                '\'' => try writer.writeAll("\\\'"),
+                '\"' => try writer.writeAll("\\\""),
                 else => try writer.writeByte(char),
             }
         }

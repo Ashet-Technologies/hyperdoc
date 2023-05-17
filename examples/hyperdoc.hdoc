@@ -17,26 +17,27 @@ p {
   span "The following blocks types are available:"
 }
 itemize {
-  p { mono "h1" span ", " mono "h2" span ", " mono "h3" span " - First, second and third level headings" }
-  p { mono "toc" span " - A table of contents" }
-  p { mono "p" span " - A regular, plain text paragraph" }
-  p { mono "quote" span " - A block quote" }
-  p { mono "enumerate" span " - An ordered list, using numbering" }
-  p { mono "itemize" span " - An unordered list, using bullet points" }
-  p { mono "pre" span " - A preformatted block of text, optionally with a language tag" }
-  p { mono "image" span " - A picture that is inserted into the document." }
+  item { p { mono "h1" span ", " mono "h2" span ", " mono "h3" span " - First, second and third level headings" } }
+  item { p { mono "toc" span " - A table of contents" } }
+  item { p { mono "p" span " - A regular, plain text paragraph" } }
+  item { p { mono "quote" span " - A block quote" } }
+  item { p { mono "enumerate" span " - An ordered list, using numbering" } }
+  item { p { mono "itemize" span " - An unordered list, using bullet points" } }
+  item { p { mono "pre" span " - A preformatted block of text, optionally with a language tag" } }
+  item { p { mono "image" span " - A picture that is inserted into the document." } }
 }
 p {
   span "The " mono "p" span ", " mono "quote" span " and " mono "pre" span " blocks contain a sequence of non-nested spans. "
   span "The following span types are available:"
 }
 itemize {
-  p { mono "span" span " - Regular, unformatted plain text" }
-  p { mono "emph" span " - Emphasises text" }
-  p { mono "mono" span " - Monospaced font" }
-  p { mono "link" span " - Plain text with a hyperlink." }
+  item { p { mono "span" span " - Regular, unformatted plain text" } }
+  item { p { mono "emph" span " - Emphasises text" } }
+  item { p { mono "mono" span " - Monospaced font" } }
+  item { p { mono "link" span " - Plain text with a hyperlink." } }
 }
 
 p {
-  span "The blocks " mono "enumerate" span " and " mono "itemize" span " contain a nested sequence of blocks."
+  span "The blocks " mono "enumerate" span " and " mono "itemize" span " contain elements of type " mono "item" span ".\n"
+  span "Each of those items contain a list of blocks."
 }

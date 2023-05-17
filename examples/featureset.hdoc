@@ -15,14 +15,14 @@ p {
 
 h3 "" "Lists"
 enumerate {
-  p { span "first" }
-  p { span "second" }
-  p { span "third" }
+  item { p { span "first" } }
+  item { p { span "second" } }
+  item { p { span "third" } }
 }
 itemize {
-  p { span "first" }
-  p { span "second" }
-  p { span "third" }
+  item { p { span "first" } }
+  item { p { span "second" } }
+  item { p { span "third" } }
 }
 
 h3 "" "Block Quote"
@@ -42,39 +42,39 @@ image "dog.png"
 
 h2 "" "Nested lists"
 itemize {
-  p { span "first" }
-  p { span "second" }
-  itemize {
-    p { span "third.first" }
-    p { span "third.second" }
-  }
-  enumerate {
-    p { span "fourth.first" }
-    p { span "fourth.second" }
-  }
+  item { p { span "first" } }
+  item { p { span "second" } }
+  item { itemize {
+    item { p { span "third.first" } }
+    item { p { span "third.second" } }
+  } }
+  item {enumerate {
+    item { p { span "fourth.first" } }
+    item { p { span "fourth.second" } }
+  } }
 }
 
 enumerate {
-  p { span "Item 1" }
-  p { span "Item 2" }
-  p { span "Item 3" }
-  p { span "Item 4" }
-  p { span "Item 5" }
-  p { span "Item 6" }
-  p { span "Item 7" }
-  p { span "Item 8" }
-  p { span "Item 9" }
+  item { p { span "Item 1" } }
+  item { p { span "Item 2" } }
+  item { p { span "Item 3" } }
+  item { p { span "Item 4" } }
+  item { p { span "Item 5" } }
+  item { p { span "Item 6" } }
+  item { p { span "Item 7" } }
+  item { p { span "Item 8" } }
+  item { p { span "Item 9" } }
 }
 
 enumerate {
-  p { span "Item 1" }
-  p { span "Item 2" }
-  p { span "Item 3" }
-  p { span "Item 4" }
-  p { span "Item 5" }
-  p { span "Item 6" }
-  p { span "Item 7" }
-  p { span "Item 8" }
-  p { span "Item 9" }
-  p { span "Item 10" }
+  item { p { span "Item 1" } }
+  item { p { span "Item 2" } }
+  item { p { span "Item 3" } }
+  item { p { span "Item 4" } }
+  item { p { span "Item 5" } }
+  item { p { span "Item 6" } }
+  item { p { span "Item 7" } }
+  item { p { span "Item 8" } }
+  item { p { span "Item 9" } }
+  item { p { span "Item 10" } }
 }
