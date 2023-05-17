@@ -20,8 +20,8 @@ pub const Document = struct {
 /// from the full document size.
 pub const Block = union(enum) {
     paragraph: Paragraph,
-    ordered_list: []Block,
-    unordered_list: []Block,
+    ordered_list: []Item,
+    unordered_list: []Item,
     quote: Paragraph,
     preformatted: CodeBlock,
     image: Image,
@@ -32,6 +32,11 @@ pub const Block = union(enum) {
 /// A paragraph is a sequence of spans.
 pub const Paragraph = struct {
     contents: []Span,
+};
+
+/// A list item is a sequence of blocks
+pub const Item = struct {
+    contents: []Block,
 };
 
 /// A code block is a paragraph with a programming language attachment
@@ -155,6 +160,9 @@ const Parser = struct {
         link,
         emph,
         mono,
+
+        // list of blocks
+        item,
     };
     fn acceptIdentifier(parser: *Parser) !Identifier {
         var tok = try parser.accept(.identifier);
@@ -281,12 +289,33 @@ const Parser = struct {
 
                 .enumerate, .itemize => {
                     try parser.consume(.@"{");
-                    const list = try parser.acceptBlockSequence(.@"}");
+
+                    var list = std.ArrayList(Item).init(parser.allocator);
+                    defer list.deinit();
+
+                    while (true) {
+                        if (parser.consume(.@"}")) |_| {
+                            break;
+                        } else |_| {}
+
+                        const ident = try parser.acceptIdentifier();
+                        if (ident != .item) {
+                            return error.UnexpectedToken;
+                        }
+
+                        try parser.consume(.@"{");
+
+                        const sequence = try parser.acceptBlockSequence(.@"}");
+
+                        try list.append(Item{
+                            .contents = sequence,
+                        });
+                    }
 
                     try seq.append(if (id == .enumerate)
-                        Block{ .ordered_list = list }
+                        Block{ .ordered_list = try list.toOwnedSlice() }
                     else
-                        Block{ .unordered_list = list });
+                        Block{ .unordered_list = try list.toOwnedSlice() });
                 },
 
                 .image => {
@@ -296,7 +325,7 @@ const Parser = struct {
                     } });
                 },
 
-                .hdoc, .link, .emph, .mono, .span => return error.InvalidTopLevelItem,
+                .item, .hdoc, .link, .emph, .mono, .span => return error.InvalidTopLevelItem,
             }
         }
 
@@ -316,7 +345,7 @@ const Parser = struct {
                 return error.UnexpectedToken;
 
             switch (id) {
-                .toc, .h1, .h2, .h3, .p, .quote, .pre, .enumerate, .itemize, .image, .hdoc => return error.InvalidSpan,
+                .item, .toc, .h1, .h2, .h3, .p, .quote, .pre, .enumerate, .itemize, .image, .hdoc => return error.InvalidSpan,
 
                 .span => {
                     const text = try parser.acceptText();

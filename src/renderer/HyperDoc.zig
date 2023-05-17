@@ -8,13 +8,13 @@ pub fn render(file: std.fs.File, document: hdoc.Document) !void {
     try renderBlocks(file, document, document.contents, 0);
 }
 
-fn renderBlocks(file: std.fs.File, document: hdoc.Document, blocks: []const hdoc.Block, indent: usize) !void {
+fn renderBlocks(file: std.fs.File, document: hdoc.Document, blocks: []const hdoc.Block, indent: usize) std.fs.File.Writer.Error!void {
     for (blocks) |block| {
         try renderBlock(file, document, block, indent);
     }
 }
 
-fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block, indent: usize) !void {
+fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block, indent: usize) std.fs.File.Writer.Error!void {
     const writer = file.writer();
     try writer.writeByteNTimes(' ', 2 * indent);
     switch (block) {
@@ -28,7 +28,13 @@ fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block, in
         .ordered_list => |content| {
             try writer.writeAll("enumerate {\n");
             for (content) |item| {
-                try renderBlock(file, document, item, indent + 1);
+                try writer.writeByteNTimes(' ', 2 * indent + 2);
+                try writer.writeAll("item {\n");
+
+                try renderBlocks(file, document, item.contents, indent + 2);
+
+                try writer.writeByteNTimes(' ', 2 * indent + 2);
+                try writer.writeAll("}\n");
             }
             try writer.writeByteNTimes(' ', 2 * indent);
             try writer.writeAll("}\n");
@@ -37,7 +43,13 @@ fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block, in
         .unordered_list => |content| {
             try writer.writeAll("itemize {\n");
             for (content) |item| {
-                try renderBlock(file, document, item, indent + 1);
+                try writer.writeByteNTimes(' ', 2 * indent + 2);
+                try writer.writeAll("item {\n");
+
+                try renderBlocks(file, document, item.contents, indent + 2);
+
+                try writer.writeByteNTimes(' ', 2 * indent + 2);
+                try writer.writeAll("}\n");
             }
             try writer.writeByteNTimes(' ', 2 * indent);
             try writer.writeAll("}\n");

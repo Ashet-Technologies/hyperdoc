@@ -25,13 +25,13 @@ pub fn render(file: std.fs.File, document: hdoc.Document) !void {
     );
 }
 
-fn renderBlocks(file: std.fs.File, document: hdoc.Document, blocks: []const hdoc.Block) !void {
+fn renderBlocks(file: std.fs.File, document: hdoc.Document, blocks: []const hdoc.Block) std.fs.File.Writer.Error!void {
     for (blocks) |block| {
         try renderBlock(file, document, block);
     }
 }
 
-fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block) !void {
+fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block) std.fs.File.Writer.Error!void {
     const writer = file.writer();
     switch (block) {
         .paragraph => |content| {
@@ -44,7 +44,7 @@ fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block) !v
             try writer.writeAll("<ol>\n");
             for (content) |item| {
                 try writer.writeAll("<li>");
-                try renderBlock(file, document, item);
+                try renderBlocks(file, document, item.contents);
                 try writer.writeAll("</li>\n");
             }
             try writer.writeAll("</ol>\n");
@@ -54,7 +54,7 @@ fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block) !v
             try writer.writeAll("<ul>\n");
             for (content) |item| {
                 try writer.writeAll("<li>");
-                try renderBlock(file, document, item);
+                try renderBlocks(file, document, item.contents);
                 try writer.writeAll("</li>\n");
             }
             try writer.writeAll("</ul>\n");

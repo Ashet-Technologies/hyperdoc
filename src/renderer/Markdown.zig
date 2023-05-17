@@ -5,13 +5,13 @@ pub fn render(file: std.fs.File, document: hdoc.Document) !void {
     try renderBlocks(file, document, document.contents);
 }
 
-fn renderBlocks(file: std.fs.File, document: hdoc.Document, blocks: []const hdoc.Block) !void {
+fn renderBlocks(file: std.fs.File, document: hdoc.Document, blocks: []const hdoc.Block) std.fs.File.Writer.Error!void {
     for (blocks) |block| {
         try renderBlock(file, document, block);
     }
 }
 
-fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block) !void {
+fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block) std.fs.File.Writer.Error!void {
     const writer = file.writer();
     switch (block) {
         .paragraph => |content| {
@@ -22,14 +22,14 @@ fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block) !v
         .ordered_list => |content| {
             for (content) |item| {
                 try writer.writeAll("- ");
-                try renderBlock(file, document, item);
+                try renderBlocks(file, document, item.contents);
             }
         },
 
         .unordered_list => |content| {
             for (content, 1..) |item, index| {
                 try writer.print("{}. ", .{index});
-                try renderBlock(file, document, item);
+                try renderBlocks(file, document, item.contents);
             }
         },
 

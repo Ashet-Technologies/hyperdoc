@@ -105,9 +105,9 @@ test "ordered lists" {
     try testAcceptDocument(
         \\hdoc "1.0"
         \\enumerate {
-        \\  toc {}
-        \\  toc {}
-        \\  toc {}
+        \\  item { toc {} }
+        \\  item { toc {} }
+        \\  item { toc {} }
         \\}
     );
 }
@@ -116,9 +116,9 @@ test "unordered lists" {
     try testAcceptDocument(
         \\hdoc "1.0"
         \\itemize {
-        \\  toc {}
-        \\  toc {}
-        \\  toc {}
+        \\  item { toc {} } 
+        \\  item { toc {} } 
+        \\  item { toc {} } 
         \\}
     );
 }
@@ -127,11 +127,11 @@ test "nested lists" {
     try testAcceptDocument(
         \\hdoc "1.0"
         \\enumerate {
-        \\  itemize { }
-        \\  enumerate { }
-        \\  toc { }
-        \\  itemize { toc { } }
-        \\  enumerate { toc { } }
+        \\  item { itemize { } }
+        \\  item { enumerate { } }
+        \\  item { toc { } }
+        \\  item { itemize { item { toc { } } } }
+        \\  item { enumerate { item { toc { } } } }
         \\}
     );
 }
@@ -222,14 +222,14 @@ test "example document" {
         \\  span "\n"
         \\}
         \\enumerate {
-        \\  p { span "first" }
-        \\  p { span "second" }
-        \\  p { span "third" }
+        \\  item { p { span "first" } }
+        \\  item { p { span "second" } }
+        \\  item { p { span "third" } }
         \\}
         \\itemize {
-        \\  p { span "first" }
-        \\  p { span "second" }
-        \\  p { span "third" }
+        \\  item { p { span "first" } }
+        \\  item { p { span "second" } }
+        \\  item { p { span "third" } }
         \\}
         \\quote {
         \\  span "Life is what happens when you're busy making other plans.\n - John Lennon"
