@@ -24,9 +24,9 @@ pub fn build(b: *std.Build) void {
     exe.addModule("hyperdoc", hyperdoc);
     exe.addModule("args", args.module("args"));
 
-    exe.install();
+    b.installArtifact(exe);
 
-    const run_cmd = exe.run();
+    const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |arg| {
         run_cmd.addArgs(arg);
@@ -44,5 +44,5 @@ pub fn build(b: *std.Build) void {
     exe_tests.addModule("hyperdoc", hyperdoc);
 
     const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&exe_tests.step);
+    test_step.dependOn(&b.addRunArtifact(exe_tests).step);
 }

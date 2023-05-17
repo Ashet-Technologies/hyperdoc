@@ -1,6 +1,9 @@
 hdoc "1.0"
 h1 "intro" "Introduction"
 toc { }
+h2 "" "Basic Features"
+
+h3 "" "Spans"
 p {
   span "Hello, World!\n"
   link "http://google.com" "Visit Google!"
@@ -9,6 +12,8 @@ p {
   span "\n"
   mono "int main()"
 }
+
+h3 "" "Lists"
 enumerate {
   p { span "first" }
   p { span "second" }
@@ -19,15 +24,19 @@ itemize {
   p { span "second" }
   p { span "third" }
 }
+
+h3 "" "Block Quote"
 quote {
   span "Life is what happens when you're busy making other plans.\n - John Lennon"
 }
+
+h3 "" "Code Example"
 pre "zig" {
   span "const std = @import(\"std\");\n"
   span "\n"
   span "pub fn main() !void {\n"
   span "    std.debug.print(\"Hello, World!\\n\", .{});\n"
-  span "}\n"
+  span "}"
 }
 image "dog.png"
 
@@ -43,4 +52,29 @@ itemize {
     p { span "fourth.first" }
     p { span "fourth.second" }
   }
+}
+
+enumerate {
+  p { span "Item 1" }
+  p { span "Item 2" }
+  p { span "Item 3" }
+  p { span "Item 4" }
+  p { span "Item 5" }
+  p { span "Item 6" }
+  p { span "Item 7" }
+  p { span "Item 8" }
+  p { span "Item 9" }
+}
+
+enumerate {
+  p { span "Item 1" }
+  p { span "Item 2" }
+  p { span "Item 3" }
+  p { span "Item 4" }
+  p { span "Item 5" }
+  p { span "Item 6" }
+  p { span "Item 7" }
+  p { span "Item 8" }
+  p { span "Item 9" }
+  p { span "Item 10" }
 }
