@@ -39,14 +39,14 @@ p {
   span "\n"
 }
 enumerate {
-  p { span "first" }
-  p { span "second" }
-  p { span "third" }
+  item { p { span "first" } }
+  item { p { span "second" } }
+  item { p { span "third" } }
 }
-items {
-  p { span "first" }
-  p { span "second" }
-  p { span "third" }
+itemize {
+  item { p { span "first" } }
+  item { p { span "second" } }
+  item { p { span "third" } }
 }
 quote {
   span "Life is what happens when you're busy making other plans.\n - John Lennon"

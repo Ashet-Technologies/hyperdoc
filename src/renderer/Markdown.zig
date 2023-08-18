@@ -96,6 +96,7 @@ fn renderSpan(file: std.fs.File, span: hdoc.Span) !void {
         },
     }
 }
+
 fn escapeMd(string: []const u8) MarkdownEscaper {
     return MarkdownEscaper{ .string = string };
 }
