@@ -7,22 +7,23 @@ pub fn build(b: *std.Build) void {
     const parser_toolkit = b.dependency("parser_toolkit", .{});
     const args = b.dependency("args", .{});
 
-    const hyperdoc = b.addModule("hyperdoc", .{
-        .source_file = .{ .path = "src/hyperdoc.zig" },
-        .dependencies = &.{
-            .{ .name = "parser-toolkit", .module = parser_toolkit.module("parser-toolkit") },
+    const hyperdoc = b.addModule(
+        "hyperdoc",
+        .{
+            .root_source_file = b.path("src/hyperdoc.zig"),
         },
-    });
+    );
+    hyperdoc.addImport("parser-toolkit", parser_toolkit.module("parser-toolkit"));
 
     const exe = b.addExecutable(.{
         .name = "hyperdoc",
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    exe.addModule("hyperdoc", hyperdoc);
-    exe.addModule("args", args.module("args"));
+    exe.root_module.addImport("hyperdoc", hyperdoc);
+    exe.root_module.addImport("args", args.module("args"));
 
     b.installArtifact(exe);
 
@@ -36,12 +37,12 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run_cmd.step);
 
     const exe_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/testsuite.zig" },
+        .root_source_file = b.path("src/testsuite.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    exe_tests.addModule("hyperdoc", hyperdoc);
+    exe_tests.root_module.addImport("hyperdoc", hyperdoc);
 
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&b.addRunArtifact(exe_tests).step);
