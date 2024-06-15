@@ -126,10 +126,10 @@ const Parser = struct {
     }
 
     fn accept(parser: *Parser, token_type: TokenType) !Token {
-        var state = parser.save();
+        const state = parser.save();
         errdefer parser.restore(state);
 
-        var token = (try parser.core.nextToken()) orelse return error.EndOfFile;
+        const token = (try parser.core.nextToken()) orelse return error.EndOfFile;
         if (token.type != token_type)
             return error.UnexpectedToken;
         return token;
@@ -165,7 +165,7 @@ const Parser = struct {
         item,
     };
     fn acceptIdentifier(parser: *Parser) !Identifier {
-        var tok = try parser.accept(.identifier);
+        const tok = try parser.accept(.identifier);
         return std.meta.stringToEnum(Identifier, tok.text) orelse return error.InvalidIdentifier;
     }
 
