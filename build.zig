@@ -1,8 +1,17 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
+    // Options:
+
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+
+    // Targets:
+
+    const run_step = b.step("run", "Run the app");
+    const test_step = b.step("test", "Run unit tests");
+
+    // Build:
 
     const parser_toolkit = b.dependency("parser_toolkit", .{});
     const args = b.dependency("args", .{});
@@ -33,7 +42,6 @@ pub fn build(b: *std.Build) void {
         run_cmd.addArgs(arg);
     }
 
-    const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
     const exe_tests = b.addTest(.{
@@ -44,6 +52,5 @@ pub fn build(b: *std.Build) void {
 
     exe_tests.root_module.addImport("hyperdoc", hyperdoc);
 
-    const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&b.addRunArtifact(exe_tests).step);
 }
