@@ -1,77 +1,86 @@
 const std = @import("std");
 const hdoc = @import("hyperdoc");
 
-pub fn render(file: std.fs.File, document: hdoc.Document) !void {
-    const writer = file.writer();
+pub const WriteError = std.Io.Writer.Error;
 
+pub fn render(writer: *std.Io.Writer, document: hdoc.Document) WriteError!void {
     try writer.writeAll("hdoc \"1.0\"\n");
-    try renderBlocks(file, document, document.contents, 0);
+    try renderBlocks(writer, document, document.contents, 0);
 }
 
-fn renderBlocks(file: std.fs.File, document: hdoc.Document, blocks: []const hdoc.Block, indent: usize) std.fs.File.Writer.Error!void {
+fn renderBlocks(
+    writer: *std.Io.Writer,
+    document: hdoc.Document,
+    blocks: []const hdoc.Block,
+    indent: usize,
+) WriteError!void {
     for (blocks) |block| {
-        try renderBlock(file, document, block, indent);
+        try renderBlock(writer, document, block, indent);
     }
 }
 
-fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block, indent: usize) std.fs.File.Writer.Error!void {
-    const writer = file.writer();
-    try writer.writeByteNTimes(' ', 2 * indent);
+fn renderBlock(
+    writer: *std.Io.Writer,
+    document: hdoc.Document,
+    block: hdoc.Block,
+    indent: usize,
+) WriteError!void {
+    try writer.splatByteAll(' ', 2 * indent);
     switch (block) {
         .paragraph => |content| {
             try writer.writeAll("p {\n");
-            try renderSpans(file, content.contents, indent + 1);
-            try writer.writeByteNTimes(' ', 2 * indent);
+            try renderSpans(writer, content.contents, indent + 1);
+            try writer.splatByteAll(' ', 2 * indent);
             try writer.writeAll("}\n");
         },
 
         .ordered_list => |content| {
             try writer.writeAll("enumerate {\n");
             for (content) |item| {
-                try writer.writeByteNTimes(' ', 2 * indent + 2);
+                try writer.splatByteAll(' ', 2 * indent + 2);
                 try writer.writeAll("item {\n");
 
-                try renderBlocks(file, document, item.contents, indent + 2);
+                try renderBlocks(writer, document, item.contents, indent + 2);
 
-                try writer.writeByteNTimes(' ', 2 * indent + 2);
+                try writer.splatByteAll(' ', 2 * indent + 2);
                 try writer.writeAll("}\n");
             }
-            try writer.writeByteNTimes(' ', 2 * indent);
+            try writer.splatByteAll(' ', 2 * indent);
             try writer.writeAll("}\n");
         },
 
         .unordered_list => |content| {
             try writer.writeAll("itemize {\n");
             for (content) |item| {
-                try writer.writeByteNTimes(' ', 2 * indent + 2);
+                try writer.splatByteAll(' ', 2 * indent + 2);
                 try writer.writeAll("item {\n");
 
-                try renderBlocks(file, document, item.contents, indent + 2);
+                try renderBlocks(writer, document, item.contents, indent + 2);
 
-                try writer.writeByteNTimes(' ', 2 * indent + 2);
+                try writer.splatByteAll(' ', 2 * indent + 2);
                 try writer.writeAll("}\n");
             }
-            try writer.writeByteNTimes(' ', 2 * indent);
+            try writer.splatByteAll(' ', 2 * indent);
             try writer.writeAll("}\n");
         },
 
         .quote => |content| {
             try writer.writeAll("quote {\n");
-            try renderSpans(file, content.contents, indent + 1);
-            try writer.writeByteNTimes(' ', 2 * indent);
+            try renderSpans(writer, content.contents, indent + 1);
+            try writer.splatByteAll(' ', 2 * indent);
             try writer.writeAll("}\n");
         },
 
         .preformatted => |content| {
-            try writer.print("pre \"{}\" {{\n", .{
+            try writer.print("pre \"{f}\" {{\n", .{
                 escape(content.language),
             });
-            try renderSpans(file, content.contents, indent + 1);
-            try writer.writeByteNTimes(' ', 2 * indent);
+            try renderSpans(writer, content.contents, indent + 1);
+            try writer.splatByteAll(' ', 2 * indent);
             try writer.writeAll("}\n");
         },
         .image => |content| {
-            try writer.print("image \"{}\"\n", .{
+            try writer.print("image \"{f}\"\n", .{
                 escape(content.path),
             });
         },
@@ -81,7 +90,7 @@ fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block, in
                 .chapter => "h2",
                 .section => "h3",
             });
-            try writer.print(" \"{}\" \"{}\"\n", .{
+            try writer.print(" \"{f}\" \"{f}\"\n", .{
                 escape(content.anchor),
                 escape(content.title),
             });
@@ -92,27 +101,34 @@ fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block, in
     }
 }
 
-fn renderSpans(file: std.fs.File, spans: []const hdoc.Span, indent: usize) !void {
+fn renderSpans(
+    writer: *std.Io.Writer,
+    spans: []const hdoc.Span,
+    indent: usize,
+) WriteError!void {
     for (spans) |span| {
-        try renderSpan(file, span, indent);
+        try renderSpan(writer, span, indent);
     }
 }
 
-fn renderSpan(file: std.fs.File, span: hdoc.Span, indent: usize) !void {
-    const writer = file.writer();
-    try writer.writeByteNTimes(' ', 2 * indent);
+fn renderSpan(
+    writer: *std.Io.Writer,
+    span: hdoc.Span,
+    indent: usize,
+) WriteError!void {
+    try writer.splatByteAll(' ', 2 * indent);
     switch (span) {
         .text => |val| {
-            try writer.print("span \"{}\"\n", .{escape(val)});
+            try writer.print("span \"{f}\"\n", .{escape(val)});
         },
         .emphasis => |val| {
-            try writer.print("emph \"{}\"\n", .{escape(val)});
+            try writer.print("emph \"{f}\"\n", .{escape(val)});
         },
         .monospace => |val| {
-            try writer.print("mono \"{}\"\n", .{escape(val)});
+            try writer.print("mono \"{f}\"\n", .{escape(val)});
         },
         .link => |val| {
-            try writer.print("link \"{}\" \"{}\"\n", .{
+            try writer.print("link \"{f}\" \"{f}\"\n", .{
                 escape(val.href),
                 escape(val.text),
             });
@@ -121,15 +137,13 @@ fn renderSpan(file: std.fs.File, span: hdoc.Span, indent: usize) !void {
 }
 
 fn escape(string: []const u8) HDocEscaper {
-    return HDocEscaper{ .string = string };
+    return .{ .string = string };
 }
 
 const HDocEscaper = struct {
     string: []const u8,
 
-    pub fn format(html: HDocEscaper, fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt;
-        _ = options;
+    pub fn format(html: HDocEscaper, writer: *std.Io.Writer) !void {
         for (html.string) |char| {
             switch (char) {
                 '\n' => try writer.writeAll("\\n"),

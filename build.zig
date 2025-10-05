@@ -13,7 +13,7 @@ pub fn build(b: *std.Build) void {
 
     // Build:
 
-    const parser_toolkit = b.dependency("parser_toolkit", .{});
+    const pt_dep = b.dependency("parser_toolkit", .{});
     const args = b.dependency("args", .{});
 
     const hyperdoc = b.addModule(
@@ -22,13 +22,15 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/hyperdoc.zig"),
         },
     );
-    hyperdoc.addImport("parser-toolkit", parser_toolkit.module("parser-toolkit"));
+    hyperdoc.addImport("parser-toolkit", pt_dep.module("parser-toolkit"));
 
     const exe = b.addExecutable(.{
         .name = "hyperdoc",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
 
     exe.root_module.addImport("hyperdoc", hyperdoc);
@@ -45,9 +47,11 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run_cmd.step);
 
     const exe_tests = b.addTest(.{
-        .root_source_file = b.path("src/testsuite.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/testsuite.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
 
     exe_tests.root_module.addImport("hyperdoc", hyperdoc);

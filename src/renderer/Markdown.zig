@@ -1,47 +1,56 @@
 const std = @import("std");
 const hdoc = @import("hyperdoc");
 
-pub fn render(file: std.fs.File, document: hdoc.Document) !void {
-    try renderBlocks(file, document, document.contents);
+const WriteError = std.Io.Writer.Error;
+
+pub fn render(writer: *std.Io.Writer, document: hdoc.Document) WriteError!void {
+    try renderBlocks(writer, document, document.contents);
 }
 
-fn renderBlocks(file: std.fs.File, document: hdoc.Document, blocks: []const hdoc.Block) std.fs.File.Writer.Error!void {
+fn renderBlocks(
+    writer: *std.Io.Writer,
+    document: hdoc.Document,
+    blocks: []const hdoc.Block,
+) WriteError!void {
     for (blocks) |block| {
-        try renderBlock(file, document, block);
+        try renderBlock(writer, document, block);
     }
 }
 
-fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block) std.fs.File.Writer.Error!void {
-    const writer = file.writer();
+fn renderBlock(
+    writer: *std.Io.Writer,
+    document: hdoc.Document,
+    block: hdoc.Block,
+) WriteError!void {
     switch (block) {
         .paragraph => |content| {
-            try renderSpans(file, content.contents);
+            try renderSpans(writer, content.contents);
             try writer.writeAll("\n\n");
         },
 
         .ordered_list => |content| {
             for (content) |item| {
                 try writer.writeAll("- ");
-                try renderBlocks(file, document, item.contents);
+                try renderBlocks(writer, document, item.contents);
             }
         },
 
         .unordered_list => |content| {
             for (content, 1..) |item, index| {
                 try writer.print("{}. ", .{index});
-                try renderBlocks(file, document, item.contents);
+                try renderBlocks(writer, document, item.contents);
             }
         },
 
         .quote => |content| {
             try writer.writeAll("> ");
-            try renderSpans(file, content.contents);
+            try renderSpans(writer, content.contents);
             try writer.writeAll("\n\n");
         },
 
         .preformatted => |content| {
             try writer.print("```{s}\n", .{content.language});
-            try renderSpans(file, content.contents);
+            try renderSpans(writer, content.contents);
             try writer.writeAll("```\n\n");
         },
         .image => |content| {
@@ -57,7 +66,7 @@ fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block) st
                 std.log.warn("anchor not supported in markdown!", .{});
             }
 
-            try writer.print("{}\n\n", .{escapeMd(content.title)});
+            try writer.print("{f}\n\n", .{escapeMd(content.title)});
         },
         .table_of_contents => |content| {
             // TODO: Render TOC
@@ -66,30 +75,32 @@ fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block) st
     }
 }
 
-fn renderSpans(file: std.fs.File, spans: []const hdoc.Span) !void {
+fn renderSpans(
+    writer: *std.Io.Writer,
+    spans: []const hdoc.Span,
+) WriteError!void {
     for (spans) |span| {
-        try renderSpan(file, span);
+        try renderSpan(writer, span);
     }
 }
 
-fn renderSpan(file: std.fs.File, span: hdoc.Span) !void {
-    const writer = file.writer();
+fn renderSpan(writer: *std.Io.Writer, span: hdoc.Span) WriteError!void {
     switch (span) {
         .text => |val| {
-            try writer.print("{}", .{escapeMd(val)});
+            try writer.print("{f}", .{escapeMd(val)});
         },
         .emphasis => |val| {
             try writer.writeAll("**");
-            try writer.print("{}", .{escapeMd(val)});
+            try writer.print("{f}", .{escapeMd(val)});
             try writer.writeAll("**");
         },
         .monospace => |val| {
             try writer.writeAll("`");
-            try writer.print("{}", .{escapeMd(val)});
+            try writer.print("{f}", .{escapeMd(val)});
             try writer.writeAll("`");
         },
         .link => |val| {
-            try writer.print("[{}]({s})", .{
+            try writer.print("[{f}]({s})", .{
                 escapeMd(val.text),
                 val.href,
             });
@@ -98,15 +109,13 @@ fn renderSpan(file: std.fs.File, span: hdoc.Span) !void {
 }
 
 fn escapeMd(string: []const u8) MarkdownEscaper {
-    return MarkdownEscaper{ .string = string };
+    return .{ .string = string };
 }
 
 const MarkdownEscaper = struct {
     string: []const u8,
 
-    pub fn format(html: MarkdownEscaper, fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt;
-        _ = options;
+    pub fn format(html: MarkdownEscaper, writer: *std.Io.Writer) !void {
         for (html.string) |char| {
             switch (char) {
                 '&' => try writer.writeAll("&amp;"),
