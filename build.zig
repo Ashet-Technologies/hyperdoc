@@ -31,6 +31,7 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         }),
+        .use_llvm = true,
     });
 
     exe.root_module.addImport("hyperdoc", hyperdoc);
@@ -52,6 +53,7 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         }),
+        .use_llvm = true,
     });
 
     exe_tests.root_module.addImport("hyperdoc", hyperdoc);
