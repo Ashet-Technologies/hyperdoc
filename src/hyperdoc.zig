@@ -83,15 +83,19 @@ pub const Link = struct {
 pub const ErrorLocation = parser_toolkit.Location;
 
 /// Parses a HyperDoc document.
-pub fn parse(allocator: std.mem.Allocator, plain_text: []const u8, error_location: ?*ErrorLocation) !Document {
+pub fn parse(
+    allocator: std.mem.Allocator,
+    plain_text: []const u8,
+    error_location: ?*ErrorLocation,
+) !Document {
     var arena = std.heap.ArenaAllocator.init(allocator);
     errdefer arena.deinit();
 
-    var tokenizer = Tokenizer.init(plain_text, null);
+    var tokenizer: Tokenizer = .init(plain_text, null);
 
-    var parser = Parser{
+    var parser: Parser = .{
         .allocator = arena.allocator(),
-        .core = ParserCore.init(&tokenizer),
+        .core = .init(&tokenizer),
     };
 
     defer if (error_location) |err| {
@@ -179,17 +183,18 @@ const Parser = struct {
 
         const string_body = text[1 .. text.len - 1];
 
-        var temp_string = std.ArrayList(u8).init(parser.allocator);
-        defer temp_string.deinit();
+        const allocator = parser.allocator;
+        var temp_string: std.ArrayList(u8) = .empty;
+        defer temp_string.deinit(allocator);
 
-        try temp_string.ensureTotalCapacity(string_body.len);
+        try temp_string.ensureTotalCapacity(allocator, string_body.len);
 
         {
             var i: usize = 0;
             while (i < string_body.len) {
                 const c = string_body[i];
                 if (c != '\\') {
-                    try temp_string.append(c);
+                    try temp_string.append(allocator, c);
                     i += 1;
                     continue;
                 }
@@ -199,29 +204,30 @@ const Parser = struct {
                 const selector = string_body[i];
                 i += 1;
                 switch (selector) {
-                    'n' => try temp_string.append('\n'),
-                    'r' => try temp_string.append('\r'),
-                    'e' => try temp_string.append('\x1B'),
+                    'n' => try temp_string.append(allocator, '\n'),
+                    'r' => try temp_string.append(allocator, '\r'),
+                    'e' => try temp_string.append(allocator, '\x1B'),
 
                     // TODO: Implement the following cases:
                     // '\xFF'
                     // '\u{ABCD}'
 
                     else => {
-                        try temp_string.append(selector);
+                        try temp_string.append(allocator, selector);
                     },
                 }
             }
         }
 
-        return try temp_string.toOwnedSlice();
+        return try temp_string.toOwnedSlice(allocator);
     }
 
     const BlockSequenceTerminator = enum { @"}", eof };
 
     fn acceptBlockSequence(parser: *Parser, terminator: BlockSequenceTerminator) ![]Block {
-        var seq = std.ArrayList(Block).init(parser.allocator);
-        defer seq.deinit();
+        const allocator = parser.allocator;
+        var seq: std.ArrayList(Block) = .empty;
+        defer seq.deinit(allocator);
 
         accept_loop: while (true) {
             const id = switch (terminator) {
@@ -243,14 +249,14 @@ const Parser = struct {
                 .toc => {
                     try parser.consume(.@"{");
                     try parser.consume(.@"}");
-                    try seq.append(.table_of_contents);
+                    try seq.append(allocator, .table_of_contents);
                 },
 
                 .h1, .h2, .h3 => {
                     const anchor = try parser.acceptText();
                     const title = try parser.acceptText();
 
-                    try seq.append(Block{
+                    try seq.append(allocator, .{
                         .heading = .{
                             .level = switch (id) {
                                 .h1 => .document,
@@ -268,10 +274,10 @@ const Parser = struct {
                     try parser.consume(.@"{");
                     const items = try parser.acceptSpanSequence();
 
-                    try seq.append(if (id == .p)
-                        Block{ .paragraph = .{ .contents = items } }
+                    try seq.append(allocator, if (id == .p)
+                        .{ .paragraph = .{ .contents = items } }
                     else
-                        Block{ .quote = .{ .contents = items } });
+                        .{ .quote = .{ .contents = items } });
                 },
 
                 .pre => {
@@ -279,8 +285,8 @@ const Parser = struct {
                     try parser.consume(.@"{");
                     const items = try parser.acceptSpanSequence();
 
-                    try seq.append(Block{
-                        .preformatted = CodeBlock{
+                    try seq.append(allocator, .{
+                        .preformatted = .{
                             .language = language,
                             .contents = items,
                         },
@@ -290,8 +296,8 @@ const Parser = struct {
                 .enumerate, .itemize => {
                     try parser.consume(.@"{");
 
-                    var list = std.ArrayList(Item).init(parser.allocator);
-                    defer list.deinit();
+                    var list: std.ArrayList(Item) = .empty;
+                    defer list.deinit(allocator);
 
                     while (true) {
                         if (parser.consume(.@"}")) |_| {
@@ -307,34 +313,45 @@ const Parser = struct {
 
                         const sequence = try parser.acceptBlockSequence(.@"}");
 
-                        try list.append(Item{
+                        try list.append(allocator, .{
                             .contents = sequence,
                         });
                     }
 
-                    try seq.append(if (id == .enumerate)
-                        Block{ .ordered_list = try list.toOwnedSlice() }
+                    const list_slice = try list.toOwnedSlice(allocator);
+
+                    try seq.append(allocator, if (id == .enumerate)
+                        .{ .ordered_list = list_slice }
                     else
-                        Block{ .unordered_list = try list.toOwnedSlice() });
+                        .{ .unordered_list = list_slice });
                 },
 
                 .image => {
                     const file_path = try parser.acceptText();
-                    try seq.append(Block{ .image = .{
-                        .path = file_path,
-                    } });
+                    try seq.append(allocator, .{
+                        .image = .{
+                            .path = file_path,
+                        },
+                    });
                 },
 
-                .item, .hdoc, .link, .emph, .mono, .span => return error.InvalidTopLevelItem,
+                .item,
+                .hdoc,
+                .link,
+                .emph,
+                .mono,
+                .span,
+                => return error.InvalidTopLevelItem,
             }
         }
 
-        return try seq.toOwnedSlice();
+        return try seq.toOwnedSlice(allocator);
     }
 
     fn acceptSpanSequence(parser: *Parser) ![]Span {
-        var seq = std.ArrayList(Span).init(parser.allocator);
-        defer seq.deinit();
+        const allocator = parser.allocator;
+        var seq: std.ArrayList(Span) = .empty;
+        defer seq.deinit(allocator);
 
         accept_loop: while (true) {
             const id = if (parser.acceptIdentifier()) |id|
@@ -345,33 +362,47 @@ const Parser = struct {
                 return error.UnexpectedToken;
 
             switch (id) {
-                .item, .toc, .h1, .h2, .h3, .p, .quote, .pre, .enumerate, .itemize, .image, .hdoc => return error.InvalidSpan,
+                .item,
+                .toc,
+                .h1,
+                .h2,
+                .h3,
+                .p,
+                .quote,
+                .pre,
+                .enumerate,
+                .itemize,
+                .image,
+                .hdoc,
+                => return error.InvalidSpan,
 
                 .span => {
                     const text = try parser.acceptText();
-                    try seq.append(Span{ .text = text });
+                    try seq.append(allocator, .{ .text = text });
                 },
                 .emph => {
                     const text = try parser.acceptText();
-                    try seq.append(Span{ .emphasis = text });
+                    try seq.append(allocator, .{ .emphasis = text });
                 },
                 .mono => {
                     const text = try parser.acceptText();
-                    try seq.append(Span{ .monospace = text });
+                    try seq.append(allocator, .{ .monospace = text });
                 },
 
                 .link => {
                     const href = try parser.acceptText();
                     const text = try parser.acceptText();
-                    try seq.append(Span{ .link = .{
-                        .href = href,
-                        .text = text,
-                    } });
+                    try seq.append(allocator, .{
+                        .link = .{
+                            .href = href,
+                            .text = text,
+                        },
+                    });
                 },
             }
         }
 
-        return try seq.toOwnedSlice();
+        return try seq.toOwnedSlice(allocator);
     }
 };
 
@@ -382,7 +413,13 @@ const Pattern = parser_toolkit.Pattern(TokenType);
 const Token = Tokenizer.Token;
 
 const Tokenizer = parser_toolkit.Tokenizer(TokenType, &[_]Pattern{
-    Pattern.create(.comment, parser_toolkit.matchers.withPrefix("#", parser_toolkit.matchers.takeNoneOf("\n"))),
+    Pattern.create(
+        .comment,
+        parser_toolkit.matchers.withPrefix(
+            "#",
+            parser_toolkit.matchers.takeNoneOf("\n"),
+        ),
+    ),
 
     Pattern.create(.@"{", parser_toolkit.matchers.literal("{")),
     Pattern.create(.@"}", parser_toolkit.matchers.literal("}")),

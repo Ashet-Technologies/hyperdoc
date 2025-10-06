@@ -1,9 +1,9 @@
 const std = @import("std");
 const hdoc = @import("hyperdoc");
 
-pub fn render(file: std.fs.File, document: hdoc.Document) !void {
-    const writer = file.writer();
+pub const WriteError = std.Io.Writer.Error;
 
+pub fn render(writer: *std.Io.Writer, document: hdoc.Document) WriteError!void {
     try writer.writeAll(
         \\<!doctype html>
         \\<head>
@@ -17,7 +17,7 @@ pub fn render(file: std.fs.File, document: hdoc.Document) !void {
         \\<body>
     );
 
-    try renderBlocks(file, document, document.contents);
+    try renderBlocks(writer, document, document.contents);
 
     try writer.writeAll(
         \\</body>
@@ -25,18 +25,25 @@ pub fn render(file: std.fs.File, document: hdoc.Document) !void {
     );
 }
 
-fn renderBlocks(file: std.fs.File, document: hdoc.Document, blocks: []const hdoc.Block) std.fs.File.Writer.Error!void {
+fn renderBlocks(
+    writer: *std.Io.Writer,
+    document: hdoc.Document,
+    blocks: []const hdoc.Block,
+) WriteError!void {
     for (blocks) |block| {
-        try renderBlock(file, document, block);
+        try renderBlock(writer, document, block);
     }
 }
 
-fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block) std.fs.File.Writer.Error!void {
-    const writer = file.writer();
+fn renderBlock(
+    writer: *std.Io.Writer,
+    document: hdoc.Document,
+    block: hdoc.Block,
+) WriteError!void {
     switch (block) {
         .paragraph => |content| {
             try writer.writeAll("<p>");
-            try renderSpans(file, content.contents);
+            try renderSpans(writer, content.contents);
             try writer.writeAll("</p>\n");
         },
 
@@ -44,7 +51,7 @@ fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block) st
             try writer.writeAll("<ol>\n");
             for (content) |item| {
                 try writer.writeAll("<li>");
-                try renderBlocks(file, document, item.contents);
+                try renderBlocks(writer, document, item.contents);
                 try writer.writeAll("</li>\n");
             }
             try writer.writeAll("</ol>\n");
@@ -54,7 +61,7 @@ fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block) st
             try writer.writeAll("<ul>\n");
             for (content) |item| {
                 try writer.writeAll("<li>");
-                try renderBlocks(file, document, item.contents);
+                try renderBlocks(writer, document, item.contents);
                 try writer.writeAll("</li>\n");
             }
             try writer.writeAll("</ul>\n");
@@ -62,7 +69,7 @@ fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block) st
 
         .quote => |content| {
             try writer.writeAll("<blockquote>");
-            try renderSpans(file, content.contents);
+            try renderSpans(writer, content.contents);
             try writer.writeAll("</blockquote>\n");
         },
 
@@ -72,7 +79,7 @@ fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block) st
             } else {
                 try writer.writeAll("<pre>");
             }
-            try renderSpans(file, content.contents);
+            try renderSpans(writer, content.contents);
             try writer.writeAll("</pre>\n");
         },
         .image => |content| {
@@ -89,7 +96,7 @@ fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block) st
             }
             try writer.writeAll(">");
 
-            try writer.print("{}", .{escapeHtml(content.title)});
+            try writer.print("{f}", .{escapeHtml(content.title)});
 
             try writer.writeAll(switch (content.level) {
                 .document => "</h1>\n",
@@ -104,30 +111,32 @@ fn renderBlock(file: std.fs.File, document: hdoc.Document, block: hdoc.Block) st
     }
 }
 
-fn renderSpans(file: std.fs.File, spans: []const hdoc.Span) !void {
+fn renderSpans(
+    writer: *std.Io.Writer,
+    spans: []const hdoc.Span,
+) WriteError!void {
     for (spans) |span| {
-        try renderSpan(file, span);
+        try renderSpan(writer, span);
     }
 }
 
-fn renderSpan(file: std.fs.File, span: hdoc.Span) !void {
-    const writer = file.writer();
+fn renderSpan(writer: *std.Io.Writer, span: hdoc.Span) WriteError!void {
     switch (span) {
         .text => |val| {
-            try writer.print("{}", .{escapeHtml(val)});
+            try writer.print("{f}", .{escapeHtml(val)});
         },
         .emphasis => |val| {
             try writer.writeAll("<em>");
-            try writer.print("{}", .{escapeHtml(val)});
+            try writer.print("{f}", .{escapeHtml(val)});
             try writer.writeAll("</em>");
         },
         .monospace => |val| {
             try writer.writeAll("<code>");
-            try writer.print("{}", .{escapeHtml(val)});
+            try writer.print("{f}", .{escapeHtml(val)});
             try writer.writeAll("</code>");
         },
         .link => |val| {
-            try writer.print("<a href=\"{s}\">{}</a>", .{
+            try writer.print("<a href=\"{s}\">{f}</a>", .{
                 val.href,
                 escapeHtml(val.text),
             });
@@ -136,15 +145,13 @@ fn renderSpan(file: std.fs.File, span: hdoc.Span) !void {
 }
 
 fn escapeHtml(string: []const u8) HtmlEscaper {
-    return HtmlEscaper{ .string = string };
+    return .{ .string = string };
 }
 
 const HtmlEscaper = struct {
     string: []const u8,
 
-    pub fn format(html: HtmlEscaper, fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt;
-        _ = options;
+    pub fn format(html: HtmlEscaper, writer: *std.Io.Writer) !void {
         for (html.string) |char| {
             switch (char) {
                 '&' => try writer.writeAll("&amp;"),
