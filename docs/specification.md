@@ -24,8 +24,8 @@ p(id="foo") {
 p {
   This paragraph contains \em{inline} formatting. We don't support \strike{bold} or \strike{italic} as it's a stylistic choice.
   Other formatting we have is \mono{monospaced}, superscript (x\sup{2}) and subscript(x\sub{2}).
-  We can also \link(ref="foo"){link to other parts of a document) or \link(url="https://ashet.computer"){to websites}.
-  With \mono(lang="c"){int *value = 10;} we can also have language information and potential syntax highlighting attached to monospaced font.
+  We can also \link(ref="foo"){link to other parts of a document} or \link(url="https://ashet.computer"){to websites}.
+  With \mono(syntax="c"){int *value = 10;} we can also have language information and potential syntax highlighting attached to monospaced font.
 }
 
 h2{Special Paragraphs}
@@ -47,7 +47,7 @@ p:
 | Literal lines don't perform any parsing, so they don't require any escaping of characters.
 | This is really useful for code blocks:
 
-pre(lang="c"):
+pre(syntax="c"):
 | #include <stdio.h>
 | int main(int argc, char const * argv[]) {
 |   printf("Hello, World!\n");
@@ -116,9 +116,9 @@ Short notes on grammar notation:
 - `[ ... ]` is an option
 - `a | b | c` is alternatives
 - `( ... )` is a group
-- `"foo"` is a literal token sequence
+- `"foo"` is a literal token sequence, no escape sequences (So `"\"` is a single backslash)
 - `/.../` is a regex
-- Whitespace is assumed to be ignored unless matched by a literal, so tokens are typically separated by whitespace
+- Whitespace is assumed to be ignored between tokens unless matched by a literal or regex, so tokens are typically separated by whitespace
 - Upper case elements are roughly tokens, while lowercase elements are rules.
 
 ```
@@ -142,6 +142,8 @@ STRING         := /"(\\.|[^"\r\n])*"/
 LITERAL_LINE   := /^\s*\|(.*)$/
 WORD           := /[^\s\{\}\\]+/
 ```
+
+**NOTE:** `list` also allows `block` for `inline` elements, as this enables us to have support for balanced braces without special care. The `block` elements will be flattened when rendering an inline list body into the document.
 
 ## Semantic Structure
 
@@ -306,6 +308,10 @@ This element contains the contents of a table cell.
 
 These elements are all allowed inside a paragraph-like content and can typically be nested.
 
+### Plain Text
+
+This is normal plain text and has no special meaning.
+
 ### Emphasis: `em`
 
 **Nesting:** Yes
@@ -332,7 +338,7 @@ Renders the text with a horizontal line through the text, striking it out.
 
 **Nesting:** Yes
 
-Renders the text a bit smaller and moved upwards (`sub`) or downwards (`sub`) to allow sub- or superscript rendering.
+Renders the text a bit smaller and moved upwards (`sup`) or downwards (`sub`) to allow sub- or superscript rendering.
 
 ### Linking: `link`
 
@@ -345,7 +351,7 @@ Renders the text a bit smaller and moved upwards (`sub`) or downwards (`sub`) to
 
 Adds a hyperlink to the contents. This allows a reader to navigate by typically clicking the link.
 
-### Localized Date/Time: `date`, `time`, `datedate`
+### Localized Date/Time: `date`, `time`, `datetime`
 
 **Nesting:** No
 
