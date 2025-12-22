@@ -19,450 +19,90 @@ pub const Document = struct {
 /// Depending on the level of nesting, the width might decrease
 /// from the full document size.
 pub const Block = union(enum) {
-    paragraph: Paragraph,
-    ordered_list: []Item,
-    unordered_list: []Item,
-    quote: Paragraph,
-    preformatted: CodeBlock,
-    image: Image,
-    heading: Heading,
-    table_of_contents,
+    // TODO
 };
-
-/// A paragraph is a sequence of spans.
-pub const Paragraph = struct {
-    contents: []Span,
-};
-
-/// A list item is a sequence of blocks
-pub const Item = struct {
-    contents: []Block,
-};
-
-/// A code block is a paragraph with a programming language attachment
-pub const CodeBlock = struct {
-    contents: []Span,
-    language: []const u8, // empty=none
-};
-
-/// An image is a block that will display non-text content.
-pub const Image = struct {
-    path: []const u8,
-};
-
-/// A heading is a block that will be rendered in a bigger/different font
-/// and introduces a new section of the document.
-/// It has an anchor that can be referenced.
-pub const Heading = struct {
-    level: Level,
-    title: []const u8,
-    anchor: []const u8,
-
-    pub const Level = enum(u2) {
-        document = 0,
-        chapter = 1,
-        section = 2,
-    };
-};
-
-/// Spans are the building blocks of paragraphs. Each span is
-/// defining a sequence of text with a certain formatting.
-pub const Span = union(enum) {
-    text: []const u8,
-    emphasis: []const u8,
-    monospace: []const u8,
-    link: Link,
-};
-
-/// Links are spans that can refer to other documents or elements.
-pub const Link = struct {
-    href: []const u8,
-    text: []const u8,
-};
-
-pub const ErrorLocation = parser_toolkit.Location;
 
 /// Parses a HyperDoc document.
 pub fn parse(
     allocator: std.mem.Allocator,
+    /// The source code to be parsed
     plain_text: []const u8,
-    error_location: ?*ErrorLocation,
+    /// An optional diagnostics element that receives diagnostic messages like errors and warnings.
+    /// If present, will be filled out by the parser.
+    diagnostics: ?*Diagnostics,
 ) !Document {
     var arena = std.heap.ArenaAllocator.init(allocator);
     errdefer arena.deinit();
 
-    var tokenizer: Tokenizer = .init(plain_text, null);
+    _ = plain_text;
+    _ = diagnostics;
 
-    var parser: Parser = .{
-        .allocator = arena.allocator(),
-        .core = .init(&tokenizer),
-    };
-
-    defer if (error_location) |err| {
-        err.* = tokenizer.current_location;
-    };
-
-    const root_id = parser.acceptIdentifier() catch return error.InvalidFormat;
-    if (root_id != .hdoc)
-        return error.InvalidFormat;
-    const version_number = parser.accept(.text) catch return error.InvalidFormat;
-    if (!std.mem.eql(u8, version_number.text, "\"1.0\""))
-        return error.InvalidVersion;
-
-    const root_elements = try parser.acceptBlockSequence(.eof);
-
-    return Document{
-        .arena = arena,
-        .contents = root_elements,
-    };
+    @panic("TODO: Implement this");
 }
 
-const Parser = struct {
-    allocator: std.mem.Allocator,
-    core: ParserCore,
+/// A diagnostic message.
+pub const Diagnostic = struct {
+    pub const Severity = enum { warning, @"error" };
 
-    fn save(parser: *Parser) Tokenizer.State {
-        return parser.core.saveState();
-    }
-
-    fn restore(parser: *Parser, state: Tokenizer.State) void {
-        return parser.core.restoreState(state);
-    }
-
-    fn accept(parser: *Parser, token_type: TokenType) !Token {
-        const state = parser.save();
-        errdefer parser.restore(state);
-
-        const token = (try parser.core.nextToken()) orelse return error.EndOfFile;
-        if (token.type != token_type)
-            return error.UnexpectedToken;
-        return token;
-    }
-
-    fn consume(parser: *Parser, token_type: TokenType) !void {
-        _ = try parser.accept(token_type);
-    }
-
-    const Identifier = enum {
-        // management
-        hdoc,
-
-        // blocks
-        h1,
-        h2,
-        h3,
-        toc,
-        p,
-        enumerate,
-        itemize,
-        quote,
-        pre,
-        image,
-
-        // spans
-        span,
-        link,
-        emph,
-        mono,
-
-        // list of blocks
-        item,
+    pub const Location = struct {
+        line: u32,
+        column: u32,
     };
-    fn acceptIdentifier(parser: *Parser) !Identifier {
-        const tok = try parser.accept(.identifier);
-        return std.meta.stringToEnum(Identifier, tok.text) orelse return error.InvalidIdentifier;
-    }
 
-    fn acceptText(parser: *Parser) ![]const u8 {
-        const text_tok = try parser.accept(.text);
+    /// An diagnostic code encoded as a 16 bit integer.
+    /// The upper 4 bit encode the severity of the code, the lower 12 bit the number.
+    pub const Code = enum(u16) {
+        // bitmasks:
+        const ERROR = 0x1000;
+        const WARNING = 0x2000;
 
-        const text = text_tok.text;
+        // TODO: Add other diagnostic codes
 
-        std.debug.assert(text.len >= 2);
-        std.debug.assert(text[0] == text[text.len - 1]);
+        // errors:
+        invalid_character = ERROR | 1,
 
-        const string_body = text[1 .. text.len - 1];
+        // warnings:
+        missing_space_in_literal = WARNING | 1,
 
-        const allocator = parser.allocator;
-        var temp_string: std.ArrayList(u8) = .empty;
-        defer temp_string.deinit(allocator);
-
-        try temp_string.ensureTotalCapacity(allocator, string_body.len);
-
-        {
-            var i: usize = 0;
-            while (i < string_body.len) {
-                const c = string_body[i];
-                if (c != '\\') {
-                    try temp_string.append(allocator, c);
-                    i += 1;
-                    continue;
-                }
-                i += 1;
-                if (i >= string_body.len)
-                    return error.InvalidEscapeSequence;
-                const selector = string_body[i];
-                i += 1;
-                switch (selector) {
-                    'n' => try temp_string.append(allocator, '\n'),
-                    'r' => try temp_string.append(allocator, '\r'),
-                    'e' => try temp_string.append(allocator, '\x1B'),
-
-                    // TODO: Implement the following cases:
-                    // '\xFF'
-                    // '\u{ABCD}'
-
-                    else => {
-                        try temp_string.append(allocator, selector);
-                    },
-                }
-            }
-        }
-
-        return try temp_string.toOwnedSlice(allocator);
-    }
-
-    const BlockSequenceTerminator = enum { @"}", eof };
-
-    fn acceptBlockSequence(parser: *Parser, terminator: BlockSequenceTerminator) ![]Block {
-        const allocator = parser.allocator;
-        var seq: std.ArrayList(Block) = .empty;
-        defer seq.deinit(allocator);
-
-        accept_loop: while (true) {
-            const id = switch (terminator) {
-                .@"}" => if (parser.acceptIdentifier()) |id|
-                    id
-                else |_| if (parser.accept(.@"}")) |_|
-                    break :accept_loop
-                else |_|
-                    return error.UnexpectedToken,
-                .eof => if (parser.acceptIdentifier()) |id|
-                    id
-                else |err| switch (err) {
-                    error.EndOfFile => break :accept_loop,
-                    else => |e| return e,
-                },
+        pub fn get_severity(code: Code) Severity {
+            const num = @intFromEnum(code);
+            return switch (num & 0xF000) {
+                ERROR => .@"error",
+                WARNING => .warning,
+                else => @panic("invalid error code!"),
             };
-
-            switch (id) {
-                .toc => {
-                    try parser.consume(.@"{");
-                    try parser.consume(.@"}");
-                    try seq.append(allocator, .table_of_contents);
-                },
-
-                .h1, .h2, .h3 => {
-                    const anchor = try parser.acceptText();
-                    const title = try parser.acceptText();
-
-                    try seq.append(allocator, .{
-                        .heading = .{
-                            .level = switch (id) {
-                                .h1 => .document,
-                                .h2 => .chapter,
-                                .h3 => .section,
-                                else => unreachable,
-                            },
-                            .title = title,
-                            .anchor = anchor,
-                        },
-                    });
-                },
-
-                .p, .quote => {
-                    try parser.consume(.@"{");
-                    const items = try parser.acceptSpanSequence();
-
-                    try seq.append(allocator, if (id == .p)
-                        .{ .paragraph = .{ .contents = items } }
-                    else
-                        .{ .quote = .{ .contents = items } });
-                },
-
-                .pre => {
-                    const language = try parser.acceptText();
-                    try parser.consume(.@"{");
-                    const items = try parser.acceptSpanSequence();
-
-                    try seq.append(allocator, .{
-                        .preformatted = .{
-                            .language = language,
-                            .contents = items,
-                        },
-                    });
-                },
-
-                .enumerate, .itemize => {
-                    try parser.consume(.@"{");
-
-                    var list: std.ArrayList(Item) = .empty;
-                    defer list.deinit(allocator);
-
-                    while (true) {
-                        if (parser.consume(.@"}")) |_| {
-                            break;
-                        } else |_| {}
-
-                        const ident = try parser.acceptIdentifier();
-                        if (ident != .item) {
-                            return error.UnexpectedToken;
-                        }
-
-                        try parser.consume(.@"{");
-
-                        const sequence = try parser.acceptBlockSequence(.@"}");
-
-                        try list.append(allocator, .{
-                            .contents = sequence,
-                        });
-                    }
-
-                    const list_slice = try list.toOwnedSlice(allocator);
-
-                    try seq.append(allocator, if (id == .enumerate)
-                        .{ .ordered_list = list_slice }
-                    else
-                        .{ .unordered_list = list_slice });
-                },
-
-                .image => {
-                    const file_path = try parser.acceptText();
-                    try seq.append(allocator, .{
-                        .image = .{
-                            .path = file_path,
-                        },
-                    });
-                },
-
-                .item,
-                .hdoc,
-                .link,
-                .emph,
-                .mono,
-                .span,
-                => return error.InvalidTopLevelItem,
-            }
         }
+    };
 
-        return try seq.toOwnedSlice(allocator);
-    }
-
-    fn acceptSpanSequence(parser: *Parser) ![]Span {
-        const allocator = parser.allocator;
-        var seq: std.ArrayList(Span) = .empty;
-        defer seq.deinit(allocator);
-
-        accept_loop: while (true) {
-            const id = if (parser.acceptIdentifier()) |id|
-                id
-            else |_| if (parser.accept(.@"}")) |_|
-                break :accept_loop
-            else |_|
-                return error.UnexpectedToken;
-
-            switch (id) {
-                .item,
-                .toc,
-                .h1,
-                .h2,
-                .h3,
-                .p,
-                .quote,
-                .pre,
-                .enumerate,
-                .itemize,
-                .image,
-                .hdoc,
-                => return error.InvalidSpan,
-
-                .span => {
-                    const text = try parser.acceptText();
-                    try seq.append(allocator, .{ .text = text });
-                },
-                .emph => {
-                    const text = try parser.acceptText();
-                    try seq.append(allocator, .{ .emphasis = text });
-                },
-                .mono => {
-                    const text = try parser.acceptText();
-                    try seq.append(allocator, .{ .monospace = text });
-                },
-
-                .link => {
-                    const href = try parser.acceptText();
-                    const text = try parser.acceptText();
-                    try seq.append(allocator, .{
-                        .link = .{
-                            .href = href,
-                            .text = text,
-                        },
-                    });
-                },
-            }
-        }
-
-        return try seq.toOwnedSlice(allocator);
-    }
+    code: Code,
+    location: Location,
+    message: []const u8,
 };
 
-const ParserCore = parser_toolkit.ParserCore(Tokenizer, .{ .whitespace, .comment });
+/// A collection of diagnostic messages.
+pub const Diagnostics = struct {
+    arena: std.heap.ArenaAllocator,
+    items: std.ArrayList(Diagnostic) = .empty,
 
-const Pattern = parser_toolkit.Pattern(TokenType);
+    pub fn init(allocator: std.mem.Allocator) Diagnostic {
+        return .{ .arena = .init(allocator) };
+    }
 
-const Token = Tokenizer.Token;
+    pub fn deinit(diag: *Diagnostics) void {
+        diag.arena.deinit();
+        diag.* = undefined;
+    }
 
-const Tokenizer = parser_toolkit.Tokenizer(TokenType, &[_]Pattern{
-    Pattern.create(
-        .comment,
-        parser_toolkit.matchers.withPrefix(
-            "#",
-            parser_toolkit.matchers.takeNoneOf("\n"),
-        ),
-    ),
+    pub fn add(diag: *Diagnostics, code: Diagnostic.Code, location: Diagnostic.Location, comptime fmt: []const u8, args: anytype) !void {
+        const allocator = diag.arena.allocator();
 
-    Pattern.create(.@"{", parser_toolkit.matchers.literal("{")),
-    Pattern.create(.@"}", parser_toolkit.matchers.literal("}")),
-    Pattern.create(.text, matchStringLiteral('\"')),
+        const msg = try std.fmt.allocPrint(allocator, fmt, args);
+        errdefer allocator.free(msg);
 
-    Pattern.create(.identifier, parser_toolkit.matchers.identifier),
-
-    Pattern.create(.whitespace, parser_toolkit.matchers.whitespace),
-});
-
-fn matchStringLiteral(comptime boundary: u8) parser_toolkit.Matcher {
-    const T = struct {
-        fn match(str: []const u8) ?usize {
-            if (str.len < 2)
-                return null;
-
-            if (str[0] != boundary)
-                return null;
-
-            var i: usize = 1;
-            while (i < str.len) {
-                if (str[i] == boundary)
-                    return i + 1;
-
-                if (str[i] == '\\') {
-                    i += 2; // skip over the escape and the escaped char
-                } else {
-                    i += 1; // just go to the next char
-                }
-            }
-
-            return null;
-        }
-    };
-
-    return T.match;
-}
-
-const TokenType = enum {
-    comment,
-    whitespace,
-    identifier,
-    text,
-    @"{",
-    @"}",
+        try diag.items.append(allocator, .{
+            .location = location,
+            .code = code,
+            .message = msg,
+        });
+    }
 };
