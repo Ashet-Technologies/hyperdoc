@@ -124,23 +124,22 @@ Short notes on grammar notation:
 ```
 document       := HEADER { block }
 
-block          := IDENTIFIER [ attribute_list ] body
+block          := WORD [ attribute_list ] body
 
 body           := list | literal | STRING
 literal        := ":" "\n" { LITERAL_LINE }
 
 list           := "{" { escape | inline | block | WORD } "}"
 escape         := "\\" | "\{" | "\}"
-inline         := "\" IDENTIFIER [ attribute_list ] body
+inline         := "\" WORD [ attribute_list ] body
 
 attribute_list := "(" [ attribute { "," attribute } ] ")"
-attribute      := IDENTIFIER "=" STRING
+attribute      := WORD "=" STRING
 
-IDENTIFIER     := /\b\w+\b/
 HEADER         := /^hdoc\s+"2.0"\s*$/
 STRING         := /"(\\.|[^"\r\n])*"/
 LITERAL_LINE   := /^\s*\|(.*)$/
-WORD           := /[^\s\{\}\\]+/
+WORD           := /[^\s\{\}\\\"(),=:]+/
 ```
 
 **NOTE:** `list` also allows `block` for `inline` elements, as this enables us to have support for balanced braces without special care. The `block` elements will be flattened when rendering an inline list body into the document.
