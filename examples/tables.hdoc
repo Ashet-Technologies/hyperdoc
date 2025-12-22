@@ -1,0 +1,36 @@
+hdoc "2.0"
+
+h1(id="tables") { HyperDoc 2.0 Table Examples }
+
+toc(depth="1") {}
+
+h2(id="table-basic") { Table Structure }
+
+table(id="inventory") {
+  columns {
+    td "Item"
+    td "Quantity"
+    td "Notes"
+  }
+  group { Fresh Produce }
+  row(title="Fruit") {
+    td "Apples"
+    td "12"
+    td { p { Delivered on \date(fmt="short"){2025-02-08}. } }
+  }
+  row(title="Vegetables") {
+    td "Carrots"
+    td "7"
+    td { p { Store at \time(fmt="rough"){08:00:00}. } }
+  }
+  group { Pantry }
+  row(title="Dry Goods") {
+    td "Rice"
+    td "3"
+    td { p { Packed on \datetime(fmt="relative"){2025-02-08T08:00:00Z}. } }
+  }
+  row(title="Bulk") {
+    td(colspan="2") { p { This cell spans two columns. } }
+    td "Requires label"
+  }
+}

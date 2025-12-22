@@ -1,0 +1,83 @@
+hdoc "2.0"
+
+h1(id="intro", lang="en") { HyperDoc 2.0 Examples }
+
+toc(depth="2") {}
+
+h2(id="paragraphs") { Paragraphs and Inline Text }
+
+p(id="p-basic") {
+    This paragraph shows plain text mixed with \em{emphasis}, \strike{strike-through}, and \mono{monospaced} spans.
+}
+
+p(lang="de") {
+    Dieser Absatz zeigt das Attribut \mono{lang} auf Blockebene.
+}
+
+p "This paragraph uses a string literal body instead of a list."
+
+p {
+  Inline scripts support \mono(syntax="zig"){const version = "2.0";} as well as sub/superscripts like H\sub{2}O and x\sup{2}.
+}
+
+p {
+  Links can target \link(ref="fig-diagram"){other blocks} or external \link(url="https://ashet.computer"){resources}.
+}
+
+note    { Notes highlight supportive information. }
+warning { Warnings call out risky behavior. }
+danger  { Danger paragraphs emphasize critical hazards. }
+tip     { Tips provide actionable hints. }
+quote   { Quotes include sourced or emphasized wording. }
+spoiler { Spoilers hide key story information until revealed. }
+
+h2(id="literals") { Literal and Preformatted Blocks }
+
+p:
+| Literal blocks keep exact content and skip parsing, so characters like \{ \} are not special.
+| They are introduced by a trailing colon.
+| You can capture snippets without escaping anything.
+
+pre(id="code-sample", syntax="zig") {
+test {
+    const message = "HyperDoc";
+    const answer = \mono(syntax="zig"){42};
+}
+}
+
+h2(id="lists") { Lists }
+
+ul {
+  li { p { Apples } }
+  li "Bananas"
+  li { p { \em{Cucumbers} with inline markup. } }
+}
+
+ol(first="3") {
+  li { p { Start counting at three. } }
+  li "Continue with a string item."
+  li { p { Finish the sequence. } }
+}
+
+h2(id="media") { Figures }
+
+p {
+  The image below has a caption, alt text, and a relative asset path. 
+}
+
+img(id="fig-diagram", alt="Diagram showing a HyperDoc example", path="./assets/diagram.svg") {
+  HyperDoc is centered inside a rounded rectangle.
+}
+
+h2(id="dates") { Dates and Times }
+
+p {
+  The event was announced on \date(fmt="long"){2025-12-17} at \time(fmt="short"){13:45:00}.
+  A combined timestamp looks like \datetime(fmt="iso"){2025-12-17T13:45:00Z}.
+}
+
+h2(id="table-ref") { Tables }
+
+p {
+  See the dedicated tables example file for row groups and colspan usage.
+}
