@@ -145,6 +145,8 @@ WORD           := /[^\s\{\}\\]+/
 
 **NOTE:** `list` also allows `block` for `inline` elements, as this enables us to have support for balanced braces without special care. The `block` elements will be flattened when rendering an inline list body into the document.
 
+**NOTE:** All attribute values are strings, so numeric-looking values are still expressed as strings (e.g. `depth="1"`).
+
 ## Semantic Structure
 
 All elements have these attributes:
@@ -199,7 +201,7 @@ The type of the paragraph includes a semantic hint:
 
 | Attribute | Function                                                                                                             |
 | --------- | -------------------------------------------------------------------------------------------------------------------- |
-| `first`   | An integer that is the number of the *first* item of the list. Allows paragraph breaks between a single joined list. |
+| `first`   | An integer string that is the number of the *first* item of the list. Allows paragraph breaks between a single joined list. |
 
 ### Figures: `img`
 
@@ -234,7 +236,7 @@ If a pre contains inline elements, these will still be parsed and apply their st
 
 | Attribute | Function                                                                |
 | --------- | ----------------------------------------------------------------------- |
-| `depth`   | `1`, `2` or `3`. Defines how many levels of headings shall be included. |
+| `depth`   | String `1`, `2` or `3`. Defines how many levels of headings shall be included. |
 
 Renders a table of contents for the current document.
 
@@ -261,14 +263,17 @@ will have two identical list items.
 
 ### Tables: `table`
 
-Allowed Items: `columns`, `row`, `group`
+**Allowed Items:** `columns`, `row`, `group`
 
-> TODO: Spec out tables proper.
-> `columns` is basically a `row` with only column headings
-> `row` is just a row with cells
-> all rows must contain the same amount of cell span
-> `group` is a heading for subsequent rows
-> `row.title` attribute is displayed in a column left of the first column, the top-left element is always empty
+Tables are made up of an optional header row (`columns`) followed by a sequence of `row` and `group` elements.
+
+- `columns` defines the header labels and the column count.
+- `row` defines a data row.
+- `group` provides a section heading that applies to subsequent rows until the next group or the end of the table.
+
+All `row` and `columns` elements must resolve to the same number of columns after applying `colspan`.
+If a `row` uses the `title` attribute or a `group` is present, renderers must reserve a leading title column.
+In that case, the header row should have an empty leading cell before the column headers.
 
 ## Table Elements
 
@@ -276,7 +281,7 @@ Allowed Items: `columns`, `row`, `group`
 
 **Allowed Items:** `td`
 
-This element contains cells 
+This element contains the header cells for each column.
 
 ### Rows: `row`
 
@@ -298,15 +303,19 @@ A *row group* is a row that contains a single heading-style cell that labels the
 
 | Attribute | Function                                           |
 | --------- | -------------------------------------------------- |
-| `colspan` | Integer defining how many columns this cell spans. |
+| `colspan` | Integer string defining how many columns this cell spans. |
 
 This element contains the contents of a table cell.
 
-> TODO: Similar to `li`, it can be string or block-sequence.
+Like `li`, a `td` can either contain a single string or a nested block sequence.
 
 ## Inline Text
 
 These elements are all allowed inside a paragraph-like content and can typically be nested.
+
+*Inline Text* can either be a string literal, a literal block or a list.
+
+If the text is a list, it allows the use of inline elements like `\em` or `\mono`.
 
 ### Plain Text
 
@@ -355,25 +364,10 @@ Adds a hyperlink to the contents. This allows a reader to navigate by typically 
 
 **Nesting:** No
 
-Renders a [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601#Combined_date_and_time_representations) date, time or date+time in a localized manner.
+| Element     | Attribute | Function                                                                                                                                          |
+| ----------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `date`      | `fmt`     | `year`, `month`, `day`, `weekday`, `short`, `long`, `relative`.                                                                                    |
+| `time`      | `fmt`     | `short`, `long`, `rough`, `relative`.                                                                                                              |
+| `datetime`  | `fmt`     | `short` (localized date+time), `long` (localized date+time with seconds), `relative`, `iso` (raw ISO 8601). |
 
-> TODO: Add `fmt` attribute:
-> `\date` takes an attribute fmt which can be 
-> - "year" (2025)
-> - "month" (December),
-> - "day" (22th)
-> - "weekday" (monday)
-> - "short" (22.12.2025)
-> - "long" (22th of December 2025)
-> - "relative" (two days ago, two months ago, ...)
->
-> `\time` takes an attribute fmt which can be 
-> - "short" (09:41)
-> - "long" (09:41:25)
-> - "rough" (early morning, morning, noon, afternoon, evening, late in the night, ...)
-> - "relative" (two minutes ago, two days ago, ...)
-> 
-> `\datetime` takes an attribute fmt which can be 
-> - *To be done*
-> - ...
-> 
+Renders a [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601#Combined_date_and_time_representations) date, time or date+time in a localized manner.
