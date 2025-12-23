@@ -1,4 +1,4 @@
-hdoc(version="2.0")
+hdoc(version="2.0");
 
 h1(id="intro", lang="en") { HyperDoc 2.0 Examples }
 

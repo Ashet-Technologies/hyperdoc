@@ -1,4 +1,4 @@
-hdoc "2.0"
+hdoc(version="2.0");
 
 h1(id="tables") { HyperDoc 2.0 Table Examples }
 

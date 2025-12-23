@@ -1,4 +1,4 @@
-hdoc(version="2.0", lang="en", title="HyperDoc \"2.0\" Demonstration");
+hdoc(version="2.0" , lang="en", title="HyperDoc \"2.0\" Demonstration");
 
 h1{HyperDoc 2.0}
 

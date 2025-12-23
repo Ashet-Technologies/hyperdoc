@@ -1,4 +1,4 @@
-hdoc(version="2.0")
+hdoc(version="2.0");
 
 p {
   On Monday at 09:07, the support desk logged a ticket titled "Login loop (again)". The user wrote, "I click

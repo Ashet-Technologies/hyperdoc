@@ -26,7 +26,8 @@ pub fn main() !u8 {
     const document = try std.fs.cwd().readFileAlloc(allocator, path, 1024 * 1024 * 10);
     defer allocator.free(document);
 
-    // TODO: Parse document
+    var parsed = try hdoc.parse(allocator, document, null);
+    defer parsed.deinit();
 
     return 0;
 }
