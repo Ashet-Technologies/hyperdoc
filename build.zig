@@ -41,9 +41,23 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .imports = &.{
-                .{ .name = "hyperdoc", .module = hyperdoc },
+                rawFileMod(b, "examples/tables.hdoc"),
+                rawFileMod(b, "examples/featurematrix.hdoc"),
+                rawFileMod(b, "examples/demo.hdoc"),
+                rawFileMod(b, "examples/guide.hdoc"),
+                rawFileMod(b, "test/parser/stress.hdoc"),
             },
         }),
+        .use_llvm = true,
     });
     test_step.dependOn(&b.addRunArtifact(exe_tests).step);
+}
+
+fn rawFileMod(b: *std.Build, path: []const u8) std.Build.Module.Import {
+    return .{
+        .name = path,
+        .module = b.createModule(.{
+            .root_source_file = b.path(path),
+        }),
+    };
 }

@@ -743,7 +743,7 @@ pub const Diagnostics = struct {
     arena: std.heap.ArenaAllocator,
     items: std.ArrayList(Diagnostic) = .empty,
 
-    pub fn init(allocator: std.mem.Allocator) Diagnostic {
+    pub fn init(allocator: std.mem.Allocator) Diagnostics {
         return .{ .arena = .init(allocator) };
     }
 
@@ -765,3 +765,31 @@ pub const Diagnostics = struct {
         });
     }
 };
+
+test "fuzz parser" {
+    const Impl = struct {
+        fn testOne(impl: @This(), data: []const u8) !void {
+            _ = impl;
+
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+
+            var diagnostics: Diagnostics = .init(std.testing.allocator);
+            defer diagnostics.deinit();
+
+            var doc = parse(std.testing.allocator, data, &diagnostics) catch return;
+            defer doc.deinit();
+        }
+    };
+
+    try std.testing.fuzz(Impl{}, Impl.testOne, .{
+        .corpus = &.{
+            "hdoc(version=\"2.0\");",
+            @embedFile("examples/tables.hdoc"),
+            @embedFile("examples/featurematrix.hdoc"),
+            @embedFile("examples/demo.hdoc"),
+            @embedFile("examples/guide.hdoc"),
+            @embedFile("test/parser/stress.hdoc"),
+        },
+    });
+}
