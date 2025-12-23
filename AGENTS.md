@@ -8,5 +8,5 @@
 - Ensure new tests are added or updated when behavior changes.
 - Run relevant tests (`zig build test`) when making code changes.
 - Run `zig build` to validate the main application still compiles
-- Test `./zig-out/bin/hyperdoc` with the `.hdoc` files in `examples/`.
+- Test `./zig-out/bin/hyperdoc` with the `.hdoc` files in `examples/` and `test/`.
 - Avoid editing documentation unless the request explicitly asks for it.

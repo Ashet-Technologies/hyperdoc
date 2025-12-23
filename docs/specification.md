@@ -7,108 +7,25 @@ It sits somewhat between LaTeX and Markdown and tries to be way simpler to parse
 ## Syntax Overview
 
 ```hdoc
-hdoc "2.0"
+hdoc(version="2.0");
 
-h1{HyperDoc 2.0}
-
-toc{}
-
-h2{Paragraphs}
-
-p { This is a simple paragraph containing text. }
-
-p(id="foo") {
-  This is a paragraph with an attribute "id" with the value "foo".
-}
+h1 "Introduction"
 
 p {
-  This paragraph contains \em{inline} formatting. We don't support \strike{bold} or \strike{italic} as it's a stylistic choice.
-  Other formatting we have is \mono{monospaced}, superscript (x\sup{2}) and subscript(x\sub{2}).
-  We can also \link(ref="foo"){link to other parts of a document} or \link(url="https://ashet.computer"){to websites}.
-  With \mono(syntax="c"){int *value = 10;} we can also have language information and potential syntax highlighting attached to monospaced font.
+  This is my first HyperDoc 2.0 document!
 }
-
-h2{Special Paragraphs}
-
-note    { HyperDoc 2.0 also supports different types of paragraphs. }
-warning { These should affect rendering, and have well-defined semantics attached to them. }
-danger  { You shall not assume any specific formatting of these elements though. }
-tip     { They typically have a standardized style though. }
-quote   { You shall not pass! }
-spoiler { Nobody expects the Spanish Inquisition! }
-
-h2{Literals and Preformatted Text}
-
-p:
-| we can also use literal lines.
-| these are introduced by a trailing colon (':') at the end of a line.
-| each following line that starts with whitespace followed by a pipe character ('|')
-| is then part of the contents.
-| Literal lines don't perform any parsing, so they don't require any escaping of characters.
-| This is really useful for code blocks:
 
 pre(syntax="c"):
 | #include <stdio.h>
-| int main(int argc, char const * argv[]) {
-|   printf("Hello, World!\n");
+| int main(int argc, char *argv[]) {
+|   printf("Hello, World!");
 |   return 0;
 | }
-
-h2{String Literals}
-
-p "It's also possible to use a string literal for bodies if desired."
-
-p { \em "Magic" is a simple way to highlight single words or text with escaping in inlines. }
-
-h2{Images & Figures}
-
-p { We can also add images to our documents: }
-
-img(id="fig1", path="./preview.jpeg") { If this is non-empty, it's a figure caption. }
-
-h2{Lists}
-
-p { Also lists are possible: }
-
-h3{Unordered Lists}
-
-ul {
-  li { p { Apples } }
-  li { p { Bananas } }
-  li { p { Cucumbers } }
-}
-
-h3{Ordered Lists}
-
-ol {
-  li { p { Collect underpants } }
-  li { p { ? } }
-  li { p { Profit } }
-}
-
-h2{Tables}
-
-p { And last, but not least, we can have tables: }
-
-table {
-  columns {
-    td "Key"
-    td "Value"
-  }
-  row {
-    td "Author"
-    td { Felix "xq" Queißner }
-  }
-  row {
-    td "Date of Invention"
-    td { \date{2025-12-17} }
-  }
-}
 ```
 
 ## Grammar
 
-This grammar describes the text format
+This grammar describes the hypertext format.
 
 Short notes on grammar notation:
 
@@ -121,13 +38,13 @@ Short notes on grammar notation:
 - Whitespace is assumed to be ignored between tokens unless matched by a literal or regex, so tokens are typically separated by whitespace
 - Upper case elements are roughly tokens, while lowercase elements are rules.
 
-```
-document       := HEADER { block }
+```ebnf
+document       := { block }
 
 block          := WORD [ attribute_list ] body
 
-body           := list | literal | STRING
-literal        := ":" "\n" { LITERAL_LINE }
+body           := ";" | list | verbatim | STRING
+verbatim       := ":" "\n" { VERBATIM_LINE }
 
 list           := "{" { escape | inline | block | WORD } "}"
 escape         := "\\" | "\{" | "\}"
@@ -136,15 +53,68 @@ inline         := "\" WORD [ attribute_list ] body
 attribute_list := "(" [ attribute { "," attribute } ] ")"
 attribute      := WORD "=" STRING
 
-HEADER         := /^hdoc\s+"2.0"\s*$/
 STRING         := /"(\\.|[^"\r\n])*"/
-LITERAL_LINE   := /^\s*\|(.*)$/
+VERBATIM_LINE  := /^\s*\|(.*)$/
 WORD           := /[^\s\{\}\\\"(),=:]+/
 ```
 
 **NOTE:** `list` also allows `block` for `inline` elements, as this enables us to have support for balanced braces without special care. The `block` elements will be flattened when rendering an inline list body into the document.
 
 **NOTE:** All attribute values are strings, so numeric-looking values are still expressed as strings (e.g. `depth="1"`).
+
+## Element Overview
+
+| Element                                                     | Element Type | Allowed Children             | Attributes                           |
+| ----------------------------------------------------------- | ------------ | ---------------------------- | ------------------------------------ |
+| *Document*                                                  | Document     | `hdoc`, Blocks               |                                      |
+| `hdoc`                                                      | Header       | -                            | `lang`, `title`, `version`, `author` |
+| `h1`, `h2`, `h3`                                            | Block        | Text Body                    | `lang`, \[`id`\]                     |
+| `p`, `note`, `warning`, `danger`, `tip`, `quote`, `spoiler` | Block        | Text Body                    | `lang`, \[`id`\]                     |
+| `ul`                                                        | Block        | `li` ≥ 1                     | `lang`, \[`id`\]                     |
+| `ol`                                                        | Block        | `li` ≥ 1                     | `lang`, \[`id`\], `first`            |
+| `img`                                                       | Block        | Text Body                    | `lang`, \[`id`\], `alt`, `path`      |
+| `pre`                                                       | Block        | Text Body                    | `lang`, \[`id`\], `syntax`           |
+| `toc`                                                       | Block        | -                            | `lang`, \[`id`\], `depth`            |
+| `table`                                                     | Block        | Table Rows                   | `lang`, \[`id`\]                     |
+| `columns`                                                   | Table Row    | `td` ≥ 1                     | `lang`                               |
+| `group`                                                     | Table Row    | Text Body                    | `lang`,                              |
+| `row`                                                       | Table Row    | `td` ≥ 1                     | `lang`, `title`                      |
+| `td`                                                        | Table Cell   | Blocks, String, Verbatim     | `lang`, `colspan`                    |
+| `li`                                                        | List Item    | Blocks, String, Verbatim     | `lang`                               |
+| `\em`                                                       | Text Body    | Text Body                    | `lang`                               |
+| `\mono`                                                     | Text Body    | Text Body                    | `lang`, `syntax`                     |
+| `\strike`                                                   | Text Body    | Text Body                    | `lang`                               |
+| `\sub`, `\sup`                                              | Text Body    | Text Body                    | `lang`                               |
+| `\link`                                                     | Text Body    | Text Body                    | `lang`, (`ref` \| `uri`)             |
+| `\date`, `\time`, `\datetime`                               | Text Body    | Plain Text, String, Verbatim | `lang`, `fmt`                        |
+| *Plain Text*                                                | Text Body    | -                            |                                      |
+| *String*                                                    | Text Body    | -                            |                                      |
+| *Verbatim*                                                  | Text Body    | -                            |                                      |
+
+Notes:
+
+- The attribute `id` is only allowed when the element is a top-level element (direct child of the document)
+- The attributes `ref` and `uri` on a `\link` are mutually exclusive
+- `\date`, `\time` and `\datetime` cannot contain other text body items except for plain text, string or verbatim content.
+
+## Attribute Overview
+
+| Attribute | Required | Allowed Values                                                                               | Description                                                                     |
+| --------- | -------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `version` | Yes      | `2.0`                                                                                        | Describes the version of this HyperDoc document.                                |
+| `lang`    | No       | [BCP 47 Language Tag](https://datatracker.ietf.org/doc/html/rfc5646)                         | Defines the language of the elements contents.                                  |
+| `title`   | No       | *Any*                                                                                        | Sets the title of the document or the table row.                                |
+| `author`  | No       | *Any*                                                                                        | Sets the author of the document.                                                |
+| `id`      | No       | Non-empty                                                                                    | Sets a reference which can be linked to with `\link(ref="...")`.                |
+| `first`   | No       | Decimal integer numbers ≥ 0                                                                  | Sets the number of the first list item.                                         |
+| `alt`     | No       | Non-empty                                                                                    | Sets the alternative text shown when an image cannot be loaded.                 |
+| `path`    | Yes      | Non-empty file path to an image file                                                         | Defines the file path where the image file can be found.                        |
+| `syntax`  | No       | *See element documentation*                                                                  | Hints the syntax highlighter how how the elements context shall be highlighted. |
+| `depth`   | No       | `1`, `2` or `3`                                                                              | Defines how many levels of headings shall be included.                          |
+| `colspan` | No       | Decimal integer numbers ≥ 1                                                                  | Sets how many columns the table cell spans.                                     |
+| `ref`     | No       | Any value present in an `id` attribute.                                                      | References any `id` inside this document.                                       |
+| `uri`     | No       | [Internationalized Resource Identifier (IRI)](https://datatracker.ietf.org/doc/html/rfc3987) | Links to a foreign document with a URI.                                         |
+| `fmt`     | No       | *See element documentation*                                                                  |                                                                                 |
 
 ## Semantic Structure
 
@@ -198,8 +168,8 @@ The type of the paragraph includes a semantic hint:
 
 #### Ordered List `ol`
 
-| Attribute | Function                                                                                                             |
-| --------- | -------------------------------------------------------------------------------------------------------------------- |
+| Attribute | Function                                                                                                                    |
+| --------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `first`   | An integer string that is the number of the *first* item of the list. Allows paragraph breaks between a single joined list. |
 
 ### Figures: `img`
@@ -233,8 +203,8 @@ If a pre contains inline elements, these will still be parsed and apply their st
 
 **Allowed Items:** *none*
 
-| Attribute | Function                                                                |
-| --------- | ----------------------------------------------------------------------- |
+| Attribute | Function                                                                       |
+| --------- | ------------------------------------------------------------------------------ |
 | `depth`   | String `1`, `2` or `3`. Defines how many levels of headings shall be included. |
 
 Renders a table of contents for the current document.
@@ -300,8 +270,8 @@ A *row group* is a row that contains a single heading-style cell that labels the
 
 **Allowed Items:** Block Elements *or* String Content.
 
-| Attribute | Function                                           |
-| --------- | -------------------------------------------------- |
+| Attribute | Function                                                  |
+| --------- | --------------------------------------------------------- |
 | `colspan` | Integer string defining how many columns this cell spans. |
 
 This element contains the contents of a table cell.
@@ -354,8 +324,8 @@ Renders the text a bit smaller and moved upwards (`sup`) or downwards (`sub`) to
 
 | Attribute | Function                                                                                                 |
 | --------- | -------------------------------------------------------------------------------------------------------- |
-| `ref`     | Points the link to a top-level block with the `id` of this `ref` attribute. Mutually exclusive to `url`. |
-| `url`     | Points the link to the resource inside the `url`. Mutually exclusive to `ref`. |
+| `ref`     | Points the link to a top-level block with the `id` of this `ref` attribute. Mutually exclusive to `uri`. |
+| `uri`     | Points the link to the resource inside the `uri`. Mutually exclusive to `ref`.                           |
 
 Adds a hyperlink to the contents. This allows a reader to navigate by typically clicking the link.
 
@@ -363,10 +333,10 @@ Adds a hyperlink to the contents. This allows a reader to navigate by typically 
 
 **Nesting:** No
 
-| Element     | Attribute | Function                                                                                                                                          |
-| ----------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `date`      | `fmt`     | `year`, `month`, `day`, `weekday`, `short`, `long`, `relative`.                                                                                    |
-| `time`      | `fmt`     | `short`, `long`, `rough`, `relative`.                                                                                                              |
-| `datetime`  | `fmt`     | `short` (localized date+time), `long` (localized date+time with seconds), `relative`, `iso` (raw ISO 8601). |
+| Element    | Attribute | Function                                                                                                    |
+| ---------- | --------- | ----------------------------------------------------------------------------------------------------------- |
+| `date`     | `fmt`     | `year`, `month`, `day`, `weekday`, `short`, `long`, `relative`.                                             |
+| `time`     | `fmt`     | `short`, `long`, `rough`, `relative`.                                                                       |
+| `datetime` | `fmt`     | `short` (localized date+time), `long` (localized date+time with seconds), `relative`, `iso` (raw ISO 8601). |
 
 Renders a [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601#Combined_date_and_time_representations) date, time or date+time in a localized manner.

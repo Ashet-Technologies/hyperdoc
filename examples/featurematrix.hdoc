@@ -1,14 +1,14 @@
-hdoc "2.0"
+hdoc(version="2.0")
 
 h1 { Small Computer Feature Matrix }
 
 table {
   columns {
     td "Ashet Home Computer"
-    td { \link(url="https://www.raspberrypi.com/products/raspberry-pi-4-model-b/specifications/") "Raspberry Pi 4" }
-    td { \link(url="https://store.arduino.cc/products/arduino-uno-rev3") "Arduino Uno REV3" }
-    td { \link(url="https://github.com/neotron-Compute/neotron-Pico") "Neotron Pico" }
-    td { \link(url="https://www.codycomputer.org/") "Cody Computer" }
+    td { \link(uri="https://www.raspberrypi.com/products/raspberry-pi-4-model-b/specifications/") "Raspberry Pi 4" }
+    td { \link(uri="https://store.arduino.cc/products/arduino-uno-rev3") "Arduino Uno REV3" }
+    td { \link(uri="https://github.com/neotron-Compute/neotron-Pico") "Neotron Pico" }
+    td { \link(uri="https://www.codycomputer.org/") "Cody Computer" }
   }
   row(title="CPU Bus Width") {
     td "32 bit"
@@ -25,11 +25,11 @@ table {
     td "6502"
   }
   row(title="CPU Model") {
-    td { \link(url="https://www.raspberrypi.com/products/rp2350/") "Raspberry Pi RP2350" }
-    td { \link(url="https://www.raspberrypi.com/documentation/computers/processors.html#bcm2711") "Broadcom BCM2711" }
-    td { \link(url="https://www.microchip.com/en-us/product/atmega328p") "ATmega328P" }
-    td { \link(url="https://www.raspberrypi.com/products/rp2040/") "Raspberry Pi RP2040" }
-    td { \link(url="https://wdc65xx.com/integrated-circuit") "W65C02S" }
+    td { \link(uri="https://www.raspberrypi.com/products/rp2350/") "Raspberry Pi RP2350" }
+    td { \link(uri="https://www.raspberrypi.com/documentation/computers/processors.html#bcm2711") "Broadcom BCM2711" }
+    td { \link(uri="https://www.microchip.com/en-us/product/atmega328p") "ATmega328P" }
+    td { \link(uri="https://www.raspberrypi.com/products/rp2040/") "Raspberry Pi RP2040" }
+    td { \link(uri="https://wdc65xx.com/integrated-circuit") "W65C02S" }
   }
   row(title="CPU Cores") {
     td "2"
@@ -88,11 +88,11 @@ table {
     td "❌"
   }
   row(title="Parallax Propeller") {
-    td { ✅ (\link(url="https://www.parallax.com/propeller-2"){Propeller 2}) }
+    td { ✅ (\link(uri="https://www.parallax.com/propeller-2"){Propeller 2}) }
     td "❌"
     td "❌"
     td "❌"
-    td { ✅ (\link(url="https://www.parallax.com/propeller-1"){Propeller 1}) }
+    td { ✅ (\link(uri="https://www.parallax.com/propeller-1"){Propeller 1}) }
   }
 }
 

@@ -1,4 +1,4 @@
-hdoc "2.0"
+hdoc(version="2.0")
 
 h1(id="intro", lang="en") { HyperDoc 2.0 Examples }
 
@@ -7,11 +7,11 @@ toc(depth="2") {}
 h2(id="paragraphs") { Paragraphs and Inline Text }
 
 p(id="p-basic") {
-    This paragraph shows plain text mixed with \em{emphasis}, \strike{strike-through}, and \mono{monospaced} spans.
+  This paragraph shows plain text mixed with \em{emphasis}, \strike{strike-through}, and \mono{monospaced} spans.
 }
 
 p(lang="de") {
-    Dieser Absatz zeigt das Attribut \mono{lang} auf Blockebene.
+  Dieser Absatz zeigt das Attribut \mono{lang} auf Blockebene.
 }
 
 p "This paragraph uses a string literal body instead of a list."
@@ -21,7 +21,7 @@ p {
 }
 
 p {
-  Links can target \link(ref="fig-diagram"){other blocks} or external \link(url="https://ashet.computer"){resources}.
+  Links can target \link(ref="fig-diagram"){other blocks} or external \link(uri="https://ashet.computer"){resources}.
 }
 
 note    { Notes highlight supportive information. }

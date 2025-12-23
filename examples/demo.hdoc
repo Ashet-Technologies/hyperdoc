@@ -1,0 +1,97 @@
+hdoc(version="2.0", lang="en", title="HyperDoc \"2.0\" Demonstration");
+
+h1{HyperDoc 2.0}
+
+toc;
+
+h2{Paragraphs}
+
+p { This is a simple paragraph containing text. }
+
+p(id="foo") {
+  This is a paragraph with an attribute "id" with the value "foo".
+}
+
+p {
+  This paragraph contains \em{inline} formatting. We don't support \strike{bold} or \strike{italic} as it's a stylistic choice.
+  Other formatting we have is \mono{monospaced}, superscript (x\sup{2}) and subscript(x\sub{2}).
+  We can also \link(ref="foo"){link to other parts of a document} or \link(uri="https://ashet.computer"){to websites}.
+  With \mono(syntax="c"){int *value = 10;} we can also have language information and potential syntax highlighting attached to monospaced font.
+}
+
+h2{Special Paragraphs}
+
+note    { HyperDoc 2.0 also supports different types of paragraphs. }
+warning { These should affect rendering, and have well-defined semantics attached to them. }
+danger  { You shall not assume any specific formatting of these elements though. }
+tip     { They typically have a standardized style though. }
+quote   { You shall not pass! }
+spoiler { Nobody expects the Spanish Inquisition! }
+
+h2{Verbatim and Preformatted Text}
+
+p:
+| We can also use verbatim text mode.
+| This is introduced by a trailing colon (':') at the end of a line.
+| Each following line that starts with whitespace followed by a pipe character ('|')
+| is then part of the contents.
+| Verbatim text doesn't perform any interpretation of its contents, so no escaping is required.
+| This is really useful for code blocks:
+
+pre(syntax="c"):
+| #include <stdio.h>
+| int main(int argc, char const * argv[]) {
+|   printf("Hello, World!\n");
+|   return 0;
+| }
+
+h2{String Literals}
+
+p "It's also possible to use a string literal for bodies if desired."
+
+p { \em "Magic" is a simple way to highlight single words or text with escaping in inlines. }
+
+h2{Images & Figures}
+
+p { We can also add images to our documents: }
+
+img(id="fig1", path="./preview.jpeg") { If this is non-empty, it's a figure caption. }
+
+h2{Lists}
+
+p { Also lists are possible: }
+
+h3{Unordered Lists}
+
+ul {
+  li { p { Apples } }
+  li { p { Bananas } }
+  li { p { Cucumbers } }
+}
+
+h3{Ordered Lists}
+
+ol {
+  li { p { Collect underpants } }
+  li { p { ? } }
+  li { p { Profit } }
+}
+
+h2{Tables}
+
+p { And last, but not least, we can have tables: }
+
+table {
+  columns {
+    td "Key"
+    td "Value"
+  }
+  row {
+    td "Author"
+    td { p { Felix "xq" Queißner } }
+  }
+  row {
+    td "Date of Invention"
+    td { p { \date{2025-12-17} } }
+  }
+}

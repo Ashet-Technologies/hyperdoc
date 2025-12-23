@@ -26,14 +26,7 @@ pub fn main() !u8 {
     const document = try std.fs.cwd().readFileAlloc(allocator, path, 1024 * 1024 * 10);
     defer allocator.free(document);
 
-    var tokenizer = hdoc.Tokenizer.init(document);
-    var stdout = std.fs.File.stdout().deprecatedWriter();
-    while (tokenizer.next()) |token| {
-        try stdout.print("{s} \"{f}\"\n", .{ @tagName(token.tag), std.zig.fmtString(token.slice(document)) });
-        if (token.tag == .eof) {
-            break;
-        }
-    }
+    // TODO: Parse document
 
     return 0;
 }
