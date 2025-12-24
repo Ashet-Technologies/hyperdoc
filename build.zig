@@ -51,6 +51,19 @@ pub fn build(b: *std.Build) void {
         .use_llvm = true,
     });
     test_step.dependOn(&b.addRunArtifact(exe_tests).step);
+
+    const main_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "hyperdoc", .module = hyperdoc },
+            },
+        }),
+        .use_llvm = true,
+    });
+    test_step.dependOn(&b.addRunArtifact(main_tests).step);
 }
 
 fn rawFileMod(b: *std.Build, path: []const u8) std.Build.Module.Import {
