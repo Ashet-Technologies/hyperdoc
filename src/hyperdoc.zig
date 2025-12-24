@@ -6,6 +6,7 @@ const parser_toolkit = @import("parser-toolkit");
 pub const Document = struct {
     arena: std.heap.ArenaAllocator,
     contents: []Block,
+    ids: []?[]const u8,
 
     pub fn deinit(doc: *Document) void {
         doc.arena.deinit();
@@ -20,12 +21,129 @@ pub const Document = struct {
 /// from the full document size.
 pub const Block = union(enum) {
     header: Header,
+    heading: Heading,
+    paragraph: Paragraph,
+    list: List,
+    image: Image,
+    preformatted: Preformatted,
+    toc: TableOfContents,
+    table: Table,
 
     pub const Header = struct {
+        lang: ?[]const u8,
         title: ?[]const u8,
+        version: ?[]const u8,
         author: ?[]const u8,
         date: ?[]const u8,
     };
+
+    pub const Heading = struct {
+        level: HeadingLevel,
+        lang: ?[]const u8,
+        content: []Span,
+    };
+
+    pub const HeadingLevel = enum { h1, h2, h3 };
+
+    pub const Paragraph = struct {
+        kind: ParagraphKind,
+        lang: ?[]const u8,
+        content: []Span,
+    };
+
+    pub const ParagraphKind = enum { p, note, warning, danger, tip, quote, spoiler };
+
+    pub const List = struct {
+        lang: ?[]const u8,
+        first: ?u32,
+        items: []ListItem,
+    };
+
+    pub const ListItem = struct {
+        lang: ?[]const u8,
+        content: []Span,
+    };
+
+    pub const Image = struct {
+        lang: ?[]const u8,
+        alt: ?[]const u8,
+        path: ?[]const u8,
+        content: []Span,
+    };
+
+    pub const Preformatted = struct {
+        lang: ?[]const u8,
+        syntax: ?[]const u8,
+        content: []Span,
+    };
+
+    pub const TableOfContents = struct {
+        lang: ?[]const u8,
+        depth: ?u8,
+    };
+
+    pub const Table = struct {
+        lang: ?[]const u8,
+        rows: []TableRow,
+    };
+
+    pub const TableRow = union(enum) {
+        columns: TableColumns,
+        row: TableDataRow,
+        group: TableGroup,
+    };
+
+    pub const TableColumns = struct {
+        lang: ?[]const u8,
+        cells: []TableCell,
+    };
+
+    pub const TableDataRow = struct {
+        lang: ?[]const u8,
+        title: ?[]const u8,
+        cells: []TableCell,
+    };
+
+    pub const TableGroup = struct {
+        lang: ?[]const u8,
+        content: []Span,
+    };
+
+    pub const TableCell = struct {
+        lang: ?[]const u8,
+        colspan: ?u32,
+        content: []Span,
+    };
+};
+
+pub const SpanContent = union(enum) {
+    text: []const u8,
+    date: DateTime,
+    time: DateTime,
+    datetime: DateTime,
+};
+
+pub const DateTime = struct {
+    value: []const u8,
+    format: ?[]const u8 = null,
+};
+
+pub const Span = struct {
+    content: SpanContent,
+    lang: ?[]const u8 = null,
+    em: bool = false,
+    mono: bool = false,
+    strike: bool = false,
+    sub: bool = false,
+    sup: bool = false,
+    link: Link = .none,
+    syntax: ?[]const u8 = null,
+};
+
+pub const Link = union(enum) {
+    none,
+    ref: []const u8,
+    uri: []const u8,
 };
 
 /// Parses a HyperDoc document.
@@ -49,9 +167,11 @@ pub fn parse(
     var sema: SemanticAnalyzer = .{
         .arena = arena.allocator(),
         .diagnostics = diagnostics,
+        .code = plain_text,
     };
 
     var blocks: std.ArrayList(Block) = .empty;
+    var ids: std.ArrayList(?[]const u8) = .empty;
 
     while (true) {
         errdefer |err| {
@@ -81,25 +201,78 @@ pub fn parse(
         };
 
         try blocks.append(arena.allocator(), block);
+        try ids.append(arena.allocator(), null);
     }
 
     return .{
         .arena = arena,
         .contents = try blocks.toOwnedSlice(arena.allocator()),
+        .ids = try ids.toOwnedSlice(arena.allocator()),
     };
 }
 
 pub const SemanticAnalyzer = struct {
     arena: std.mem.Allocator,
     diagnostics: ?*Diagnostics,
+    code: []const u8,
+    seen_header: bool = false,
 
     fn translate_toplevel_node(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, InvalidNodeType }!Block {
-        _ = sema;
-        switch (node.type) {
-            else => {
+        if (!sema.seen_header) {
+            sema.seen_header = true;
+            if (node.type != .hdoc) {
+                sema.emit_diagnostic(.missing_hdoc_header, node.location.offset);
                 return error.InvalidNodeType;
-            },
+            }
+        } else if (node.type == .hdoc) {
+            sema.emit_diagnostic(.duplicate_hdoc_header, node.location.offset);
+            return error.InvalidNodeType;
         }
+
+        if (node.type == .hdoc) {
+            return .{
+                .header = .{
+                    .lang = null,
+                    .title = sema.attr_value(node.attributes, "title"),
+                    .version = sema.attr_value(node.attributes, "version"),
+                    .author = sema.attr_value(node.attributes, "author"),
+                    .date = sema.attr_value(node.attributes, "date"),
+                },
+            };
+        }
+
+        return error.InvalidNodeType;
+    }
+
+    fn attr_value(sema: *SemanticAnalyzer, attrs: std.StringArrayHashMapUnmanaged(Parser.Attribute), name: []const u8) ?[]const u8 {
+        _ = sema;
+        if (attrs.get(name)) |attr| {
+            return attr.value;
+        }
+        return null;
+    }
+
+    fn emit_diagnostic(sema: *SemanticAnalyzer, code: Diagnostic.Code, offset: usize) void {
+        if (sema.diagnostics) |diag| {
+            diag.add(code, sema.make_location(offset)) catch {};
+        }
+    }
+
+    fn make_location(sema: *SemanticAnalyzer, offset: usize) Diagnostic.Location {
+        var line: u32 = 1;
+        var column: u32 = 1;
+
+        var i: usize = 0;
+        while (i < offset and i < sema.code.len) : (i += 1) {
+            if (sema.code[i] == '\n') {
+                line += 1;
+                column = 1;
+            } else {
+                column += 1;
+            }
+        }
+
+        return .{ .line = line, .column = column };
     }
 };
 
@@ -112,7 +285,22 @@ pub const Parser = struct {
 
     pub const ScopeType = enum { top_level, nested };
 
+    fn emitDiagnostic(
+        parser: *Parser,
+        code: Diagnostic.Code,
+        diag_location: Diagnostic.Location,
+    ) void {
+        if (parser.diagnostics) |diag| {
+            diag.add(code, diag_location) catch {};
+        }
+    }
+
     pub fn accept_node(parser: *Parser, comptime scope_type: ScopeType) !Node {
+        parser.skip_whitespace();
+        if (scope_type == .top_level and parser.at_end()) {
+            return error.EndOfFile;
+        }
+
         const type_ident = parser.accept_identifier() catch |err| switch (err) {
             error.UnexpectedEndOfFile => |e| switch (scope_type) {
                 .nested => return e,
@@ -144,7 +332,7 @@ pub const Parser = struct {
 
                     const gop_entry = try attributes.getOrPut(parser.arena, attr_name.text);
                     if (gop_entry.found_existing) {
-                        // TODO: Emit diagnostic
+                        emitDiagnostic(parser, .{ .duplicate_attribute = .{ .name = attr_name.text } }, parser.make_diagnostic_location(attr_location.offset));
                     }
                     gop_entry.value_ptr.* = .{
                         .location = attr_location,
@@ -179,7 +367,7 @@ pub const Parser = struct {
             }
 
             if (lines.items.len == 0) {
-                // TODO: Emit diagnostic about verbatim block with no lines
+                emitDiagnostic(parser, .empty_verbatim_block, parser.make_diagnostic_location(type_ident.position.offset));
             }
 
             return .{
@@ -230,6 +418,11 @@ pub const Parser = struct {
         while (true) {
             parser.skip_whitespace();
 
+            if (parser.at_end()) {
+                emitDiagnostic(parser, .unterminated_block_list, parser.make_diagnostic_location(parser.offset));
+                return error.UnterminatedList;
+            }
+
             if (parser.try_accept_char('}'))
                 break;
 
@@ -259,7 +452,7 @@ pub const Parser = struct {
             parser.skip_whitespace();
 
             const head = parser.peek_char() orelse {
-                // TODO: Emit diagnostic
+                emitDiagnostic(parser, .unterminated_inline_list, parser.make_diagnostic_location(parser.offset));
                 return error.UnterminatedList;
             };
 
@@ -322,6 +515,13 @@ pub const Parser = struct {
             return null;
         }
 
+        const after_pipe = if (!parser.at_end()) parser.code[parser.offset] else null;
+        if (after_pipe) |c| {
+            if (c != ' ' and c != '\n') {
+                emitDiagnostic(parser, .verbatim_missing_space, parser.make_diagnostic_location(head));
+            }
+        }
+
         while (!parser.at_end()) {
             const c = parser.code[parser.offset];
             if (c == '\n') {
@@ -332,11 +532,17 @@ pub const Parser = struct {
             parser.offset += 1;
         }
         if (parser.at_end()) {
-            // TODO: Emit diagnostic about verbatim lines should have an empty line feed at the end of the file.
+            emitDiagnostic(parser, .verbatim_missing_trailing_newline, parser.make_diagnostic_location(parser.offset));
         }
 
         const token = parser.slice(head, parser.offset);
         std.debug.assert(std.mem.startsWith(u8, token.text, "|"));
+        if (token.text.len > 0) {
+            const last = token.text[token.text.len - 1];
+            if (last == ' ' or last == '\t') {
+                emitDiagnostic(parser, .trailing_whitespace, parser.make_diagnostic_location(parser.offset - 1));
+            }
+        }
         return token;
     }
 
@@ -350,9 +556,12 @@ pub const Parser = struct {
         if (parser.try_accept_char(expected))
             return;
 
-        if (parser.at_end())
+        if (parser.at_end()) {
+            emitDiagnostic(parser, .{ .unexpected_eof = .{ .context = "character", .expected_char = expected } }, parser.make_diagnostic_location(parser.offset));
             return error.UnexpectedEndOfFile;
+        }
 
+        emitDiagnostic(parser, .{ .unexpected_character = .{ .expected = expected, .found = parser.code[parser.offset] } }, parser.make_diagnostic_location(parser.offset));
         return error.UnexpectedCharacter;
     }
 
@@ -373,8 +582,10 @@ pub const Parser = struct {
     pub fn try_accept_string(parser: *Parser) !?Token {
         parser.skip_whitespace();
 
-        if (parser.at_end())
+        if (parser.at_end()) {
+            emitDiagnostic(parser, .{ .unexpected_eof = .{ .context = "string literal" } }, parser.make_diagnostic_location(parser.offset));
             return null;
+        }
 
         if (parser.code[parser.offset] != '"')
             return null;
@@ -385,12 +596,16 @@ pub const Parser = struct {
     pub fn accept_string(parser: *Parser) error{ OutOfMemory, UnexpectedEndOfFile, UnexpectedCharacter, UnterminatedStringLiteral }!Token {
         parser.skip_whitespace();
 
-        if (parser.at_end())
+        if (parser.at_end()) {
+            emitDiagnostic(parser, .{ .unexpected_eof = .{ .context = "string literal" } }, parser.make_diagnostic_location(parser.offset));
             return error.UnexpectedEndOfFile;
+        }
 
         const start = parser.offset;
-        if (parser.code[start] != '"')
+        if (parser.code[start] != '"') {
+            emitDiagnostic(parser, .{ .unexpected_character = .{ .expected = '"', .found = parser.code[start] } }, parser.make_diagnostic_location(parser.offset));
             return error.UnexpectedCharacter;
+        }
 
         parser.offset += 1;
 
@@ -419,19 +634,24 @@ pub const Parser = struct {
             }
         }
 
+        emitDiagnostic(parser, .unterminated_string, parser.make_diagnostic_location(start));
         return error.UnterminatedStringLiteral;
     }
 
     pub fn accept_identifier(parser: *Parser) error{ UnexpectedEndOfFile, InvalidCharacter }!Token {
         parser.skip_whitespace();
 
-        if (parser.at_end())
+        if (parser.at_end()) {
+            emitDiagnostic(parser, .{ .unexpected_eof = .{ .context = "identifier" } }, parser.make_diagnostic_location(parser.offset));
             return error.UnexpectedEndOfFile;
+        }
 
         const start = parser.offset;
         const first = parser.code[start];
-        if (!is_ident_char(first))
+        if (!is_ident_char(first)) {
+            emitDiagnostic(parser, .{ .invalid_identifier_start = .{ .char = first } }, parser.make_diagnostic_location(start));
             return error.InvalidCharacter;
+        }
 
         while (parser.offset < parser.code.len) {
             const c = parser.code[parser.offset];
@@ -447,8 +667,10 @@ pub const Parser = struct {
     pub fn accept_word(parser: *Parser) error{UnexpectedEndOfFile}!Token {
         parser.skip_whitespace();
 
-        if (parser.at_end())
+        if (parser.at_end()) {
+            emitDiagnostic(parser, .{ .unexpected_eof = .{ .context = "word" } }, parser.make_diagnostic_location(parser.offset));
             return error.UnexpectedEndOfFile;
+        }
 
         const start = parser.offset;
 
@@ -708,34 +930,77 @@ pub const Diagnostic = struct {
         }
     };
 
-    /// An diagnostic code encoded as a 16 bit integer.
-    /// The upper 4 bit encode the severity of the code, the lower 12 bit the number.
-    pub const Code = enum(u16) {
-        // bitmasks:
-        const ERROR = 0x1000;
-        const WARNING = 0x2000;
+    pub const UnexpectedEof = struct { context: []const u8, expected_char: ?u8 = null };
+    pub const UnexpectedCharacter = struct { expected: u8, found: u8 };
+    pub const InvalidIdentifierStart = struct { char: u8 };
+    pub const DuplicateAttribute = struct { name: []const u8 };
+    pub const MissingHdocHeader = struct {};
+    pub const DuplicateHdocHeader = struct {};
 
-        // TODO: Add other diagnostic codes
-
+    pub const Code = union(enum) {
         // errors:
-        invalid_character = ERROR | 1,
+        unterminated_inline_list,
+        unexpected_eof: UnexpectedEof,
+        unexpected_character: UnexpectedCharacter,
+        unterminated_string,
+        invalid_identifier_start: InvalidIdentifierStart,
+        unterminated_block_list,
+        missing_hdoc_header: MissingHdocHeader,
+        duplicate_hdoc_header: DuplicateHdocHeader,
 
         // warnings:
-        missing_space_in_literal = WARNING | 1,
+        duplicate_attribute: DuplicateAttribute,
+        empty_verbatim_block,
+        verbatim_missing_trailing_newline,
+        verbatim_missing_space,
+        trailing_whitespace,
 
-        pub fn get_severity(code: Code) Severity {
-            const num = @intFromEnum(code);
-            return switch (num & 0xF000) {
-                ERROR => .@"error",
-                WARNING => .warning,
-                else => @panic("invalid error code!"),
+        pub fn severity(code: Code) Severity {
+            return switch (code) {
+                .unterminated_inline_list => .@"error",
+                .unexpected_eof => .@"error",
+                .unexpected_character => .@"error",
+                .unterminated_string => .@"error",
+                .invalid_identifier_start => .@"error",
+                .unterminated_block_list => .@"error",
+                .missing_hdoc_header => .@"error",
+                .duplicate_hdoc_header => .@"error",
+
+                .duplicate_attribute => .warning,
+                .empty_verbatim_block => .warning,
+                .verbatim_missing_trailing_newline => .warning,
+                .verbatim_missing_space => .warning,
+                .trailing_whitespace => .warning,
             };
+        }
+
+        pub fn format(code: Code, w: anytype) !void {
+            switch (code) {
+                .unterminated_inline_list => try w.writeAll("Inline list body is unterminated (missing '}' before end of file)."),
+                .unexpected_eof => |ctx| {
+                    if (ctx.expected_char) |ch| {
+                        try w.print("Unexpected end of file while expecting '{c}'.", .{ch});
+                    } else {
+                        try w.print("Unexpected end of file while expecting {s}.", .{ctx.context});
+                    }
+                },
+                .unexpected_character => |ctx| try w.print("Expected '{c}' but found '{c}'.", .{ ctx.expected, ctx.found }),
+                .unterminated_string => try w.writeAll("Unterminated string literal (missing closing \")."),
+                .invalid_identifier_start => |ctx| try w.print("Invalid identifier start character: '{c}'.", .{ctx.char}),
+                .unterminated_block_list => try w.writeAll("Block list body is unterminated (missing '}' before end of file)."),
+                .missing_hdoc_header => try w.writeAll("Document must start with an 'hdoc' header."),
+                .duplicate_hdoc_header => try w.writeAll("Only one 'hdoc' header is allowed; additional header found."),
+                .duplicate_attribute => |ctx| try w.print("Duplicate attribute '{s}' will overwrite the earlier value.", .{ctx.name}),
+                .empty_verbatim_block => try w.writeAll("Verbatim block has no lines."),
+                .verbatim_missing_trailing_newline => try w.writeAll("Verbatim line should end with a newline."),
+                .verbatim_missing_space => try w.writeAll("Expected a space after '|' in verbatim line."),
+                .trailing_whitespace => try w.writeAll("Trailing whitespace at end of line."),
+            }
         }
     };
 
     code: Code,
     location: Location,
-    message: []const u8,
 };
 
 /// A collection of diagnostic messages.
@@ -752,17 +1017,27 @@ pub const Diagnostics = struct {
         diag.* = undefined;
     }
 
-    pub fn add(diag: *Diagnostics, code: Diagnostic.Code, location: Diagnostic.Location, comptime fmt: []const u8, args: anytype) !void {
-        const allocator = diag.arena.allocator();
-
-        const msg = try std.fmt.allocPrint(allocator, fmt, args);
-        errdefer allocator.free(msg);
-
-        try diag.items.append(allocator, .{
+    pub fn add(diag: *Diagnostics, code: Diagnostic.Code, location: Diagnostic.Location) !void {
+        try diag.items.append(diag.arena.allocator(), .{
             .location = location,
             .code = code,
-            .message = msg,
         });
+    }
+
+    pub fn has_error(diag: Diagnostics) bool {
+        for (diag.items.items) |item| {
+            if (item.code.severity() == .@"error")
+                return true;
+        }
+        return false;
+    }
+
+    pub fn has_warning(diag: Diagnostics) bool {
+        for (diag.items.items) |item| {
+            if (item.code.severity() == .warning)
+                return true;
+        }
+        return false;
     }
 };
 

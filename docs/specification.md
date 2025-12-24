@@ -67,7 +67,7 @@ WORD           := /[^\s\{\}\\\"(),=:]+/
 | Element                                                     | Element Type | Allowed Children             | Attributes                           |
 | ----------------------------------------------------------- | ------------ | ---------------------------- | ------------------------------------ |
 | *Document*                                                  | Document     | `hdoc`, Blocks               |                                      |
-| `hdoc`                                                      | Header       | -                            | `lang`, `title`, `version`, `author` |
+| `hdoc`                                                      | Header       | -                            | `lang`, `title`, `version`, `author`, `date` |
 | `h1`, `h2`, `h3`                                            | Block        | Text Body                    | `lang`, \[`id`\]                     |
 | `p`, `note`, `warning`, `danger`, `tip`, `quote`, `spoiler` | Block        | Text Body                    | `lang`, \[`id`\]                     |
 | `ul`                                                        | Block        | `li` ≥ 1                     | `lang`, \[`id`\]                     |
@@ -105,6 +105,7 @@ Notes:
 | `lang`    | No       | [BCP 47 Language Tag](https://datatracker.ietf.org/doc/html/rfc5646)                         | Defines the language of the elements contents.                                  |
 | `title`   | No       | *Any*                                                                                        | Sets the title of the document or the table row.                                |
 | `author`  | No       | *Any*                                                                                        | Sets the author of the document.                                                |
+| `date`    | No       | [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601#Combined_date_and_time_representations) timestamp | Sets the authoring date of the document.                                        |
 | `id`      | No       | Non-empty                                                                                    | Sets a reference which can be linked to with `\link(ref="...")`.                |
 | `first`   | No       | Decimal integer numbers ≥ 0                                                                  | Sets the number of the first list item.                                         |
 | `alt`     | No       | Non-empty                                                                                    | Sets the alternative text shown when an image cannot be loaded.                 |

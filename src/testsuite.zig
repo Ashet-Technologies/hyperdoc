@@ -241,6 +241,77 @@ test "parser handles unknown node types" {
     }
 }
 
+fn diagnosticsContain(diag: *const hdoc.Diagnostics, expected: hdoc.Diagnostic.Code) bool {
+    for (diag.items.items) |item| {
+        if (std.meta.activeTag(item.code) == std.meta.activeTag(expected)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+test "parsing valid document yields empty diagnostics" {
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    var doc = try hdoc.parse(std.testing.allocator, "hdoc(version=\"2.0\");", &diagnostics);
+    defer doc.deinit();
+
+    try std.testing.expect(!diagnostics.has_error());
+    try std.testing.expect(!diagnostics.has_warning());
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.items.items.len);
+}
+
+test "diagnostic codes are emitted for expected samples" {
+    const Case = struct {
+        code: hdoc.Diagnostic.Code,
+        samples: []const []const u8,
+    };
+
+    const cases = [_]Case{
+        .{ .code = .{ .unexpected_eof = .{ .context = "identifier", .expected_char = null } }, .samples = &.{"hdoc(version=\"2.0\"); h1("} },
+        .{ .code = .{ .unexpected_character = .{ .expected = '{', .found = '1' } }, .samples = &.{"hdoc(version=\"2.0\"); h1 123"} },
+        .{ .code = .unterminated_string, .samples = &.{"hdoc(version=\"2.0\"); h1 \"unterminated"} },
+        .{ .code = .{ .invalid_identifier_start = .{ .char = '-' } }, .samples = &.{"hdoc(version=\"2.0\"); -abc"} },
+        .{ .code = .unterminated_block_list, .samples = &.{"hdoc{h1 \"x\""} },
+        .{ .code = .unterminated_inline_list, .samples = &.{"hdoc(version=\"2.0\"); p {hello"} },
+        .{ .code = .{ .duplicate_attribute = .{ .name = "title" } }, .samples = &.{"hdoc(version=\"2.0\"); h1(title=\"a\",title=\"b\");"} },
+        .{ .code = .empty_verbatim_block, .samples = &.{"hdoc(version=\"2.0\"); pre:\n"} },
+        .{ .code = .verbatim_missing_trailing_newline, .samples = &.{"hdoc(version=\"2.0\"); pre:\n|line"} },
+        .{ .code = .verbatim_missing_space, .samples = &.{"hdoc(version=\"2.0\"); pre:\n|nospace\n"} },
+        .{ .code = .trailing_whitespace, .samples = &.{"hdoc(version=\"2.0\"); pre:\n| trailing \n"} },
+        .{ .code = .missing_hdoc_header, .samples = &.{"h1 \"Title\""} },
+        .{ .code = .duplicate_hdoc_header, .samples = &.{"hdoc(version=\"2.0\"); hdoc(version=\"2.0\");"} },
+    };
+
+    inline for (cases) |case| {
+        for (case.samples) |sample| {
+            var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+            defer diagnostics.deinit();
+
+            const maybe_doc = hdoc.parse(std.testing.allocator, sample, &diagnostics) catch |err| switch (err) {
+                error.OutOfMemory => return err,
+                else => null,
+            };
+
+            if (maybe_doc) |doc| {
+                var owned_doc = doc;
+                defer owned_doc.deinit();
+            }
+
+            try std.testing.expect(diagnosticsContain(&diagnostics, case.code));
+
+            const expected_severity = case.code.severity();
+            if (expected_severity == .@"error") {
+                try std.testing.expect(diagnostics.has_error());
+            } else {
+                try std.testing.expect(!diagnostics.has_error());
+                try std.testing.expect(diagnostics.has_warning());
+            }
+        }
+    }
+}
+
 test "parser reports unterminated inline lists" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
