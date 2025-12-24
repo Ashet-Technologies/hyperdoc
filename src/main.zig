@@ -35,5 +35,7 @@ pub fn main() !u8 {
     if (diagnostics.has_error())
         return 1;
 
+    // TODO: Implement dumping of "parsed "
+
     return 0;
 }

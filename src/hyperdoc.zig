@@ -5,8 +5,18 @@ const parser_toolkit = @import("parser-toolkit");
 /// tree structure of the document.
 pub const Document = struct {
     arena: std.heap.ArenaAllocator,
+
+    version: Version,
+
+    // document contents:
     contents: []Block,
     ids: []?[]const u8,
+
+    // header information
+    lang: ?[]const u8,
+    title: ?[]const u8,
+    author: ?[]const u8,
+    date: ?DateTime,
 
     pub fn deinit(doc: *Document) void {
         doc.arena.deinit();
@@ -20,7 +30,6 @@ pub const Document = struct {
 /// Depending on the level of nesting, the width might decrease
 /// from the full document size.
 pub const Block = union(enum) {
-    header: Header,
     heading: Heading,
     paragraph: Paragraph,
     list: List,
@@ -28,14 +37,6 @@ pub const Block = union(enum) {
     preformatted: Preformatted,
     toc: TableOfContents,
     table: Table,
-
-    pub const Header = struct {
-        lang: ?[]const u8,
-        title: ?[]const u8,
-        version: ?[]const u8,
-        author: ?[]const u8,
-        date: ?[]const u8,
-    };
 
     pub const Heading = struct {
         level: HeadingLevel,
@@ -118,15 +119,17 @@ pub const Block = union(enum) {
 
 pub const SpanContent = union(enum) {
     text: []const u8,
-    date: DateTime,
-    time: DateTime,
-    datetime: DateTime,
+    date: FormattedDateTime(Date),
+    time: FormattedDateTime(Time),
+    datetime: FormattedDateTime(DateTime),
 };
 
-pub const DateTime = struct {
-    value: []const u8,
-    format: ?[]const u8 = null,
-};
+pub fn FormattedDateTime(comptime DT: type) type {
+    return struct {
+        value: DT,
+        format: DT.Format = .default,
+    };
+}
 
 pub const Span = struct {
     content: SpanContent,
@@ -146,6 +149,95 @@ pub const Link = union(enum) {
     uri: []const u8,
 };
 
+/// HyperDoc Version Number
+pub const Version = struct {
+    major: u16,
+    minor: u16,
+
+    pub fn parse(text: []const u8) !Version {
+        const split_index = std.mem.indexOfScalar(u8, text, '.') orelse return error.InvalidValue;
+
+        const head = text[0..split_index];
+        const tail = text[split_index + 1 ..];
+
+        return .{
+            .major = std.fmt.parseInt(u16, head, 10) catch return error.InvalidValue,
+            .minor = std.fmt.parseInt(u16, tail, 10) catch return error.InvalidValue,
+        };
+    }
+};
+
+pub const DateTime = struct {
+    pub const Format = enum {
+        pub const default: Format = .short;
+
+        short,
+        long,
+        relative,
+        iso,
+    };
+
+    date: Date,
+    time: Time,
+
+    pub fn parse(text: []const u8) !DateTime {
+        const split_index = std.mem.indexOfScalar(u8, text, 'T') orelse return error.InvalidValue;
+
+        const head = text[0..split_index];
+        const tail = text[split_index + 1 ..];
+
+        return .{
+            .date = try Date.parse(head),
+            .time = try Time.parse(tail),
+        };
+    }
+};
+
+pub const Date = struct {
+    pub const Format = enum {
+        pub const default: Format = .short;
+        year,
+        month,
+        day,
+        weekday,
+        short,
+        long,
+        relative,
+        iso,
+    };
+
+    year: i32, // e.g., 2024
+    month: u4, // 1-12
+    day: u5, // 1-31
+
+    pub fn parse(text: []const u8) !Date {
+        _ = text;
+        @panic("TODO: Implement this");
+    }
+};
+
+pub const Time = struct {
+    pub const Format = enum {
+        pub const default: Format = .short;
+
+        long,
+        short,
+        rough,
+        relative,
+        iso,
+    };
+
+    hour: u5, // 0-23
+    minute: u6, // 0-59
+    second: u6, // 0-59
+    microsecond: u20, // 0-999999
+
+    pub fn parse(text: []const u8) !Time {
+        _ = text;
+        @panic("TODO: Implement this");
+    }
+};
+
 /// Parses a HyperDoc document.
 pub fn parse(
     allocator: std.mem.Allocator,
@@ -154,7 +246,7 @@ pub fn parse(
     /// An optional diagnostics element that receives diagnostic messages like errors and warnings.
     /// If present, will be filled out by the parser.
     diagnostics: ?*Diagnostics,
-) error{ OutOfMemory, SyntaxError }!Document {
+) error{ OutOfMemory, SyntaxError, MalformedDocument }!Document {
     var arena = std.heap.ArenaAllocator.init(allocator);
     errdefer arena.deinit();
 
@@ -169,9 +261,6 @@ pub fn parse(
         .diagnostics = diagnostics,
         .code = plain_text,
     };
-
-    var blocks: std.ArrayList(Block) = .empty;
-    var ids: std.ArrayList(?[]const u8) = .empty;
 
     while (true) {
         errdefer |err| {
@@ -194,67 +283,185 @@ pub fn parse(
             => return error.SyntaxError,
         };
 
-        const block = sema.translate_toplevel_node(node) catch |err| switch (err) {
-            error.OutOfMemory => |e| return @as(error{OutOfMemory}!Document, e),
-
-            error.InvalidNodeType => continue,
-        };
-
-        try blocks.append(arena.allocator(), block);
-        try ids.append(arena.allocator(), null);
+        try sema.append_node(node);
     }
+
+    const header = sema.header orelse return error.MalformedDocument;
 
     return .{
         .arena = arena,
-        .contents = try blocks.toOwnedSlice(arena.allocator()),
-        .ids = try ids.toOwnedSlice(arena.allocator()),
+        .contents = try sema.blocks.toOwnedSlice(arena.allocator()),
+        .ids = try sema.ids.toOwnedSlice(arena.allocator()),
+
+        .lang = header.lang,
+        .title = header.title,
+        .version = header.version,
+        .author = header.author,
+        .date = header.date,
     };
 }
 
 pub const SemanticAnalyzer = struct {
+    const Header = struct {
+        version: Version,
+        lang: ?[]const u8,
+        title: ?[]const u8,
+        author: ?[]const u8,
+        date: ?DateTime,
+    };
+
     arena: std.mem.Allocator,
     diagnostics: ?*Diagnostics,
     code: []const u8,
-    seen_header: bool = false,
 
-    fn translate_toplevel_node(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, InvalidNodeType }!Block {
-        if (!sema.seen_header) {
-            sema.seen_header = true;
-            if (node.type != .hdoc) {
-                sema.emit_diagnostic(.missing_hdoc_header, node.location.offset);
-                return error.InvalidNodeType;
-            }
-        } else if (node.type == .hdoc) {
-            sema.emit_diagnostic(.duplicate_hdoc_header, node.location.offset);
-            return error.InvalidNodeType;
-        }
+    header: ?Header = null,
+    blocks: std.ArrayList(Block) = .empty,
+    ids: std.ArrayList(?[]const u8) = .empty,
 
-        if (node.type == .hdoc) {
-            return .{
-                .header = .{
-                    .lang = null,
-                    .title = sema.attr_value(node.attributes, "title"),
-                    .version = sema.attr_value(node.attributes, "version"),
-                    .author = sema.attr_value(node.attributes, "author"),
-                    .date = sema.attr_value(node.attributes, "date"),
-                },
-            };
+    fn append_node(sema: *SemanticAnalyzer, node: Parser.Node) error{OutOfMemory}!void {
+        switch (node.type) {
+            .hdoc => {
+                if (sema.header != null) {
+                    try sema.emit_diagnostic(.duplicate_hdoc_header, node.location.offset);
+                }
+                sema.header = sema.translate_header_node(node) catch |err| switch (err) {
+                    error.OutOfMemory => |e| return e,
+                    error.BadAttributes => null,
+                };
+            },
+
+            else => {
+                if (sema.header == null) {
+                    if (sema.blocks.items.len == 0) {
+                        // Emit error for the first encountered block.
+                        // This can only happen exactly once, as we either:
+                        // - have already set a header block when the first non-header nodes arrives.
+                        // - we have processed another block already, so the previous block would've emitted the warning already.
+                        try sema.emit_diagnostic(.missing_hdoc_header, node.location.offset);
+                    }
+                }
+
+                const block, const id = sema.translate_block_node(node) catch |err| switch (err) {
+                    error.OutOfMemory => |e| return e,
+                    error.InvalidNodeType, error.BadAttributes => {
+                        return;
+                    },
+                };
+
+                try sema.blocks.append(sema.arena, block);
+                try sema.ids.append(sema.arena, id);
+            },
         }
+    }
+
+    fn translate_header_node(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, BadAttributes }!Header {
+        std.debug.assert(node.type == .hdoc);
+
+        const attrs = try sema.get_attributes(node, struct {
+            version: Version,
+            title: ?[]const u8 = null,
+            author: ?[]const u8 = null,
+            date: ?DateTime = null,
+            lang: ?[]const u8 = null,
+        });
+
+        return .{
+            .version = attrs.version,
+            .lang = attrs.lang,
+            .title = attrs.title,
+            .author = attrs.author,
+            .date = attrs.date,
+        };
+    }
+
+    fn translate_block_node(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, InvalidNodeType, BadAttributes }!struct { Block, ?[]const u8 } {
+        std.debug.assert(node.type != .hdoc);
+
+        _ = sema;
 
         return error.InvalidNodeType;
     }
 
-    fn attr_value(sema: *SemanticAnalyzer, attrs: std.StringArrayHashMapUnmanaged(Parser.Attribute), name: []const u8) ?[]const u8 {
-        _ = sema;
-        if (attrs.get(name)) |attr| {
-            return attr.value;
+    fn get_attributes(sema: *SemanticAnalyzer, node: Parser.Node, comptime Attrs: type) error{ OutOfMemory, BadAttributes }!Attrs {
+        const Fields = std.meta.FieldEnum(Attrs);
+        const fields = @typeInfo(Attrs).@"struct".fields;
+
+        var required: std.EnumSet(Fields) = .initEmpty();
+
+        var attrs: Attrs = undefined;
+        inline for (fields) |fld| {
+            if (fld.default_value_ptr) |default_value_ptr| {
+                @field(attrs, fld.name) = @as(*const fld.type, @ptrCast(@alignCast(default_value_ptr))).*;
+            } else {
+                @field(attrs, fld.name) = undefined;
+                required.insert(@field(Fields, fld.name));
+            }
         }
-        return null;
+
+        var any_invalid = false;
+        var found: std.EnumSet(Fields) = .initEmpty();
+        for (node.attributes.keys(), node.attributes.values()) |key, attrib| {
+            const fld = std.meta.stringToEnum(Fields, key) orelse {
+                try sema.emit_diagnostic(.{ .unknown_attribute = .{ .type = node.type, .name = key } }, node.location.offset);
+                continue;
+            };
+            if (found.contains(fld)) {
+                try sema.emit_diagnostic(.{ .duplicate_attribute = .{ .name = key } }, node.location.offset);
+            }
+            found.insert(fld);
+
+            switch (fld) {
+                inline else => |tag| @field(attrs, @tagName(tag)) = sema.cast_value(attrib, @FieldType(Attrs, @tagName(tag))) catch |err| switch (err) {
+                    error.OutOfMemory => |e| return e,
+
+                    else => {
+                        any_invalid = true;
+
+                        try sema.emit_diagnostic(.{ .invalid_attribute = .{ .type = node.type, .name = key } }, node.location.offset);
+
+                        continue;
+                    },
+                },
+            }
+        }
+
+        // Check if we have any required attributes missing:
+        var any_missing = false;
+        {
+            var iter = required.iterator();
+            while (iter.next()) |req_field| {
+                if (!found.contains(req_field)) {
+                    try sema.emit_diagnostic(.{ .missing_attribute = .{ .type = node.type, .name = @tagName(req_field) } }, node.location.offset);
+                    any_missing = true;
+                }
+            }
+        }
+        if (any_missing or any_invalid)
+            return error.BadAttributes;
+
+        return attrs;
     }
 
-    fn emit_diagnostic(sema: *SemanticAnalyzer, code: Diagnostic.Code, offset: usize) void {
+    fn cast_value(sema: *SemanticAnalyzer, attrib: Parser.Attribute, comptime T: type) error{ OutOfMemory, InvalidValue }!T {
+        if (@typeInfo(T) == .optional) {
+            return try sema.cast_value(attrib, @typeInfo(T).optional.child);
+        }
+
+        return switch (T) {
+            []const u8 =>  attrib.value,
+
+            Version => Version.parse(attrib.value) catch return error.InvalidValue,
+            DateTime => DateTime.parse(attrib.value) catch return error.InvalidValue,
+            Date => Date.parse(attrib.value) catch return error.InvalidValue,
+            Time => Time.parse(attrib.value) catch return error.InvalidValue,
+
+            else => @compileError("Unsupported attribute type: " ++ @typeName(T)),
+        };
+    }
+
+    fn emit_diagnostic(sema: *SemanticAnalyzer, code: Diagnostic.Code, offset: usize) !void {
         if (sema.diagnostics) |diag| {
-            diag.add(code, sema.make_location(offset)) catch {};
+            try diag.add(code, sema.make_location(offset));
         }
     }
 
@@ -934,6 +1141,7 @@ pub const Diagnostic = struct {
     pub const UnexpectedCharacter = struct { expected: u8, found: u8 };
     pub const InvalidIdentifierStart = struct { char: u8 };
     pub const DuplicateAttribute = struct { name: []const u8 };
+    pub const NodeAttributeError = struct { type: Parser.NodeType, name: []const u8 };
     pub const MissingHdocHeader = struct {};
     pub const DuplicateHdocHeader = struct {};
 
@@ -947,8 +1155,11 @@ pub const Diagnostic = struct {
         unterminated_block_list,
         missing_hdoc_header: MissingHdocHeader,
         duplicate_hdoc_header: DuplicateHdocHeader,
+        missing_attribute: NodeAttributeError,
+        invalid_attribute: NodeAttributeError,
 
         // warnings:
+        unknown_attribute: NodeAttributeError,
         duplicate_attribute: DuplicateAttribute,
         empty_verbatim_block,
         verbatim_missing_trailing_newline,
@@ -957,20 +1168,25 @@ pub const Diagnostic = struct {
 
         pub fn severity(code: Code) Severity {
             return switch (code) {
-                .unterminated_inline_list => .@"error",
-                .unexpected_eof => .@"error",
-                .unexpected_character => .@"error",
-                .unterminated_string => .@"error",
-                .invalid_identifier_start => .@"error",
-                .unterminated_block_list => .@"error",
-                .missing_hdoc_header => .@"error",
-                .duplicate_hdoc_header => .@"error",
+                .unterminated_inline_list,
+                .unexpected_eof,
+                .unexpected_character,
+                .unterminated_string,
+                .invalid_identifier_start,
+                .unterminated_block_list,
+                .missing_hdoc_header,
+                .duplicate_hdoc_header,
+                .invalid_attribute,
+                .missing_attribute,
+                => .@"error",
 
-                .duplicate_attribute => .warning,
-                .empty_verbatim_block => .warning,
-                .verbatim_missing_trailing_newline => .warning,
-                .verbatim_missing_space => .warning,
-                .trailing_whitespace => .warning,
+                .unknown_attribute,
+                .duplicate_attribute,
+                .empty_verbatim_block,
+                .verbatim_missing_trailing_newline,
+                .verbatim_missing_space,
+                .trailing_whitespace,
+                => .warning,
             };
         }
 

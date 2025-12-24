@@ -64,32 +64,32 @@ WORD           := /[^\s\{\}\\\"(),=:]+/
 
 ## Element Overview
 
-| Element                                                     | Element Type | Allowed Children             | Attributes                           |
-| ----------------------------------------------------------- | ------------ | ---------------------------- | ------------------------------------ |
-| *Document*                                                  | Document     | `hdoc`, Blocks               |                                      |
+| Element                                                     | Element Type | Allowed Children             | Attributes                                   |
+| ----------------------------------------------------------- | ------------ | ---------------------------- | -------------------------------------------- |
+| *Document*                                                  | Document     | `hdoc`, Blocks               |                                              |
 | `hdoc`                                                      | Header       | -                            | `lang`, `title`, `version`, `author`, `date` |
-| `h1`, `h2`, `h3`                                            | Block        | Text Body                    | `lang`, \[`id`\]                     |
-| `p`, `note`, `warning`, `danger`, `tip`, `quote`, `spoiler` | Block        | Text Body                    | `lang`, \[`id`\]                     |
-| `ul`                                                        | Block        | `li` ≥ 1                     | `lang`, \[`id`\]                     |
-| `ol`                                                        | Block        | `li` ≥ 1                     | `lang`, \[`id`\], `first`            |
-| `img`                                                       | Block        | Text Body                    | `lang`, \[`id`\], `alt`, `path`      |
-| `pre`                                                       | Block        | Text Body                    | `lang`, \[`id`\], `syntax`           |
-| `toc`                                                       | Block        | -                            | `lang`, \[`id`\], `depth`            |
-| `table`                                                     | Block        | Table Rows                   | `lang`, \[`id`\]                     |
-| `columns`                                                   | Table Row    | `td` ≥ 1                     | `lang`                               |
-| `group`                                                     | Table Row    | Text Body                    | `lang`,                              |
-| `row`                                                       | Table Row    | `td` ≥ 1                     | `lang`, `title`                      |
-| `td`                                                        | Table Cell   | Blocks, String, Verbatim     | `lang`, `colspan`                    |
-| `li`                                                        | List Item    | Blocks, String, Verbatim     | `lang`                               |
-| `\em`                                                       | Text Body    | Text Body                    | `lang`                               |
-| `\mono`                                                     | Text Body    | Text Body                    | `lang`, `syntax`                     |
-| `\strike`                                                   | Text Body    | Text Body                    | `lang`                               |
-| `\sub`, `\sup`                                              | Text Body    | Text Body                    | `lang`                               |
-| `\link`                                                     | Text Body    | Text Body                    | `lang`, (`ref` \| `uri`)             |
-| `\date`, `\time`, `\datetime`                               | Text Body    | Plain Text, String, Verbatim | `lang`, `fmt`                        |
-| *Plain Text*                                                | Text Body    | -                            |                                      |
-| *String*                                                    | Text Body    | -                            |                                      |
-| *Verbatim*                                                  | Text Body    | -                            |                                      |
+| `h1`, `h2`, `h3`                                            | Block        | Text Body                    | `lang`, \[`id`\]                             |
+| `p`, `note`, `warning`, `danger`, `tip`, `quote`, `spoiler` | Block        | Text Body                    | `lang`, \[`id`\]                             |
+| `ul`                                                        | Block        | `li` ≥ 1                     | `lang`, \[`id`\]                             |
+| `ol`                                                        | Block        | `li` ≥ 1                     | `lang`, \[`id`\], `first`                    |
+| `img`                                                       | Block        | Text Body                    | `lang`, \[`id`\], `alt`, `path`              |
+| `pre`                                                       | Block        | Text Body                    | `lang`, \[`id`\], `syntax`                   |
+| `toc`                                                       | Block        | -                            | `lang`, \[`id`\], `depth`                    |
+| `table`                                                     | Block        | Table Rows                   | `lang`, \[`id`\]                             |
+| `columns`                                                   | Table Row    | `td` ≥ 1                     | `lang`                                       |
+| `group`                                                     | Table Row    | Text Body                    | `lang`,                                      |
+| `row`                                                       | Table Row    | `td` ≥ 1                     | `lang`, `title`                              |
+| `td`                                                        | Table Cell   | Blocks, String, Verbatim     | `lang`, `colspan`                            |
+| `li`                                                        | List Item    | Blocks, String, Verbatim     | `lang`                                       |
+| `\em`                                                       | Text Body    | Text Body                    | `lang`                                       |
+| `\mono`                                                     | Text Body    | Text Body                    | `lang`, `syntax`                             |
+| `\strike`                                                   | Text Body    | Text Body                    | `lang`                                       |
+| `\sub`, `\sup`                                              | Text Body    | Text Body                    | `lang`                                       |
+| `\link`                                                     | Text Body    | Text Body                    | `lang`, (`ref` \| `uri`)                     |
+| `\date`, `\time`, `\datetime`                               | Text Body    | Plain Text, String, Verbatim | `lang`, `fmt`                                |
+| *Plain Text*                                                | Text Body    | -                            |                                              |
+| *String*                                                    | Text Body    | -                            |                                              |
+| *Verbatim*                                                  | Text Body    | -                            |                                              |
 
 Notes:
 
@@ -99,23 +99,23 @@ Notes:
 
 ## Attribute Overview
 
-| Attribute | Required | Allowed Values                                                                               | Description                                                                     |
-| --------- | -------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `version` | Yes      | `2.0`                                                                                        | Describes the version of this HyperDoc document.                                |
-| `lang`    | No       | [BCP 47 Language Tag](https://datatracker.ietf.org/doc/html/rfc5646)                         | Defines the language of the elements contents.                                  |
-| `title`   | No       | *Any*                                                                                        | Sets the title of the document or the table row.                                |
-| `author`  | No       | *Any*                                                                                        | Sets the author of the document.                                                |
-| `date`    | No       | [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601#Combined_date_and_time_representations) timestamp | Sets the authoring date of the document.                                        |
-| `id`      | No       | Non-empty                                                                                    | Sets a reference which can be linked to with `\link(ref="...")`.                |
-| `first`   | No       | Decimal integer numbers ≥ 0                                                                  | Sets the number of the first list item.                                         |
-| `alt`     | No       | Non-empty                                                                                    | Sets the alternative text shown when an image cannot be loaded.                 |
-| `path`    | Yes      | Non-empty file path to an image file                                                         | Defines the file path where the image file can be found.                        |
-| `syntax`  | No       | *See element documentation*                                                                  | Hints the syntax highlighter how how the elements context shall be highlighted. |
-| `depth`   | No       | `1`, `2` or `3`                                                                              | Defines how many levels of headings shall be included.                          |
-| `colspan` | No       | Decimal integer numbers ≥ 1                                                                  | Sets how many columns the table cell spans.                                     |
-| `ref`     | No       | Any value present in an `id` attribute.                                                      | References any `id` inside this document.                                       |
-| `uri`     | No       | [Internationalized Resource Identifier (IRI)](https://datatracker.ietf.org/doc/html/rfc3987) | Links to a foreign document with a URI.                                         |
-| `fmt`     | No       | *See element documentation*                                                                  |                                                                                 |
+| Attribute | Required | Allowed Values                                                                                                                                                                            | Description                                                                     |
+| --------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `version` | Yes      | `2.0`                                                                                                                                                                                     | Describes the version of this HyperDoc document.                                |
+| `lang`    | No       | [BCP 47 Language Tag](https://datatracker.ietf.org/doc/html/rfc5646)                                                                                                                      | Defines the language of the elements contents.                                  |
+| `title`   | No       | *Any*                                                                                                                                                                                     | Sets the title of the document or the table row.                                |
+| `author`  | No       | *Any*                                                                                                                                                                                     | Sets the author of the document.                                                |
+| `date`    | No       | A date-time value using the format specified below (intersection between [RFC3339](https://datatracker.ietf.org/doc/html/rfc3339) and [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601)) | Sets the authoring date of the document.                                        |
+| `id`      | No       | Non-empty                                                                                                                                                                                 | Sets a reference which can be linked to with `\link(ref="...")`.                |
+| `first`   | No       | Decimal integer numbers ≥ 0                                                                                                                                                               | Sets the number of the first list item.                                         |
+| `alt`     | No       | Non-empty                                                                                                                                                                                 | Sets the alternative text shown when an image cannot be loaded.                 |
+| `path`    | Yes      | Non-empty file path to an image file                                                                                                                                                      | Defines the file path where the image file can be found.                        |
+| `syntax`  | No       | *See element documentation*                                                                                                                                                               | Hints the syntax highlighter how how the elements context shall be highlighted. |
+| `depth`   | No       | `1`, `2` or `3`                                                                                                                                                                           | Defines how many levels of headings shall be included.                          |
+| `colspan` | No       | Decimal integer numbers ≥ 1                                                                                                                                                               | Sets how many columns the table cell spans.                                     |
+| `ref`     | No       | Any value present in an `id` attribute.                                                                                                                                                   | References any `id` inside this document.                                       |
+| `uri`     | No       | [Internationalized Resource Identifier (IRI)](https://datatracker.ietf.org/doc/html/rfc3987)                                                                                              | Links to a foreign document with a URI.                                         |
+| `fmt`     | No       | *See element documentation*                                                                                                                                                               |                                                                                 |
 
 ## Semantic Structure
 
@@ -341,3 +341,4 @@ Adds a hyperlink to the contents. This allows a reader to navigate by typically 
 | `datetime` | `fmt`     | `short` (localized date+time), `long` (localized date+time with seconds), `relative`, `iso` (raw ISO 8601). |
 
 Renders a [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601#Combined_date_and_time_representations) date, time or date+time in a localized manner.
+
