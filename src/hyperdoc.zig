@@ -377,9 +377,107 @@ pub const SemanticAnalyzer = struct {
     fn translate_block_node(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, InvalidNodeType, BadAttributes }!struct { Block, ?[]const u8 } {
         std.debug.assert(node.type != .hdoc);
 
-        _ = sema;
+        switch (node.type) {
+            .hdoc => unreachable,
+
+            .h1, .h2, .h3 => {
+                const heading, const id = try sema.translate_heading_node(node);
+                return .{ .{ .heading = heading }, id };
+            },
+            .p, .note, .warning, .danger, .tip, .quote, .spoiler => {
+                const paragraph, const id = try sema.translate_paragraph_node(node);
+                return .{ .{ .paragraph = paragraph }, id };
+            },
+            .ul, .ol => {
+                const list, const id = try sema.translate_list_node(node);
+                return .{ .{ .list = list }, id };
+            },
+            .img => {
+                const image, const id = try sema.translate_image_node(node);
+                return .{ .{ .image = image }, id };
+            },
+            .pre => {
+                const preformatted, const id = try sema.translate_preformatted_node(node);
+                return .{ .{ .preformatted = preformatted }, id };
+            },
+            .toc => {
+                const toc, const id = try sema.translate_toc_node(node);
+                return .{ .{ .toc = toc }, id };
+            },
+            .table => {
+                const table, const id = try sema.translate_table_node(node);
+                return .{ .{ .table = table }, id };
+            },
+
+            .unknown_block, .unknown_inline => {
+                try sema.emit_diagnostic(.{ .unknown_block_type = .{ .name = sema.code[node.location.offset .. node.location.offset + node.location.length] } }, node.location.offset);
+                return error.InvalidNodeType;
+            },
+
+            .@"\\em",
+            .@"\\mono",
+            .@"\\strike",
+            .@"\\sub",
+            .@"\\sup",
+            .@"\\link",
+            .@"\\time",
+            .@"\\date",
+            .@"\\datetime",
+            .text,
+            .columns,
+            .group,
+            .row,
+            .td,
+            .li,
+            => {
+                try sema.emit_diagnostic(.{ .invalid_block_type = .{ .name = sema.code[node.location.offset .. node.location.offset + node.location.length] } }, node.location.offset);
+                return error.InvalidNodeType;
+            },
+        }
 
         return error.InvalidNodeType;
+    }
+
+    fn translate_heading_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Heading, ?[]const u8 } {
+        _ = sema;
+        _ = node;
+        @panic("Not yet implemented");
+    }
+
+    fn translate_paragraph_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Paragraph, ?[]const u8 } {
+        _ = sema;
+        _ = node;
+        @panic("Not yet implemented");
+    }
+
+    fn translate_list_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.List, ?[]const u8 } {
+        _ = sema;
+        _ = node;
+        @panic("Not yet implemented");
+    }
+
+    fn translate_image_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Image, ?[]const u8 } {
+        _ = sema;
+        _ = node;
+        @panic("Not yet implemented");
+    }
+
+    fn translate_preformatted_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Preformatted, ?[]const u8 } {
+        _ = sema;
+        _ = node;
+        @panic("Not yet implemented");
+    }
+
+    fn translate_toc_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.TableOfContents, ?[]const u8 } {
+        _ = sema;
+        _ = node;
+        @panic("Not yet implemented");
+    }
+
+    fn translate_table_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Table, ?[]const u8 } {
+        _ = sema;
+        _ = node;
+        @panic("Not yet implemented");
     }
 
     fn get_attributes(sema: *SemanticAnalyzer, node: Parser.Node, comptime Attrs: type) error{ OutOfMemory, BadAttributes }!Attrs {
@@ -448,7 +546,7 @@ pub const SemanticAnalyzer = struct {
         }
 
         return switch (T) {
-            []const u8 =>  attrib.value,
+            []const u8 => attrib.value,
 
             Version => Version.parse(attrib.value) catch return error.InvalidValue,
             DateTime => DateTime.parse(attrib.value) catch return error.InvalidValue,
@@ -1144,6 +1242,7 @@ pub const Diagnostic = struct {
     pub const NodeAttributeError = struct { type: Parser.NodeType, name: []const u8 };
     pub const MissingHdocHeader = struct {};
     pub const DuplicateHdocHeader = struct {};
+    pub const InvalidBlockError = struct { name: []const u8 };
 
     pub const Code = union(enum) {
         // errors:
@@ -1157,6 +1256,8 @@ pub const Diagnostic = struct {
         duplicate_hdoc_header: DuplicateHdocHeader,
         missing_attribute: NodeAttributeError,
         invalid_attribute: NodeAttributeError,
+        unknown_block_type: InvalidBlockError,
+        invalid_block_type: InvalidBlockError,
 
         // warnings:
         unknown_attribute: NodeAttributeError,
@@ -1178,6 +1279,8 @@ pub const Diagnostic = struct {
                 .duplicate_hdoc_header,
                 .invalid_attribute,
                 .missing_attribute,
+                .unknown_block_type,
+                .invalid_block_type,
                 => .@"error",
 
                 .unknown_attribute,
