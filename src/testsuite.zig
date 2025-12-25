@@ -114,10 +114,10 @@ test "parser handles attributes and empty bodies" {
     try std.testing.expectEqual(@as(usize, 2), node.attributes.count());
 
     const title = node.attributes.get("title") orelse return error.TestExpectedEqual;
-    try std.testing.expectEqualStrings("Hello", title.value);
+    try std.testing.expectEqualStrings("\"Hello\"", title.value.text);
 
     const author = node.attributes.get("author") orelse return error.TestExpectedEqual;
-    try std.testing.expectEqualStrings("World", author.value);
+    try std.testing.expectEqualStrings("\"World\"", author.value.text);
 
     try std.testing.expect(node.body == .empty);
 }

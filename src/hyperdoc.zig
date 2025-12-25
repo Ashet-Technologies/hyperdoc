@@ -346,6 +346,10 @@ pub const SemanticAnalyzer = struct {
                     error.InvalidNodeType, error.BadAttributes => {
                         return;
                     },
+                    error.Unimplemented => {
+                        std.log.warn("implementd translation of {} node", .{node.type});
+                        return;
+                    },
                 };
 
                 try sema.blocks.append(sema.arena, block);
@@ -374,7 +378,7 @@ pub const SemanticAnalyzer = struct {
         };
     }
 
-    fn translate_block_node(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, InvalidNodeType, BadAttributes }!struct { Block, ?[]const u8 } {
+    fn translate_block_node(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, InvalidNodeType, BadAttributes, Unimplemented }!struct { Block, ?[]const u8 } {
         std.debug.assert(node.type != .hdoc);
 
         switch (node.type) {
@@ -439,45 +443,100 @@ pub const SemanticAnalyzer = struct {
     }
 
     fn translate_heading_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Heading, ?[]const u8 } {
+        const attrs = try sema.get_attributes(node, struct {
+            lang: ?[]const u8 = null,
+            id: ?[]const u8 = null,
+        });
+
+        const heading: Block.Heading = .{
+            .level = switch (node.type) {
+                .h1 => .h1,
+                .h2 => .h2,
+                .h3 => .h3,
+                else => unreachable,
+            },
+            .lang = attrs.lang,
+            .content = try sema.translate_inline_list(node.body),
+        };
+
+        return .{ heading, attrs.id };
+    }
+
+    fn translate_inline_list(sema: *SemanticAnalyzer, body: Parser.Node.Body) error{ OutOfMemory, Unimplemented }![]Span {
+        switch (body) {
+            .empty => return &.{},
+
+            .string => {
+                std.log.warn("TODO: Implement string span translation", .{});
+                return error.Unimplemented;
+            },
+            .verbatim => {
+                std.log.warn("TODO: Implement verbatim span translation", .{});
+                return error.Unimplemented;
+            },
+
+            .list => {
+                var spans: std.ArrayList(Span) = .empty;
+                errdefer spans.deinit(sema.arena);
+
+                // TODO: Insert a space span between two regular text spans if they are not consecutive to each other.
+
+                for (body.list) |child_node| {
+                    const span = try sema.translate_span_node(child_node);
+                    try spans.append(sema.arena, span);
+                }
+
+                // TODO: Compact spans by joining spans with equal properties
+
+                return try spans.toOwnedSlice(sema.arena);
+            },
+        }
+    }
+
+    fn translate_span_node(sema: *SemanticAnalyzer, node: Parser.Node) !Span {
+        //
         _ = sema;
-        _ = node;
-        @panic("Not yet implemented");
+        std.log.warn("TODO: Translate spans of type {}", .{node.type});
+
+        return .{
+            .content = .{ .text = "???" },
+        };
     }
 
     fn translate_paragraph_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Paragraph, ?[]const u8 } {
         _ = sema;
         _ = node;
-        @panic("Not yet implemented");
+        return error.Unimplemented; // TODO: Implement this node type
     }
 
     fn translate_list_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.List, ?[]const u8 } {
         _ = sema;
         _ = node;
-        @panic("Not yet implemented");
+        return error.Unimplemented; // TODO: Implement this node type
     }
 
     fn translate_image_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Image, ?[]const u8 } {
         _ = sema;
         _ = node;
-        @panic("Not yet implemented");
+        return error.Unimplemented; // TODO: Implement this node type
     }
 
     fn translate_preformatted_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Preformatted, ?[]const u8 } {
         _ = sema;
         _ = node;
-        @panic("Not yet implemented");
+        return error.Unimplemented; // TODO: Implement this node type
     }
 
     fn translate_toc_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.TableOfContents, ?[]const u8 } {
         _ = sema;
         _ = node;
-        @panic("Not yet implemented");
+        return error.Unimplemented; // TODO: Implement this node type
     }
 
     fn translate_table_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Table, ?[]const u8 } {
         _ = sema;
         _ = node;
-        @panic("Not yet implemented");
+        return error.Unimplemented; // TODO: Implement this node type
     }
 
     fn get_attributes(sema: *SemanticAnalyzer, node: Parser.Node, comptime Attrs: type) error{ OutOfMemory, BadAttributes }!Attrs {
@@ -545,13 +604,15 @@ pub const SemanticAnalyzer = struct {
             return try sema.cast_value(attrib, @typeInfo(T).optional.child);
         }
 
-        return switch (T) {
-            []const u8 => attrib.value,
+        const value = try sema.unescape_string(attrib.value);
 
-            Version => Version.parse(attrib.value) catch return error.InvalidValue,
-            DateTime => DateTime.parse(attrib.value) catch return error.InvalidValue,
-            Date => Date.parse(attrib.value) catch return error.InvalidValue,
-            Time => Time.parse(attrib.value) catch return error.InvalidValue,
+        return switch (T) {
+            []const u8 => value,
+
+            Version => Version.parse(value) catch return error.InvalidValue,
+            DateTime => DateTime.parse(value) catch return error.InvalidValue,
+            Date => Date.parse(value) catch return error.InvalidValue,
+            Time => Time.parse(value) catch return error.InvalidValue,
 
             else => @compileError("Unsupported attribute type: " ++ @typeName(T)),
         };
@@ -578,6 +639,18 @@ pub const SemanticAnalyzer = struct {
         }
 
         return .{ .line = line, .column = column };
+    }
+
+    /// Accepts a string literal, including the surrounding quotes.
+    pub fn unescape_string(sema: *SemanticAnalyzer, token: Parser.Token) error{OutOfMemory}![]const u8 {
+        std.debug.assert(token.text.len >= 2);
+        std.debug.assert(token.text[0] == '"' and token.text[token.text.len - 1] == '"');
+
+        _ = sema;
+        // TODO: Implement unescaping logic here.
+
+        // For now, we just return the raw text.
+        return token.text[1 .. token.text.len - 1];
     }
 };
 
@@ -641,7 +714,7 @@ pub const Parser = struct {
                     }
                     gop_entry.value_ptr.* = .{
                         .location = attr_location,
-                        .value = try parser.unescape_string(attr_value),
+                        .value = attr_value,
                     };
 
                     if (!parser.try_accept_char(',')) {
@@ -1009,18 +1082,6 @@ pub const Parser = struct {
         return parser.offset >= parser.code.len;
     }
 
-    /// Accepts a string literal, including the surrounding quotes.
-    pub fn unescape_string(parser: *Parser, token: Token) error{OutOfMemory}![]const u8 {
-        std.debug.assert(token.text.len >= 2);
-        std.debug.assert(token.text[0] == '"' and token.text[token.text.len - 1] == '"');
-
-        _ = parser;
-        // TODO: Implement unescaping logic here.
-
-        // For now, we just return the raw text.
-        return token.text[1 .. token.text.len - 1];
-    }
-
     pub fn location(parser: *Parser, start: usize, end: ?usize) Location {
         return .{ .offset = start, .length = (end orelse parser.offset) - start };
     }
@@ -1218,7 +1279,7 @@ pub const Parser = struct {
 
     pub const Attribute = struct {
         location: Location,
-        value: []const u8,
+        value: Token,
     };
 };
 
