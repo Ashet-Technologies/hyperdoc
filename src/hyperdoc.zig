@@ -211,8 +211,31 @@ pub const Date = struct {
     day: u5, // 1-31
 
     pub fn parse(text: []const u8) !Date {
-        _ = text;
-        @panic("TODO: Implement this");
+        const first_dash = std.mem.indexOfScalar(u8, text, '-') orelse return error.InvalidValue;
+        const tail = text[first_dash + 1 ..];
+        const second_dash_rel = std.mem.indexOfScalar(u8, tail, '-') orelse return error.InvalidValue;
+        const second_dash = first_dash + 1 + second_dash_rel;
+
+        const year_text = text[0..first_dash];
+        const month_text = text[first_dash + 1 .. second_dash];
+        const day_text = text[second_dash + 1 ..];
+
+        if (year_text.len == 0 or month_text.len != 2 or day_text.len != 2) return error.InvalidValue;
+
+        const year_value = std.fmt.parseInt(u32, year_text, 10) catch return error.InvalidValue;
+        if (year_value > std.math.maxInt(i32)) return error.InvalidValue;
+
+        const month_value = std.fmt.parseInt(u8, month_text, 10) catch return error.InvalidValue;
+        const day_value = std.fmt.parseInt(u8, day_text, 10) catch return error.InvalidValue;
+
+        if (month_value < 1 or month_value > 12) return error.InvalidValue;
+        if (day_value < 1 or day_value > 31) return error.InvalidValue;
+
+        return .{
+            .year = @intCast(year_value),
+            .month = @intCast(month_value),
+            .day = @intCast(day_value),
+        };
     }
 };
 
@@ -231,10 +254,82 @@ pub const Time = struct {
     minute: u6, // 0-59
     second: u6, // 0-59
     microsecond: u20, // 0-999999
+    zone_offset: i32, // in minutes
 
     pub fn parse(text: []const u8) !Time {
-        _ = text;
-        @panic("TODO: Implement this");
+        if (text.len < 9) return error.InvalidValue;
+
+        const hour = std.fmt.parseInt(u8, text[0..2], 10) catch return error.InvalidValue;
+        if (text[2] != ':') return error.InvalidValue;
+        const minute = std.fmt.parseInt(u8, text[3..5], 10) catch return error.InvalidValue;
+        if (text[5] != ':') return error.InvalidValue;
+        const second = std.fmt.parseInt(u8, text[6..8], 10) catch return error.InvalidValue;
+
+        if (hour > 23 or minute > 59 or second > 59) return error.InvalidValue;
+
+        var index: usize = 8;
+        var microsecond: u20 = 0;
+
+        if (index >= text.len) return error.InvalidValue;
+
+        if (text[index] == '.') {
+            const start = index + 1;
+            var end = start;
+            while (end < text.len and std.ascii.isDigit(text[end])) : (end += 1) {}
+            if (end == start) return error.InvalidValue;
+
+            const fraction_value = std.fmt.parseInt(u64, text[start..end], 10) catch return error.InvalidValue;
+            microsecond = fractionToMicrosecond(end - start, fraction_value) orelse return error.InvalidValue;
+            index = end;
+        }
+
+        if (index >= text.len) return error.InvalidValue;
+
+        if (text[index] == 'Z') {
+            if (index + 1 != text.len) return error.InvalidValue;
+            return .{
+                .hour = @intCast(hour),
+                .minute = @intCast(minute),
+                .second = @intCast(second),
+                .microsecond = microsecond,
+                .zone_offset = 0,
+            };
+        }
+
+        const sign_char = text[index];
+        if (sign_char != '+' and sign_char != '-') return error.InvalidValue;
+        const sign: i32 = if (sign_char == '+') 1 else -1;
+
+        if (text.len - index != 6) return error.InvalidValue;
+        const zone_hour = std.fmt.parseInt(u8, text[index + 1 .. index + 3], 10) catch return error.InvalidValue;
+        if (text[index + 3] != ':') return error.InvalidValue;
+        const zone_minute = std.fmt.parseInt(u8, text[index + 4 .. index + 6], 10) catch return error.InvalidValue;
+
+        if (zone_hour > 23 or zone_minute > 59) return error.InvalidValue;
+
+        const zone_total: u16 = @as(u16, zone_hour) * 60 + zone_minute;
+        const offset_minutes: i32 = sign * @as(i32, zone_total);
+
+        return .{
+            .hour = @intCast(hour),
+            .minute = @intCast(minute),
+            .second = @intCast(second),
+            .microsecond = microsecond,
+            .zone_offset = offset_minutes,
+        };
+    }
+
+    fn fractionToMicrosecond(len: usize, value: u64) ?u20 {
+        const micro: u64 = switch (len) {
+            1 => value * 100_000,
+            2 => value * 10_000,
+            3 => value * 1_000,
+            6 => value,
+            9 => value / 1_000,
+            else => return null,
+        };
+        if (micro > 999_999) return null;
+        return @intCast(micro);
     }
 };
 

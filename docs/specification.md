@@ -99,23 +99,23 @@ Notes:
 
 ## Attribute Overview
 
-| Attribute | Required | Allowed Values                                                                                                                                                                            | Description                                                                     |
-| --------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `version` | Yes      | `2.0`                                                                                                                                                                                     | Describes the version of this HyperDoc document.                                |
-| `lang`    | No       | [BCP 47 Language Tag](https://datatracker.ietf.org/doc/html/rfc5646)                                                                                                                      | Defines the language of the elements contents.                                  |
-| `title`   | No       | *Any*                                                                                                                                                                                     | Sets the title of the document or the table row.                                |
-| `author`  | No       | *Any*                                                                                                                                                                                     | Sets the author of the document.                                                |
-| `date`    | No       | A date-time value using the format specified below (intersection between [RFC3339](https://datatracker.ietf.org/doc/html/rfc3339) and [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601)) | Sets the authoring date of the document.                                        |
-| `id`      | No       | Non-empty                                                                                                                                                                                 | Sets a reference which can be linked to with `\link(ref="...")`.                |
-| `first`   | No       | Decimal integer numbers ≥ 0                                                                                                                                                               | Sets the number of the first list item.                                         |
-| `alt`     | No       | Non-empty                                                                                                                                                                                 | Sets the alternative text shown when an image cannot be loaded.                 |
-| `path`    | Yes      | Non-empty file path to an image file                                                                                                                                                      | Defines the file path where the image file can be found.                        |
-| `syntax`  | No       | *See element documentation*                                                                                                                                                               | Hints the syntax highlighter how how the elements context shall be highlighted. |
-| `depth`   | No       | `1`, `2` or `3`                                                                                                                                                                           | Defines how many levels of headings shall be included.                          |
-| `colspan` | No       | Decimal integer numbers ≥ 1                                                                                                                                                               | Sets how many columns the table cell spans.                                     |
-| `ref`     | No       | Any value present in an `id` attribute.                                                                                                                                                   | References any `id` inside this document.                                       |
-| `uri`     | No       | [Internationalized Resource Identifier (IRI)](https://datatracker.ietf.org/doc/html/rfc3987)                                                                                              | Links to a foreign document with a URI.                                         |
-| `fmt`     | No       | *See element documentation*                                                                                                                                                               |                                                                                 |
+| Attribute | Required | Allowed Values                                                                                                                                                                                                            | Description                                                                     |
+| --------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `version` | Yes      | `2.0`                                                                                                                                                                                                                     | Describes the version of this HyperDoc document.                                |
+| `lang`    | No       | [BCP 47 Language Tag](https://datatracker.ietf.org/doc/html/rfc5646)                                                                                                                                                      | Defines the language of the elements contents.                                  |
+| `title`   | No       | *Any*                                                                                                                                                                                                                     | Sets the title of the document or the table row.                                |
+| `author`  | No       | *Any*                                                                                                                                                                                                                     | Sets the author of the document.                                                |
+| `date`    | No       | A date-time value using the format specified below (a conservative intersection of [RFC3339](https://datatracker.ietf.org/doc/html/rfc3339) and [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601), compatible with both) | Sets the authoring date of the document.                                        |
+| `id`      | No       | Non-empty                                                                                                                                                                                                                 | Sets a reference which can be linked to with `\link(ref="...")`.                |
+| `first`   | No       | Decimal integer numbers ≥ 0                                                                                                                                                                                               | Sets the number of the first list item.                                         |
+| `alt`     | No       | Non-empty                                                                                                                                                                                                                 | Sets the alternative text shown when an image cannot be loaded.                 |
+| `path`    | Yes      | Non-empty file path to an image file                                                                                                                                                                                      | Defines the file path where the image file can be found.                        |
+| `syntax`  | No       | *See element documentation*                                                                                                                                                                                               | Hints the syntax highlighter how how the elements context shall be highlighted. |
+| `depth`   | No       | `1`, `2` or `3`                                                                                                                                                                                                           | Defines how many levels of headings shall be included.                          |
+| `colspan` | No       | Decimal integer numbers ≥ 1                                                                                                                                                                                               | Sets how many columns the table cell spans.                                     |
+| `ref`     | No       | Any value present in an `id` attribute.                                                                                                                                                                                   | References any `id` inside this document.                                       |
+| `uri`     | No       | [Internationalized Resource Identifier (IRI)](https://datatracker.ietf.org/doc/html/rfc3987)                                                                                                                              | Links to a foreign document with a URI.                                         |
+| `fmt`     | No       | *See element documentation*                                                                                                                                                                                               |                                                                                 |
 
 ## Semantic Structure
 
@@ -341,4 +341,42 @@ Adds a hyperlink to the contents. This allows a reader to navigate by typically 
 | `datetime` | `fmt`     | `short` (localized date+time), `long` (localized date+time with seconds), `relative`, `iso` (raw ISO 8601). |
 
 Renders a [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601#Combined_date_and_time_representations) date, time or date+time in a localized manner.
+
+## Date/Time Formatting
+
+All date/time values MUST use the formats defined in this section. This is a conservative, interoperable intersection between [RFC3339](https://datatracker.ietf.org/doc/html/rfc3339) and [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601), so values that conform here are valid under both specifications. Digits are ASCII decimal unless stated otherwise.
+
+### Date Format
+
+Date strings MUST follow `YYYY-MM-DD`.
+
+- `YYYY` is a year with one or more digits.
+- `MM` is a two-digit month in the range `01` to `12`.
+- `DD` is a two-digit day in the range `01` to `31`.
+- The `-` separators are mandatory.
+
+Examples: `2025-12-25`, `1-01-01`.
+
+### Time Format
+
+Time strings MUST follow `hh:mm:ss` with a required time zone.
+
+- `hh`, `mm`, `ss` are two-digit hour, minute, second fields.
+- Hour MUST be in `00` to `23`, minute and second MUST be in `00` to `59`.
+- An optional fractional seconds component MAY follow the seconds field as `.` plus
+  1, 2, 3, 6, or 9 digits.
+- The fractional separator MUST be `.`. Comma is not allowed.
+- A time zone is required and MUST be either `Z` (UTC) or a numeric offset
+  in the form `+hh:mm` or `-hh:mm` with two-digit hour/minute fields.
+- Offset hours MUST be in `00` to `23`, offset minutes MUST be in `00` to `59`.
+
+Examples: `22:30:46Z`, `22:30:46.136+01:00`, `21:30:46.136797358-05:30`.
+
+### Date/Time Format
+
+Date/time strings MUST combine a date and time with a literal `T`.
+
+- Format: `YYYY-MM-DD` + `T` + `hh:mm:ss` (with optional fraction and required zone).
+
+Examples: `2025-12-25T22:31:50.13+01:00`, `2025-12-25T21:31:43Z`.
 
