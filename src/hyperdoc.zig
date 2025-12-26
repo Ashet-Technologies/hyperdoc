@@ -117,13 +117,6 @@ pub const Block = union(enum) {
     };
 };
 
-pub const SpanContent = union(enum) {
-    text: []const u8,
-    date: FormattedDateTime(Date),
-    time: FormattedDateTime(Time),
-    datetime: FormattedDateTime(DateTime),
-};
-
 pub fn FormattedDateTime(comptime DT: type) type {
     return struct {
         value: DT,
@@ -132,15 +125,47 @@ pub fn FormattedDateTime(comptime DT: type) type {
 }
 
 pub const Span = struct {
-    content: SpanContent,
-    lang: ?[]const u8 = null,
-    em: bool = false,
-    mono: bool = false,
-    strike: bool = false,
-    sub: bool = false,
-    sup: bool = false,
-    link: Link = .none,
-    syntax: ?[]const u8 = null,
+    pub const Content = union(enum) {
+        text: []const u8,
+        date: FormattedDateTime(Date),
+        time: FormattedDateTime(Time),
+        datetime: FormattedDateTime(DateTime),
+    };
+
+    pub const Attributes = struct {
+        lang: ?[]const u8 = null,
+        em: bool = false,
+        mono: bool = false,
+        strike: bool = false,
+        sub: bool = false,
+        sup: bool = false,
+        link: Link = .none,
+        syntax: ?[]const u8 = null,
+
+        pub const Overrides = struct {
+            lang: ?[]const u8 = null,
+            em: ?bool = null,
+            mono: ?bool = null,
+            strike: ?bool = null,
+            sub: ?bool = null,
+            sup: ?bool = null,
+            link: ?Link = null,
+            syntax: ?[]const u8 = null,
+        };
+
+        pub fn derive(base: Attributes, overlay: Overrides) Attributes {
+            var new = base;
+            inline for (@typeInfo(Attributes).@"struct".fields) |fld| {
+                if (@field(overlay, fld.name)) |new_value| {
+                    @field(new, fld.name) = new_value;
+                }
+            }
+            return new;
+        }
+    };
+
+    content: Content,
+    attribs: Attributes,
 };
 
 pub const Link = union(enum) {
@@ -551,51 +576,148 @@ pub const SemanticAnalyzer = struct {
                 else => unreachable,
             },
             .lang = attrs.lang,
-            .content = try sema.translate_inline_list(node.body),
+            .content = try sema.translate_inline(node),
         };
 
         return .{ heading, attrs.id };
     }
 
-    fn translate_inline_list(sema: *SemanticAnalyzer, body: Parser.Node.Body) error{ OutOfMemory, Unimplemented }![]Span {
-        switch (body) {
-            .empty => return &.{},
+    fn translate_inline(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, Unimplemented }![]Span {
+        var spans: std.ArrayList(Span) = .empty;
+        errdefer spans.deinit(sema.arena);
 
-            .string => {
-                std.log.warn("TODO: Implement string span translation", .{});
-                return error.Unimplemented;
+        // TODO: Implement automatic space insertion.
+        //       This must be done when two consecutive nodes are separated by a space
+
+        try sema.translate_inline_body(&spans, node.body, .{});
+
+        // TODO: Compact spans by joining spans with equal properties
+
+        return try spans.toOwnedSlice(sema.arena);
+    }
+
+    fn translate_inline_node(sema: *SemanticAnalyzer, spans: *std.ArrayList(Span), node: Parser.Node, attribs: Span.Attributes) !void {
+        switch (node.type) {
+            .unknown_inline,
+            .text,
+            => {
+                try sema.translate_inline_body(spans, node.body, attribs);
             },
-            .verbatim => {
-                std.log.warn("TODO: Implement verbatim span translation", .{});
-                return error.Unimplemented;
+
+            .@"\\em",
+            .@"\\mono",
+            .@"\\strike",
+            .@"\\sub",
+            .@"\\sup",
+            .@"\\link",
+
+            .@"\\date",
+            .@"\\time",
+            .@"\\datetime",
+            => {
+                // TODO: Implement date/time translation
             },
 
-            .list => {
-                var spans: std.ArrayList(Span) = .empty;
-                errdefer spans.deinit(sema.arena);
-
-                // TODO: Insert a space span between two regular text spans if they are not consecutive to each other.
-
-                for (body.list) |child_node| {
-                    const span = try sema.translate_span_node(child_node);
-                    try spans.append(sema.arena, span);
-                }
-
-                // TODO: Compact spans by joining spans with equal properties
-
-                return try spans.toOwnedSlice(sema.arena);
-            },
+            .hdoc,
+            .h1,
+            .h2,
+            .h3,
+            .p,
+            .note,
+            .warning,
+            .danger,
+            .tip,
+            .quote,
+            .spoiler,
+            .ul,
+            .ol,
+            .img,
+            .pre,
+            .toc,
+            .table,
+            .columns,
+            .group,
+            .row,
+            .td,
+            .li,
+            .unknown_block,
+            => @panic("PARSER ERROR: The parser emitted a block node inside an inline context"),
         }
     }
 
-    fn translate_span_node(sema: *SemanticAnalyzer, node: Parser.Node) !Span {
-        //
-        _ = sema;
-        std.log.warn("TODO: Translate spans of type {}", .{node.type});
+    fn translate_inline_body(sema: *SemanticAnalyzer, spans: *std.ArrayList(Span), body: Parser.Node.Body, attribs: Span.Attributes) error{ OutOfMemory, Unimplemented }!void {
+        switch (body) {
+            .empty => |location| {
+                try sema.emit_diagnostic(.empty_inline_body, location.offset);
+            },
 
-        return .{
-            .content = .{ .text = "???" },
-        };
+            .string => |string_body| {
+                const text = try sema.unescape_string(string_body);
+
+                try spans.append(sema.arena, .{
+                    .content = .{ .text = text },
+                    .attribs = attribs,
+                });
+            },
+
+            .verbatim => |verbatim_lines| {
+                var text_buffer: std.ArrayList(u8) = .empty;
+                defer text_buffer.deinit(sema.arena);
+
+                var size: usize = verbatim_lines.len -| 1;
+                for (verbatim_lines) |line| {
+                    size += line.text.len;
+                }
+                try text_buffer.ensureTotalCapacityPrecise(sema.arena, size);
+
+                var first_unpadded = true;
+                for (verbatim_lines, 0..) |line, index| {
+                    if (index != 0) {
+                        try text_buffer.append(sema.arena, '\n');
+                    }
+                    std.debug.assert(std.mem.startsWith(u8, line.text, "|"));
+
+                    const is_padded = std.mem.startsWith(u8, line.text, "| ");
+
+                    if (!is_padded) {
+                        if (first_unpadded) {
+                            try sema.emit_diagnostic(.unpadded_verbatim_line, line.location.offset);
+                            first_unpadded = false;
+                        }
+                    }
+
+                    const text = if (is_padded)
+                        line.text[2..]
+                    else
+                        line.text[1..];
+
+                    const stripped = std.mem.trimRight(u8, text, " \t");
+                    if (text.len != stripped.len) {
+                        try sema.emit_diagnostic(.trailing_whitespace_in_verbatim_line, line.location.offset + stripped.len);
+                    }
+
+                    text_buffer.appendSliceAssumeCapacity(stripped);
+                }
+
+                try spans.append(sema.arena, .{
+                    .content = .{ .text = try text_buffer.toOwnedSlice(sema.arena) },
+                    .attribs = attribs,
+                });
+            },
+
+            .list => |list| {
+                for (list) |child_node| {
+                    try sema.translate_inline_node(spans, child_node, attribs);
+                }
+            },
+
+            .text_span => |text_span| {
+                try spans.append(sema.arena, .{
+                    .content = .{ .text = text_span.text },
+                    .attribs = attribs,
+                });
+            },
+        }
     }
 
     fn translate_paragraph_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Paragraph, ?[]const u8 } {
@@ -822,7 +944,7 @@ pub const Parser = struct {
                 .location = parser.location(type_ident.location.offset, null),
                 .type = node_type,
                 .attributes = attributes,
-                .body = .empty,
+                .body = .{ .empty = parser.location(parser.offset - 1, null) },
             };
         }
 
@@ -929,6 +1051,15 @@ pub const Parser = struct {
                 '{' => {
                     nesting += 1;
                     parser.offset += 1;
+
+                    const token = parser.slice(parser.offset - 1, parser.offset);
+                    try children.append(parser.arena, .{
+                        .location = token.location,
+                        .type = .text,
+                        .body = .{
+                            .text_span = token,
+                        },
+                    });
                 },
 
                 '}' => {
@@ -938,6 +1069,15 @@ pub const Parser = struct {
                         break;
 
                     nesting -= 1;
+
+                    const token = parser.slice(parser.offset - 1, parser.offset);
+                    try children.append(parser.arena, .{
+                        .location = token.location,
+                        .type = .text,
+                        .body = .{
+                            .text_span = token,
+                        },
+                    });
                 },
 
                 '\\' => backslash: {
@@ -946,7 +1086,18 @@ pub const Parser = struct {
                         switch (next_char) {
                             '{', '}', '\\' => {
                                 // Escaped brace
+
+                                const token = parser.slice(parser.offset, parser.offset + 2);
+                                try children.append(parser.arena, .{
+                                    .location = token.location,
+                                    .type = .text,
+                                    .body = .{
+                                        .text_span = token,
+                                    },
+                                });
+
                                 parser.offset += 2;
+
                                 break :backslash;
                             },
                             else => {},
@@ -966,8 +1117,7 @@ pub const Parser = struct {
                     try children.append(parser.arena, .{
                         .location = word.location,
                         .type = .text,
-                        .attributes = .empty,
-                        .body = .empty,
+                        .body = .{ .text_span = word },
                     });
                 },
             }
@@ -1335,6 +1485,7 @@ pub const Parser = struct {
                 .@"\\datetime",
 
                 .unknown_inline,
+                .unknown_block, // Unknown blocks must also have inline bodies to optimally retain body contents
                 => true,
 
                 .hdoc,
@@ -1347,7 +1498,6 @@ pub const Parser = struct {
                 .li,
 
                 .text,
-                .unknown_block,
                 => false,
             };
         }
@@ -1361,10 +1511,11 @@ pub const Parser = struct {
         body: Body,
 
         pub const Body = union(enum) {
-            empty,
+            empty: Location,
             string: Token,
             verbatim: []Token,
             list: []Node,
+            text_span: Token,
         };
     };
 
@@ -1418,6 +1569,9 @@ pub const Diagnostic = struct {
         verbatim_missing_trailing_newline,
         verbatim_missing_space,
         trailing_whitespace,
+        empty_inline_body,
+        unpadded_verbatim_line,
+        trailing_whitespace_in_verbatim_line,
 
         pub fn severity(code: Code) Severity {
             return switch (code) {
@@ -1441,6 +1595,9 @@ pub const Diagnostic = struct {
                 .verbatim_missing_trailing_newline,
                 .verbatim_missing_space,
                 .trailing_whitespace,
+                .empty_inline_body,
+                .unpadded_verbatim_line,
+                .trailing_whitespace_in_verbatim_line,
                 => .warning,
             };
         }
@@ -1472,6 +1629,11 @@ pub const Diagnostic = struct {
                 .unknown_attribute => |ctx| try w.print("Unknown attribute '{s}' for node type '{t}'.", .{ ctx.name, ctx.type }),
                 .unknown_block_type => |ctx| try w.print("Unknown block type '{s}'.", .{ctx.name}),
                 .invalid_block_type => |ctx| try w.print("Invalid block type '{s}' in this context.", .{ctx.name}),
+
+                .empty_inline_body => try w.writeAll("Inline body is empty."),
+
+                .unpadded_verbatim_line => try w.writeAll("Verbatim line is not properly padded with a space character at the start."),
+                .trailing_whitespace_in_verbatim_line => try w.writeAll("Trailing whitespace at end of verbatim line."),
             }
         }
     };

@@ -119,7 +119,7 @@ fn dumpFormattedDateTime(writer: anytype, indent: usize, formatted: hdoc.Formatt
     try writer.print("format: {s}\n", .{@tagName(formatted.format)});
 }
 
-fn dumpSpanContent(writer: anytype, indent: usize, content: hdoc.SpanContent) !void {
+fn dumpSpanContent(writer: anytype, indent: usize, content: hdoc.Span.Content) !void {
     switch (content) {
         .text => |text| {
             try writeIndent(writer, indent);
@@ -174,14 +174,14 @@ fn dumpSpan(writer: anytype, indent: usize, span: hdoc.Span) !void {
     try writeIndent(writer, indent);
     try writer.writeAll("content:\n");
     try dumpSpanContent(writer, indent + indent_step, span.content);
-    try dumpOptionalStringField(writer, indent, "lang", span.lang);
-    try dumpBoolField(writer, indent, "em", span.em);
-    try dumpBoolField(writer, indent, "mono", span.mono);
-    try dumpBoolField(writer, indent, "strike", span.strike);
-    try dumpBoolField(writer, indent, "sub", span.sub);
-    try dumpBoolField(writer, indent, "sup", span.sup);
-    try dumpLink(writer, indent, span.link);
-    try dumpOptionalStringField(writer, indent, "syntax", span.syntax);
+    try dumpOptionalStringField(writer, indent, "lang", span.attribs.lang);
+    try dumpBoolField(writer, indent, "em", span.attribs.em);
+    try dumpBoolField(writer, indent, "mono", span.attribs.mono);
+    try dumpBoolField(writer, indent, "strike", span.attribs.strike);
+    try dumpBoolField(writer, indent, "sub", span.attribs.sub);
+    try dumpBoolField(writer, indent, "sup", span.attribs.sup);
+    try dumpLink(writer, indent, span.attribs.link);
+    try dumpOptionalStringField(writer, indent, "syntax", span.attribs.syntax);
 }
 
 fn dumpSpanListField(writer: anytype, indent: usize, key: []const u8, spans: []const hdoc.Span) !void {
@@ -413,7 +413,7 @@ test "dumpDocument escapes string values" {
     const spans = try arena_alloc.alloc(hdoc.Span, 1);
     spans[0] = .{
         .content = .{ .text = span_text },
-        .link = .{ .ref = link_ref },
+        .attribs = .{ .link = .{ .ref = link_ref } },
     };
 
     const blocks = try arena_alloc.alloc(hdoc.Block, 1);
