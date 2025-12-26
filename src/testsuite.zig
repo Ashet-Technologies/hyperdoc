@@ -279,7 +279,7 @@ test "diagnostic codes are emitted for expected samples" {
         .{ .code = .{ .invalid_identifier_start = .{ .char = '-' } }, .samples = &.{"hdoc(version=\"2.0\"); -abc"} },
         .{ .code = .unterminated_block_list, .samples = &.{"hdoc{h1 \"x\""} },
         .{ .code = .unterminated_inline_list, .samples = &.{"hdoc(version=\"2.0\"); p {hello"} },
-        // TODO: .{ .code = .{ .duplicate_attribute = .{ .name = "title" } }, .samples = &.{"hdoc(version=\"2.0\"); h1(title=\"a\",title=\"b\");"} },
+        .{ .code = .{ .duplicate_attribute = .{ .name = "title" } }, .samples = &.{"hdoc(version=\"2.0\"); h1(lang=\"a\",lang=\"b\");"} },
         .{ .code = .empty_verbatim_block, .samples = &.{"hdoc(version=\"2.0\"); pre:\n"} },
         .{ .code = .verbatim_missing_trailing_newline, .samples = &.{"hdoc(version=\"2.0\"); pre:\n|line"} },
         .{ .code = .verbatim_missing_space, .samples = &.{"hdoc(version=\"2.0\"); pre:\n|nospace\n"} },
@@ -303,7 +303,13 @@ test "diagnostic codes are emitted for expected samples" {
                 defer owned_doc.deinit();
             }
 
-            try std.testing.expect(diagnosticsContain(&diagnostics, case.code));
+            if (!diagnosticsContain(&diagnostics, case.code)) {
+                std.log.err("Diagnostics did not contain expected code: '{t}'", .{case.code});
+                for (diagnostics.items.items) |item| {
+                    std.log.err("  Emitted diagnostic: {f}", .{item.code});
+                }
+                return error.MissingDiagnosticCode;
+            }
 
             const expected_severity = case.code.severity();
             if (expected_severity == .@"error") {

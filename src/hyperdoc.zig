@@ -1466,6 +1466,12 @@ pub const Diagnostic = struct {
                 .verbatim_missing_trailing_newline => try w.writeAll("Verbatim line should end with a newline."),
                 .verbatim_missing_space => try w.writeAll("Expected a space after '|' in verbatim line."),
                 .trailing_whitespace => try w.writeAll("Trailing whitespace at end of line."),
+
+                .missing_attribute => |ctx| try w.print("Missing required attribute '{s}' for node type '{t}'.", .{ ctx.name, ctx.type }),
+                .invalid_attribute => |ctx| try w.print("Invalid value for attribute '{s}' for node type '{t}'.", .{ ctx.name, ctx.type }),
+                .unknown_attribute => |ctx| try w.print("Unknown attribute '{s}' for node type '{t}'.", .{ ctx.name, ctx.type }),
+                .unknown_block_type => |ctx| try w.print("Unknown block type '{s}'.", .{ctx.name}),
+                .invalid_block_type => |ctx| try w.print("Invalid block type '{s}' in this context.", .{ctx.name}),
             }
         }
     };
