@@ -566,7 +566,7 @@ pub const SemanticAnalyzer = struct {
         return .{ heading, attrs.id };
     }
 
-    fn translate_inline(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, Unimplemented }![]Span {
+    fn translate_inline(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, BadAttributes }![]Span {
         var spans: std.ArrayList(Span) = .empty;
         errdefer spans.deinit(sema.arena);
 
@@ -662,20 +662,96 @@ pub const SemanticAnalyzer = struct {
             .text,
             => try sema.translate_inline_body(spans, node.body, attribs),
 
-            .@"\\em",
-            => try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{ .em = true })),
+            .@"\\em" => {
+                const props = try sema.get_attributes(node, struct {
+                    lang: ?[]const u8 = null,
+                });
 
-            .@"\\mono",
-            .@"\\strike",
-            .@"\\sub",
-            .@"\\sup",
-            .@"\\link",
+                try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
+                    .lang = props.lang,
+                    .em = true,
+                }));
+            },
+
+            .@"\\strike" => {
+                const props = try sema.get_attributes(node, struct {
+                    lang: ?[]const u8 = null,
+                });
+
+                try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
+                    .lang = props.lang,
+                    .strike = true,
+                }));
+            },
+
+            .@"\\sub" => {
+                const props = try sema.get_attributes(node, struct {
+                    lang: ?[]const u8 = null,
+                });
+
+                try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
+                    .lang = props.lang,
+                    .position = .superscript,
+                }));
+            },
+
+            .@"\\sup" => {
+                const props = try sema.get_attributes(node, struct {
+                    lang: ?[]const u8 = null,
+                });
+
+                try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
+                    .lang = props.lang,
+                    .position = .subscript,
+                }));
+            },
+
+            .@"\\link" => {
+                const props = try sema.get_attributes(node, struct {
+                    lang: ?[]const u8 = null,
+                    uri: ?[]const u8 = null,
+                    ref: ?[]const u8 = null,
+                });
+
+                if (props.uri != null and props.ref != null) {
+                    try sema.emit_diagnostic(.invalid_link, node.location.offset); // TODO: Use proper attribute location
+                }
+
+                const link: Link = if (props.uri) |uri| blk: {
+                    // TODO: Figure out where to put URI validation (not empty, no leading/trailing whitespace)
+                    break :blk .{ .uri = uri };
+                } else if (props.ref) |ref| blk: {
+                    // TODO: Figure out where to put reference validation (no leading/trailing whitespace)
+                    // TODO: Reference validation must also happen for "id" attribute
+                    break :blk .{ .ref = ref };
+                } else blk: {
+                    try sema.emit_diagnostic(.invalid_link, node.location.offset); // TODO: Use proper attribute location
+                    break :blk .none;
+                };
+
+                try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
+                    .link = link,
+                }));
+            },
+
+            .@"\\mono" => {
+                const props = try sema.get_attributes(node, struct {
+                    lang: ?[]const u8 = null,
+                    syntax: []const u8 = "",
+                });
+                try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
+                    .mono = true,
+                    .lang = props.lang,
+                    .syntax = props.syntax,
+                }));
+            },
 
             .@"\\date",
             .@"\\time",
             .@"\\datetime",
             => {
                 // TODO: Implement date/time translation
+                std.log.err("TODO: Implement {t}", .{node.type});
             },
 
             .hdoc,
@@ -705,7 +781,7 @@ pub const SemanticAnalyzer = struct {
         }
     }
 
-    fn translate_inline_body(sema: *SemanticAnalyzer, spans: *std.ArrayList(Span), body: Parser.Node.Body, attribs: Span.Attributes) error{ OutOfMemory, Unimplemented }!void {
+    fn translate_inline_body(sema: *SemanticAnalyzer, spans: *std.ArrayList(Span), body: Parser.Node.Body, attribs: Span.Attributes) error{ OutOfMemory, BadAttributes }!void {
         switch (body) {
             .empty => |location| {
                 try sema.emit_diagnostic(.empty_inline_body, location.offset);
@@ -1625,6 +1701,7 @@ pub const Diagnostic = struct {
         invalid_block_type: InvalidBlockError,
         invalid_inline_combination: InlineCombinationError,
         link_not_nestable,
+        invalid_link,
 
         // warnings:
         unknown_attribute: NodeAttributeError,
@@ -1654,6 +1731,7 @@ pub const Diagnostic = struct {
                 .invalid_block_type,
                 .invalid_inline_combination,
                 .link_not_nestable,
+                .invalid_link,
                 => .@"error",
 
                 .unknown_attribute,
@@ -1706,6 +1784,7 @@ pub const Diagnostic = struct {
                 .redundant_inline => |ctx| try w.print("The inline \\{t} has no effect.", .{ctx.attribute}),
                 .invalid_inline_combination => |ctx| try w.print("Cannot combine \\{t} with \\{t}.", .{ ctx.first, ctx.second }),
                 .link_not_nestable => try w.writeAll("Links are not nestable"),
+                .invalid_link => try w.writeAll("\\link requires either ref=\"…\" or uri=\"…\" attribute."),
             }
         }
     };
