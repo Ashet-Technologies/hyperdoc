@@ -652,24 +652,26 @@ pub const SemanticAnalyzer = struct {
 
         var any_invalid = false;
         var found: std.EnumSet(Fields) = .initEmpty();
-        for (node.attributes.keys(), node.attributes.values()) |key, attrib| {
+        for (node.attributes.items) |attrib| {
+            const key = attrib.name.text;
+
             const fld = std.meta.stringToEnum(Fields, key) orelse {
-                try sema.emit_diagnostic(.{ .unknown_attribute = .{ .type = node.type, .name = key } }, node.location.offset);
+                try sema.emit_diagnostic(.{ .unknown_attribute = .{ .type = node.type, .name = key } }, attrib.name.location.offset);
                 continue;
             };
             if (found.contains(fld)) {
-                try sema.emit_diagnostic(.{ .duplicate_attribute = .{ .name = key } }, node.location.offset);
+                try sema.emit_diagnostic(.{ .duplicate_attribute = .{ .name = key } }, attrib.name.location.offset);
             }
             found.insert(fld);
 
             switch (fld) {
-                inline else => |tag| @field(attrs, @tagName(tag)) = sema.cast_value(attrib, @FieldType(Attrs, @tagName(tag))) catch |err| switch (err) {
+                inline else => |tag| @field(attrs, @tagName(tag)) = sema.cast_value(attrib.value, @FieldType(Attrs, @tagName(tag))) catch |err| switch (err) {
                     error.OutOfMemory => |e| return e,
 
                     else => {
                         any_invalid = true;
 
-                        try sema.emit_diagnostic(.{ .invalid_attribute = .{ .type = node.type, .name = key } }, node.location.offset);
+                        try sema.emit_diagnostic(.{ .invalid_attribute = .{ .type = node.type, .name = key } }, attrib.value.location.offset);
 
                         continue;
                     },
@@ -694,12 +696,12 @@ pub const SemanticAnalyzer = struct {
         return attrs;
     }
 
-    fn cast_value(sema: *SemanticAnalyzer, attrib: Parser.Attribute, comptime T: type) error{ OutOfMemory, InvalidValue }!T {
+    fn cast_value(sema: *SemanticAnalyzer, attrib: Parser.Token, comptime T: type) error{ OutOfMemory, InvalidValue }!T {
         if (@typeInfo(T) == .optional) {
             return try sema.cast_value(attrib, @typeInfo(T).optional.child);
         }
 
-        const value = try sema.unescape_string(attrib.value);
+        const value = try sema.unescape_string(attrib);
 
         return switch (T) {
             []const u8 => value,
@@ -788,7 +790,7 @@ pub const Parser = struct {
         else
             .unknown_block;
 
-        var attributes: std.StringArrayHashMapUnmanaged(Attribute) = .empty;
+        var attributes: std.ArrayList(Attribute) = .empty;
         errdefer attributes.deinit(parser.arena);
 
         if (parser.try_accept_char('(')) {
@@ -797,20 +799,14 @@ pub const Parser = struct {
                 // so we know that the next token must be the attribute name.
 
                 while (true) {
-                    const start = parser.offset;
                     const attr_name = try parser.accept_identifier();
                     _ = try parser.accept_char('=');
                     const attr_value = try parser.accept_string();
-                    const attr_location = parser.location(start, parser.offset);
 
-                    const gop_entry = try attributes.getOrPut(parser.arena, attr_name.text);
-                    if (gop_entry.found_existing) {
-                        emitDiagnostic(parser, .{ .duplicate_attribute = .{ .name = attr_name.text } }, parser.make_diagnostic_location(attr_location.offset));
-                    }
-                    gop_entry.value_ptr.* = .{
-                        .location = attr_location,
+                    try attributes.append(parser.arena, .{
+                        .name = attr_name,
                         .value = attr_value,
-                    };
+                    });
 
                     if (!parser.try_accept_char(',')) {
                         break;
@@ -823,7 +819,7 @@ pub const Parser = struct {
         if (parser.try_accept_char(';')) {
             // block has empty content
             return .{
-                .location = parser.location(type_ident.position.offset, null),
+                .location = parser.location(type_ident.location.offset, null),
                 .type = node_type,
                 .attributes = attributes,
                 .body = .empty,
@@ -840,11 +836,11 @@ pub const Parser = struct {
             }
 
             if (lines.items.len == 0) {
-                emitDiagnostic(parser, .empty_verbatim_block, parser.make_diagnostic_location(type_ident.position.offset));
+                emitDiagnostic(parser, .empty_verbatim_block, parser.make_diagnostic_location(type_ident.location.offset));
             }
 
             return .{
-                .location = parser.location(type_ident.position.offset, null),
+                .location = parser.location(type_ident.location.offset, null),
                 .type = node_type,
                 .attributes = attributes,
                 .body = .{ .verbatim = try lines.toOwnedSlice(parser.arena) },
@@ -855,7 +851,7 @@ pub const Parser = struct {
             // block has string content
 
             return .{
-                .location = parser.location(type_ident.position.offset, null),
+                .location = parser.location(type_ident.location.offset, null),
                 .type = node_type,
                 .attributes = attributes,
                 .body = .{ .string = string_body },
@@ -868,7 +864,7 @@ pub const Parser = struct {
             try parser.accept_block_node_list();
 
         return .{
-            .location = parser.location(type_ident.position.offset, null),
+            .location = parser.location(type_ident.location.offset, null),
             .type = node_type,
             .attributes = attributes,
             .body = .{ .list = try children.toOwnedSlice(parser.arena) },
@@ -968,7 +964,7 @@ pub const Parser = struct {
                 else => {
                     const word = try parser.accept_word();
                     try children.append(parser.arena, .{
-                        .location = word.position,
+                        .location = word.location,
                         .type = .text,
                         .attributes = .empty,
                         .body = .empty,
@@ -1184,7 +1180,7 @@ pub const Parser = struct {
     pub fn slice(parser: *Parser, start: usize, end: usize) Token {
         return .{
             .text = parser.code[start..end],
-            .position = .{ .offset = start, .length = end - start },
+            .location = .{ .offset = start, .length = end - start },
         };
     }
 
@@ -1221,7 +1217,7 @@ pub const Parser = struct {
 
     pub const Token = struct {
         text: []const u8,
-        position: Location,
+        location: Location,
     };
 
     pub const Location = struct {
@@ -1360,7 +1356,7 @@ pub const Parser = struct {
     pub const Node = struct {
         location: Location,
         type: NodeType,
-        attributes: std.StringArrayHashMapUnmanaged(Attribute),
+        attributes: std.ArrayList(Attribute) = .empty,
 
         body: Body,
 
@@ -1373,7 +1369,7 @@ pub const Parser = struct {
     };
 
     pub const Attribute = struct {
-        location: Location,
+        name: Token,
         value: Token,
     };
 };
