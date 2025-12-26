@@ -2,3 +2,5 @@ hdoc(version="2.0");
 
 h1:
 | Hello, World!
+
+h2{Hello \em{World}!}

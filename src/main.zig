@@ -178,8 +178,7 @@ fn dumpSpan(writer: anytype, indent: usize, span: hdoc.Span) !void {
     try dumpBoolField(writer, indent, "em", span.attribs.em);
     try dumpBoolField(writer, indent, "mono", span.attribs.mono);
     try dumpBoolField(writer, indent, "strike", span.attribs.strike);
-    try dumpBoolField(writer, indent, "sub", span.attribs.sub);
-    try dumpBoolField(writer, indent, "sup", span.attribs.sup);
+    try dumpEnumField(writer, indent, "position", span.attribs.position);
     try dumpLink(writer, indent, span.attribs.link);
     try dumpOptionalStringField(writer, indent, "syntax", span.attribs.syntax);
 }

@@ -133,39 +133,23 @@ pub const Span = struct {
     };
 
     pub const Attributes = struct {
-        lang: ?[]const u8 = null,
+        lang: []const u8 = "", // empty is absence
+        position: ScriptPosition = .baseline,
         em: bool = false,
         mono: bool = false,
         strike: bool = false,
-        sub: bool = false,
-        sup: bool = false,
         link: Link = .none,
-        syntax: ?[]const u8 = null,
-
-        pub const Overrides = struct {
-            lang: ?[]const u8 = null,
-            em: ?bool = null,
-            mono: ?bool = null,
-            strike: ?bool = null,
-            sub: ?bool = null,
-            sup: ?bool = null,
-            link: ?Link = null,
-            syntax: ?[]const u8 = null,
-        };
-
-        pub fn derive(base: Attributes, overlay: Overrides) Attributes {
-            var new = base;
-            inline for (@typeInfo(Attributes).@"struct".fields) |fld| {
-                if (@field(overlay, fld.name)) |new_value| {
-                    @field(new, fld.name) = new_value;
-                }
-            }
-            return new;
-        }
+        syntax: []const u8 = "", // empty is absence
     };
 
     content: Content,
     attribs: Attributes,
+};
+
+pub const ScriptPosition = enum {
+    baseline,
+    superscript,
+    subscript,
 };
 
 pub const Link = union(enum) {
@@ -596,15 +580,91 @@ pub const SemanticAnalyzer = struct {
         return try spans.toOwnedSlice(sema.arena);
     }
 
+    pub const AttribOverrides = struct {
+        lang: ?[]const u8 = null,
+        em: ?bool = null,
+        mono: ?bool = null,
+        strike: ?bool = null,
+        position: ?ScriptPosition = null,
+        link: ?Link = null,
+        syntax: []const u8 = "",
+    };
+
+    fn derive_attribute(sema: *SemanticAnalyzer, location: Parser.Location, old: Span.Attributes, overlay: AttribOverrides) !Span.Attributes {
+        comptime std.debug.assert(@typeInfo(Span.Attributes).@"struct".fields.len == @typeInfo(AttribOverrides).@"struct".fields.len);
+
+        var new = old;
+        if (overlay.lang) |lang| {
+            new.lang = lang;
+        }
+
+        if (overlay.em) |v| {
+            if (old.em) {
+                try sema.emit_diagnostic(.{ .redundant_inline = .{ .attribute = .em } }, location.offset);
+            }
+            new.em = v;
+        }
+
+        if (overlay.mono) |mono| {
+            if (old.mono) {
+                if (std.mem.eql(u8, old.syntax, new.syntax)) {
+                    try sema.emit_diagnostic(.{ .redundant_inline = .{ .attribute = .mono } }, location.offset);
+                }
+            }
+            new.mono = mono;
+            new.syntax = overlay.syntax;
+        } else {
+            // can't override syntax without also enabling mono!
+            std.debug.assert(overlay.syntax.len == 0);
+        }
+
+        if (overlay.strike) |strike| {
+            if (old.strike) {
+                try sema.emit_diagnostic(.{ .redundant_inline = .{ .attribute = .strike } }, location.offset);
+            }
+            new.strike = strike;
+        }
+
+        if (overlay.position) |new_pos| {
+            std.debug.assert(new_pos != .baseline); // we can never return to baseline script.
+            if (old.position == new_pos) {
+                try sema.emit_diagnostic(.{ .redundant_inline = .{ .attribute = .sub } }, location.offset);
+            } else if (old.position != .baseline) {
+                try sema.emit_diagnostic(.{ .invalid_inline_combination = .{
+                    .first = switch (old.position) {
+                        .superscript => .sup,
+                        .subscript => .sub,
+                        .baseline => unreachable,
+                    },
+                    .second = switch (new_pos) {
+                        .superscript => .sup,
+                        .subscript => .sub,
+                        .baseline => unreachable,
+                    },
+                } }, location.offset);
+            }
+            new.position = new_pos;
+        }
+
+        if (overlay.link) |link| {
+            if (old.link != .none) {
+                try sema.emit_diagnostic(.link_not_nestable, location.offset);
+            }
+            new.link = link;
+        }
+
+        return new;
+    }
+
     fn translate_inline_node(sema: *SemanticAnalyzer, spans: *std.ArrayList(Span), node: Parser.Node, attribs: Span.Attributes) !void {
         switch (node.type) {
             .unknown_inline,
             .text,
-            => {
-                try sema.translate_inline_body(spans, node.body, attribs);
-            },
+            => try sema.translate_inline_body(spans, node.body, attribs),
 
             .@"\\em",
+            => try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{ .em = true })),
+
             .@"\\mono",
             .@"\\strike",
             .@"\\sub",
@@ -1546,6 +1606,8 @@ pub const Diagnostic = struct {
     pub const MissingHdocHeader = struct {};
     pub const DuplicateHdocHeader = struct {};
     pub const InvalidBlockError = struct { name: []const u8 };
+    pub const InlineUsageError = struct { attribute: InlineAttribute };
+    pub const InlineCombinationError = struct { first: InlineAttribute, second: InlineAttribute };
 
     pub const Code = union(enum) {
         // errors:
@@ -1561,6 +1623,8 @@ pub const Diagnostic = struct {
         invalid_attribute: NodeAttributeError,
         unknown_block_type: InvalidBlockError,
         invalid_block_type: InvalidBlockError,
+        invalid_inline_combination: InlineCombinationError,
+        link_not_nestable,
 
         // warnings:
         unknown_attribute: NodeAttributeError,
@@ -1572,6 +1636,7 @@ pub const Diagnostic = struct {
         empty_inline_body,
         unpadded_verbatim_line,
         trailing_whitespace_in_verbatim_line,
+        redundant_inline: InlineUsageError,
 
         pub fn severity(code: Code) Severity {
             return switch (code) {
@@ -1587,6 +1652,8 @@ pub const Diagnostic = struct {
                 .missing_attribute,
                 .unknown_block_type,
                 .invalid_block_type,
+                .invalid_inline_combination,
+                .link_not_nestable,
                 => .@"error",
 
                 .unknown_attribute,
@@ -1598,6 +1665,7 @@ pub const Diagnostic = struct {
                 .empty_inline_body,
                 .unpadded_verbatim_line,
                 .trailing_whitespace_in_verbatim_line,
+                .redundant_inline,
                 => .warning,
             };
         }
@@ -1634,6 +1702,10 @@ pub const Diagnostic = struct {
 
                 .unpadded_verbatim_line => try w.writeAll("Verbatim line is not properly padded with a space character at the start."),
                 .trailing_whitespace_in_verbatim_line => try w.writeAll("Trailing whitespace at end of verbatim line."),
+
+                .redundant_inline => |ctx| try w.print("The inline \\{t} has no effect.", .{ctx.attribute}),
+                .invalid_inline_combination => |ctx| try w.print("Cannot combine \\{t} with \\{t}.", .{ ctx.first, ctx.second }),
+                .link_not_nestable => try w.writeAll("Links are not nestable"),
             }
         }
     };
@@ -1678,6 +1750,17 @@ pub const Diagnostics = struct {
         }
         return false;
     }
+};
+
+pub const InlineAttribute = enum {
+    lang,
+    em,
+    mono,
+    strike,
+    sub,
+    sup,
+    link,
+    syntax,
 };
 
 test "fuzz parser" {
