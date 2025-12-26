@@ -95,92 +95,126 @@ fn dumpDateTime(writer: anytype, indent: usize, datetime: hdoc.DateTime) !void {
     try dumpTime(writer, indent + indent_step, datetime.time);
 }
 
-fn dumpFormattedDate(writer: anytype, indent: usize, formatted: hdoc.FormattedDateTime(hdoc.Date)) !void {
-    try writeIndent(writer, indent);
-    try writer.writeAll("value:\n");
-    try dumpDate(writer, indent + indent_step, formatted.value);
-    try writeIndent(writer, indent);
-    try writer.print("format: {s}\n", .{@tagName(formatted.format)});
-}
-
-fn dumpFormattedTime(writer: anytype, indent: usize, formatted: hdoc.FormattedDateTime(hdoc.Time)) !void {
-    try writeIndent(writer, indent);
-    try writer.writeAll("value:\n");
-    try dumpTime(writer, indent + indent_step, formatted.value);
-    try writeIndent(writer, indent);
-    try writer.print("format: {s}\n", .{@tagName(formatted.format)});
-}
-
-fn dumpFormattedDateTime(writer: anytype, indent: usize, formatted: hdoc.FormattedDateTime(hdoc.DateTime)) !void {
-    try writeIndent(writer, indent);
-    try writer.writeAll("value:\n");
-    try dumpDateTime(writer, indent + indent_step, formatted.value);
-    try writeIndent(writer, indent);
-    try writer.print("format: {s}\n", .{@tagName(formatted.format)});
-}
-
-fn dumpSpanContent(writer: anytype, indent: usize, content: hdoc.Span.Content) !void {
-    switch (content) {
-        .text => |text| {
-            try writeIndent(writer, indent);
-            try writer.writeAll("text: ");
-            try writeStringValue(writer, text);
-            try writer.writeByte('\n');
-        },
-        .date => |date| {
-            try writeIndent(writer, indent);
-            try writer.writeAll("date:\n");
-            try dumpFormattedDate(writer, indent + indent_step, date);
-        },
-        .time => |time| {
-            try writeIndent(writer, indent);
-            try writer.writeAll("time:\n");
-            try dumpFormattedTime(writer, indent + indent_step, time);
-        },
-        .datetime => |datetime| {
-            try writeIndent(writer, indent);
-            try writer.writeAll("datetime:\n");
-            try dumpFormattedDateTime(writer, indent + indent_step, datetime);
-        },
+fn writeAttrSeparator(writer: anytype, first: *bool) !void {
+    if (first.*) {
+        first.* = false;
+    } else {
+        try writer.writeByte(' ');
     }
 }
 
-fn dumpLink(writer: anytype, indent: usize, link: hdoc.Link) !void {
-    switch (link) {
-        .none => {
-            try writeIndent(writer, indent);
-            try writer.writeAll("link: none\n");
-        },
+fn writeSpanAttributes(writer: anytype, span: hdoc.Span) !void {
+    try writer.writeByte('[');
+    var first = true;
+    if (span.attribs.em) {
+        try writeAttrSeparator(writer, &first);
+        try writer.writeAll("em");
+    }
+    if (span.attribs.mono) {
+        try writeAttrSeparator(writer, &first);
+        try writer.writeAll("mono");
+    }
+    if (span.attribs.strike) {
+        try writeAttrSeparator(writer, &first);
+        try writer.writeAll("strike");
+    }
+    if (span.attribs.position != .baseline) {
+        try writeAttrSeparator(writer, &first);
+        try writer.print("position=\"{s}\"", .{@tagName(span.attribs.position)});
+    }
+    switch (span.attribs.link) {
+        .none => {},
         .ref => |value| {
-            try writeIndent(writer, indent);
-            try writer.writeAll("link:\n");
-            try writeIndent(writer, indent + indent_step);
-            try writer.writeAll("ref: ");
-            try writeStringValue(writer, value);
-            try writer.writeByte('\n');
+            try writeAttrSeparator(writer, &first);
+            try writer.print("link=\"ref:{f}\"", .{std.zig.fmtString(value)});
         },
         .uri => |value| {
-            try writeIndent(writer, indent);
-            try writer.writeAll("link:\n");
-            try writeIndent(writer, indent + indent_step);
-            try writer.writeAll("uri: ");
-            try writeStringValue(writer, value);
-            try writer.writeByte('\n');
+            try writeAttrSeparator(writer, &first);
+            try writer.print("link=\"uri:{f}\"", .{std.zig.fmtString(value)});
+        },
+    }
+    if (span.attribs.lang.len != 0) {
+        try writeAttrSeparator(writer, &first);
+        try writer.print("lang=\"{f}\"", .{std.zig.fmtString(span.attribs.lang)});
+    }
+    if (span.attribs.syntax.len != 0) {
+        try writeAttrSeparator(writer, &first);
+        try writer.print("syntax=\"{f}\"", .{std.zig.fmtString(span.attribs.syntax)});
+    }
+    try writer.writeByte(']');
+}
+
+fn writeDateValue(writer: anytype, date: hdoc.Date) !void {
+    try writer.print("{d:0>4}-{d:0>2}-{d:0>2}", .{ date.year, date.month, date.day });
+}
+
+fn writeTimeValue(writer: anytype, time: hdoc.Time) !void {
+    try writer.print("{d:0>2}:{d:0>2}:{d:0>2}", .{ time.hour, time.minute, time.second });
+    if (time.microsecond != 0) {
+        try writer.print(".{d:0>6}", .{time.microsecond});
+    }
+}
+
+fn writeDateTimeValue(writer: anytype, datetime: hdoc.DateTime) !void {
+    try writeDateValue(writer, datetime.date);
+    try writer.writeByte('T');
+    try writeTimeValue(writer, datetime.time);
+}
+
+fn writeFormattedDateInline(writer: anytype, formatted: hdoc.FormattedDateTime(hdoc.Date)) !void {
+    try writer.writeAll("date:");
+    try writeDateValue(writer, formatted.value);
+    if (formatted.format != hdoc.Date.Format.default) {
+        try writer.writeByte('@');
+        try writer.writeAll(@tagName(formatted.format));
+    }
+}
+
+fn writeFormattedTimeInline(writer: anytype, formatted: hdoc.FormattedDateTime(hdoc.Time)) !void {
+    try writer.writeAll("time:");
+    try writeTimeValue(writer, formatted.value);
+    if (formatted.format != hdoc.Time.Format.default) {
+        try writer.writeByte('@');
+        try writer.writeAll(@tagName(formatted.format));
+    }
+}
+
+fn writeFormattedDateTimeInline(writer: anytype, formatted: hdoc.FormattedDateTime(hdoc.DateTime)) !void {
+    try writer.writeAll("datetime:");
+    try writeDateTimeValue(writer, formatted.value);
+    if (formatted.format != hdoc.DateTime.Format.default) {
+        try writer.writeByte('@');
+        try writer.writeAll(@tagName(formatted.format));
+    }
+}
+
+fn writeSpanContentInline(writer: anytype, content: hdoc.Span.Content) !void {
+    switch (content) {
+        .text => |text| {
+            try writeStringValue(writer, text);
+        },
+        .date => |date| {
+            try writer.writeByte('"');
+            try writeFormattedDateInline(writer, date);
+            try writer.writeByte('"');
+        },
+        .time => |time| {
+            try writer.writeByte('"');
+            try writeFormattedTimeInline(writer, time);
+            try writer.writeByte('"');
+        },
+        .datetime => |datetime| {
+            try writer.writeByte('"');
+            try writeFormattedDateTimeInline(writer, datetime);
+            try writer.writeByte('"');
         },
     }
 }
 
-fn dumpSpan(writer: anytype, indent: usize, span: hdoc.Span) !void {
-    try writeIndent(writer, indent);
-    try writer.writeAll("content:\n");
-    try dumpSpanContent(writer, indent + indent_step, span.content);
-    try dumpOptionalStringField(writer, indent, "lang", span.attribs.lang);
-    try dumpBoolField(writer, indent, "em", span.attribs.em);
-    try dumpBoolField(writer, indent, "mono", span.attribs.mono);
-    try dumpBoolField(writer, indent, "strike", span.attribs.strike);
-    try dumpEnumField(writer, indent, "position", span.attribs.position);
-    try dumpLink(writer, indent, span.attribs.link);
-    try dumpOptionalStringField(writer, indent, "syntax", span.attribs.syntax);
+fn dumpSpanInline(writer: anytype, span: hdoc.Span) !void {
+    try writeSpanAttributes(writer, span);
+    try writer.writeByte(' ');
+    try writeSpanContentInline(writer, span.content);
 }
 
 fn dumpSpanListField(writer: anytype, indent: usize, key: []const u8, spans: []const hdoc.Span) !void {
@@ -192,8 +226,9 @@ fn dumpSpanListField(writer: anytype, indent: usize, key: []const u8, spans: []c
     try writer.print("{s}:\n", .{key});
     for (spans) |span| {
         try writeIndent(writer, indent + indent_step);
-        try writer.writeAll("-\n");
-        try dumpSpan(writer, indent + indent_step * 2, span);
+        try writer.writeAll("- ");
+        try dumpSpanInline(writer, span);
+        try writer.writeByte('\n');
     }
 }
 
@@ -286,31 +321,27 @@ fn dumpTableRowsField(writer: anytype, indent: usize, key: []const u8, rows: []c
     }
 }
 
-fn dumpBlock(writer: anytype, indent: usize, block: hdoc.Block) !void {
+fn dumpBlockInline(writer: anytype, indent: usize, block: hdoc.Block) !void {
     switch (block) {
         .heading => |heading| {
-            try writeIndent(writer, indent);
             try writer.writeAll("heading:\n");
             try dumpEnumField(writer, indent + indent_step, "level", heading.level);
             try dumpOptionalStringField(writer, indent + indent_step, "lang", heading.lang);
             try dumpSpanListField(writer, indent + indent_step, "content", heading.content);
         },
         .paragraph => |paragraph| {
-            try writeIndent(writer, indent);
             try writer.writeAll("paragraph:\n");
             try dumpEnumField(writer, indent + indent_step, "kind", paragraph.kind);
             try dumpOptionalStringField(writer, indent + indent_step, "lang", paragraph.lang);
             try dumpSpanListField(writer, indent + indent_step, "content", paragraph.content);
         },
         .list => |list| {
-            try writeIndent(writer, indent);
             try writer.writeAll("list:\n");
             try dumpOptionalStringField(writer, indent + indent_step, "lang", list.lang);
             try dumpOptionalNumberField(writer, indent + indent_step, "first", list.first);
             try dumpListItemsField(writer, indent + indent_step, "items", list.items);
         },
         .image => |image| {
-            try writeIndent(writer, indent);
             try writer.writeAll("image:\n");
             try dumpOptionalStringField(writer, indent + indent_step, "lang", image.lang);
             try dumpOptionalStringField(writer, indent + indent_step, "alt", image.alt);
@@ -318,20 +349,17 @@ fn dumpBlock(writer: anytype, indent: usize, block: hdoc.Block) !void {
             try dumpSpanListField(writer, indent + indent_step, "content", image.content);
         },
         .preformatted => |preformatted| {
-            try writeIndent(writer, indent);
             try writer.writeAll("preformatted:\n");
             try dumpOptionalStringField(writer, indent + indent_step, "lang", preformatted.lang);
             try dumpOptionalStringField(writer, indent + indent_step, "syntax", preformatted.syntax);
             try dumpSpanListField(writer, indent + indent_step, "content", preformatted.content);
         },
         .toc => |toc| {
-            try writeIndent(writer, indent);
             try writer.writeAll("toc:\n");
             try dumpOptionalStringField(writer, indent + indent_step, "lang", toc.lang);
             try dumpOptionalNumberField(writer, indent + indent_step, "depth", toc.depth);
         },
         .table => |table| {
-            try writeIndent(writer, indent);
             try writer.writeAll("table:\n");
             try dumpOptionalStringField(writer, indent + indent_step, "lang", table.lang);
             try dumpTableRowsField(writer, indent + indent_step, "rows", table.rows);
@@ -348,8 +376,8 @@ fn dumpBlockListField(writer: anytype, indent: usize, key: []const u8, blocks: [
     try writer.print("{s}:\n", .{key});
     for (blocks) |block| {
         try writeIndent(writer, indent + indent_step);
-        try writer.writeAll("-\n");
-        try dumpBlock(writer, indent + indent_step * 2, block);
+        try writer.writeAll("- ");
+        try dumpBlockInline(writer, indent + indent_step, block);
     }
 }
 
@@ -439,13 +467,13 @@ test "dumpDocument escapes string values" {
     defer std.testing.allocator.free(expected_title);
     try std.testing.expect(std.mem.indexOf(u8, output, expected_title) != null);
 
-    const expected_span = try std.fmt.allocPrint(std.testing.allocator, "text: \"{f}\"\n", .{std.zig.fmtString(span_text)});
+    const expected_span = try std.fmt.allocPrint(
+        std.testing.allocator,
+        "- [link=\"ref:{f}\"] \"{f}\"\n",
+        .{ std.zig.fmtString(link_ref), std.zig.fmtString(span_text) },
+    );
     defer std.testing.allocator.free(expected_span);
     try std.testing.expect(std.mem.indexOf(u8, output, expected_span) != null);
-
-    const expected_link = try std.fmt.allocPrint(std.testing.allocator, "ref: \"{f}\"\n", .{std.zig.fmtString(link_ref)});
-    defer std.testing.allocator.free(expected_link);
-    try std.testing.expect(std.mem.indexOf(u8, output, expected_link) != null);
 
     const expected_id = try std.fmt.allocPrint(std.testing.allocator, "- \"{f}\"\n", .{std.zig.fmtString(id_value)});
     defer std.testing.allocator.free(expected_id);
