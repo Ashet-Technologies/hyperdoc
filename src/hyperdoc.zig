@@ -452,7 +452,7 @@ pub const SemanticAnalyzer = struct {
         switch (node.type) {
             .hdoc => {
                 if (sema.header != null) {
-                    try sema.emit_diagnostic(.duplicate_hdoc_header, node.location.offset);
+                    try sema.emit_diagnostic(.duplicate_hdoc_header, node.location);
                 }
                 sema.header = sema.translate_header_node(node) catch |err| switch (err) {
                     error.OutOfMemory => |e| return e,
@@ -467,7 +467,7 @@ pub const SemanticAnalyzer = struct {
                         // This can only happen exactly once, as we either:
                         // - have already set a header block when the first non-header nodes arrives.
                         // - we have processed another block already, so the previous block would've emitted the warning already.
-                        try sema.emit_diagnostic(.missing_hdoc_header, node.location.offset);
+                        try sema.emit_diagnostic(.missing_hdoc_header, node.location);
                     }
                 }
 
@@ -544,7 +544,7 @@ pub const SemanticAnalyzer = struct {
             },
 
             .unknown_block, .unknown_inline => {
-                try sema.emit_diagnostic(.{ .unknown_block_type = .{ .name = sema.code[node.location.offset .. node.location.offset + node.location.length] } }, node.location.offset);
+                try sema.emit_diagnostic(.{ .unknown_block_type = .{ .name = sema.code[node.location.offset .. node.location.offset + node.location.length] } }, node.location);
                 return error.InvalidNodeType;
             },
 
@@ -564,7 +564,7 @@ pub const SemanticAnalyzer = struct {
             .td,
             .li,
             => {
-                try sema.emit_diagnostic(.{ .invalid_block_type = .{ .name = sema.code[node.location.offset .. node.location.offset + node.location.length] } }, node.location.offset);
+                try sema.emit_diagnostic(.{ .invalid_block_type = .{ .name = sema.code[node.location.offset .. node.location.offset + node.location.length] } }, node.location);
                 return error.InvalidNodeType;
             },
         }
@@ -626,7 +626,7 @@ pub const SemanticAnalyzer = struct {
 
         if (overlay.em) |v| {
             if (old.em) {
-                try sema.emit_diagnostic(.{ .redundant_inline = .{ .attribute = .em } }, location.offset);
+                try sema.emit_diagnostic(.{ .redundant_inline = .{ .attribute = .em } }, location);
             }
             new.em = v;
         }
@@ -634,7 +634,7 @@ pub const SemanticAnalyzer = struct {
         if (overlay.mono) |mono| {
             if (old.mono) {
                 if (std.mem.eql(u8, old.syntax, new.syntax)) {
-                    try sema.emit_diagnostic(.{ .redundant_inline = .{ .attribute = .mono } }, location.offset);
+                    try sema.emit_diagnostic(.{ .redundant_inline = .{ .attribute = .mono } }, location);
                 }
             }
             new.mono = mono;
@@ -646,7 +646,7 @@ pub const SemanticAnalyzer = struct {
 
         if (overlay.strike) |strike| {
             if (old.strike) {
-                try sema.emit_diagnostic(.{ .redundant_inline = .{ .attribute = .strike } }, location.offset);
+                try sema.emit_diagnostic(.{ .redundant_inline = .{ .attribute = .strike } }, location);
             }
             new.strike = strike;
         }
@@ -654,7 +654,7 @@ pub const SemanticAnalyzer = struct {
         if (overlay.position) |new_pos| {
             std.debug.assert(new_pos != .baseline); // we can never return to baseline script.
             if (old.position == new_pos) {
-                try sema.emit_diagnostic(.{ .redundant_inline = .{ .attribute = .sub } }, location.offset);
+                try sema.emit_diagnostic(.{ .redundant_inline = .{ .attribute = .sub } }, location);
             } else if (old.position != .baseline) {
                 try sema.emit_diagnostic(.{ .invalid_inline_combination = .{
                     .first = switch (old.position) {
@@ -667,14 +667,14 @@ pub const SemanticAnalyzer = struct {
                         .subscript => .sub,
                         .baseline => unreachable,
                     },
-                } }, location.offset);
+                } }, location);
             }
             new.position = new_pos;
         }
 
         if (overlay.link) |link| {
             if (old.link != .none) {
-                try sema.emit_diagnostic(.link_not_nestable, location.offset);
+                try sema.emit_diagnostic(.link_not_nestable, location);
             }
             new.link = link;
         }
@@ -740,7 +740,7 @@ pub const SemanticAnalyzer = struct {
                 });
 
                 if (props.uri != null and props.ref != null) {
-                    try sema.emit_diagnostic(.invalid_link, node.location.offset);
+                    try sema.emit_diagnostic(.invalid_link, node.location);
                 }
 
                 const link: Link = if (props.uri) |uri| blk: {
@@ -748,7 +748,7 @@ pub const SemanticAnalyzer = struct {
                 } else if (props.ref) |ref| blk: {
                     break :blk .{ .ref = ref };
                 } else blk: {
-                    try sema.emit_diagnostic(.invalid_link, node.location.offset);
+                    try sema.emit_diagnostic(.invalid_link, node.location);
                     break :blk .none;
                 };
 
@@ -845,7 +845,7 @@ pub const SemanticAnalyzer = struct {
             value
         else |_| blk: {
             // TODO: Report error for invalid value
-            try sema.emit_diagnostic(.invalid_date_time, node.location.offset);
+            try sema.emit_diagnostic(.invalid_date_time, node.location);
             break :blk std.mem.zeroes(DTValue);
         };
 
@@ -855,7 +855,7 @@ pub const SemanticAnalyzer = struct {
             format
         else blk: {
             // TODO: Report error about invalid format
-            try sema.emit_diagnostic(.invalid_date_time_fmt, (get_attribute_location(node, "fmt", .value) orelse node.location).offset);
+            try sema.emit_diagnostic(.invalid_date_time_fmt, get_attribute_location(node, "fmt", .value) orelse node.location);
             break :blk .default;
         };
 
@@ -868,7 +868,7 @@ pub const SemanticAnalyzer = struct {
     fn translate_inline_body(sema: *SemanticAnalyzer, spans: *std.ArrayList(Span), body: Parser.Node.Body, attribs: Span.Attributes) error{ OutOfMemory, BadAttributes }!void {
         switch (body) {
             .empty => |location| {
-                try sema.emit_diagnostic(.empty_inline_body, location.offset);
+                try sema.emit_diagnostic(.empty_inline_body, location);
             },
 
             .string => |string_body| {
@@ -996,11 +996,11 @@ pub const SemanticAnalyzer = struct {
             const key = attrib.name.text;
 
             const fld = std.meta.stringToEnum(Fields, key) orelse {
-                try sema.emit_diagnostic(.{ .unknown_attribute = .{ .type = node.type, .name = key } }, attrib.name.location.offset);
+                try sema.emit_diagnostic(.{ .unknown_attribute = .{ .type = node.type, .name = key } }, attrib.name.location);
                 continue;
             };
             if (found.contains(fld)) {
-                try sema.emit_diagnostic(.{ .duplicate_attribute = .{ .name = key } }, attrib.name.location.offset);
+                try sema.emit_diagnostic(.{ .duplicate_attribute = .{ .name = key } }, attrib.name.location);
             }
             found.insert(fld);
 
@@ -1011,7 +1011,7 @@ pub const SemanticAnalyzer = struct {
                     else => {
                         any_invalid = true;
 
-                        try sema.emit_diagnostic(.{ .invalid_attribute = .{ .type = node.type, .name = key } }, attrib.value.location.offset);
+                        try sema.emit_diagnostic(.{ .invalid_attribute = .{ .type = node.type, .name = key } }, attrib.value.location);
 
                         continue;
                     },
@@ -1025,7 +1025,7 @@ pub const SemanticAnalyzer = struct {
             var iter = required.iterator();
             while (iter.next()) |req_field| {
                 if (!found.contains(req_field)) {
-                    try sema.emit_diagnostic(.{ .missing_attribute = .{ .type = node.type, .name = @tagName(req_field) } }, node.location.offset);
+                    try sema.emit_diagnostic(.{ .missing_attribute = .{ .type = node.type, .name = @tagName(req_field) } }, node.location);
                     any_missing = true;
                 }
             }
@@ -1049,7 +1049,7 @@ pub const SemanticAnalyzer = struct {
             Reference => {
                 const stripped = std.mem.trim(u8, value, whitespace_chars);
                 if (stripped.len != value.len) {
-                    try sema.emit_diagnostic(.attribute_leading_trailing_whitespace, attrib.location.offset);
+                    try sema.emit_diagnostic(.attribute_leading_trailing_whitespace, attrib.location);
                 }
                 return .init(stripped);
             },
@@ -1057,7 +1057,7 @@ pub const SemanticAnalyzer = struct {
             Uri => {
                 const stripped = std.mem.trim(u8, value, whitespace_chars);
                 if (stripped.len != value.len) {
-                    try sema.emit_diagnostic(.attribute_leading_trailing_whitespace, attrib.location.offset);
+                    try sema.emit_diagnostic(.attribute_leading_trailing_whitespace, attrib.location);
                 }
                 return .init(stripped);
             },
@@ -1071,9 +1071,9 @@ pub const SemanticAnalyzer = struct {
         };
     }
 
-    fn emit_diagnostic(sema: *SemanticAnalyzer, code: Diagnostic.Code, offset: usize) !void {
+    fn emit_diagnostic(sema: *SemanticAnalyzer, code: Diagnostic.Code, location: Parser.Location) !void {
         if (sema.diagnostics) |diag| {
-            try diag.add(code, sema.make_location(offset));
+            try diag.add(code, sema.make_location(location.offset));
         }
     }
 
