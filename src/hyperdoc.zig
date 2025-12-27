@@ -592,6 +592,42 @@ pub const SemanticAnalyzer = struct {
         return .{ heading, attrs.id };
     }
 
+    fn translate_paragraph_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Paragraph, ?Reference } {
+        _ = sema;
+        _ = node;
+        return error.Unimplemented; // TODO: Implement this node type
+    }
+
+    fn translate_list_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.List, ?Reference } {
+        _ = sema;
+        _ = node;
+        return error.Unimplemented; // TODO: Implement this node type
+    }
+
+    fn translate_image_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Image, ?Reference } {
+        _ = sema;
+        _ = node;
+        return error.Unimplemented; // TODO: Implement this node type
+    }
+
+    fn translate_preformatted_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Preformatted, ?Reference } {
+        _ = sema;
+        _ = node;
+        return error.Unimplemented; // TODO: Implement this node type
+    }
+
+    fn translate_toc_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.TableOfContents, ?Reference } {
+        _ = sema;
+        _ = node;
+        return error.Unimplemented; // TODO: Implement this node type
+    }
+
+    fn translate_table_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Table, ?Reference } {
+        _ = sema;
+        _ = node;
+        return error.Unimplemented; // TODO: Implement this node type
+    }
+
     fn translate_inline(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, BadAttributes }![]Span {
         var spans: std.ArrayList(Span) = .empty;
         errdefer spans.deinit(sema.arena);
@@ -926,42 +962,6 @@ pub const SemanticAnalyzer = struct {
                 });
             },
         }
-    }
-
-    fn translate_paragraph_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Paragraph, ?Reference } {
-        _ = sema;
-        _ = node;
-        return error.Unimplemented; // TODO: Implement this node type
-    }
-
-    fn translate_list_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.List, ?Reference } {
-        _ = sema;
-        _ = node;
-        return error.Unimplemented; // TODO: Implement this node type
-    }
-
-    fn translate_image_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Image, ?Reference } {
-        _ = sema;
-        _ = node;
-        return error.Unimplemented; // TODO: Implement this node type
-    }
-
-    fn translate_preformatted_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Preformatted, ?Reference } {
-        _ = sema;
-        _ = node;
-        return error.Unimplemented; // TODO: Implement this node type
-    }
-
-    fn translate_toc_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.TableOfContents, ?Reference } {
-        _ = sema;
-        _ = node;
-        return error.Unimplemented; // TODO: Implement this node type
-    }
-
-    fn translate_table_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Table, ?Reference } {
-        _ = sema;
-        _ = node;
-        return error.Unimplemented; // TODO: Implement this node type
     }
 
     fn get_attribute_location(node: Parser.Node, attrib_name: []const u8, comptime key: enum { name, value }) ?Parser.Location {
