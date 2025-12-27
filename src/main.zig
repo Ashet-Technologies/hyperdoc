@@ -126,11 +126,11 @@ fn writeSpanAttributes(writer: anytype, span: hdoc.Span) !void {
         .none => {},
         .ref => |value| {
             try writeAttrSeparator(writer, &first);
-            try writer.print("link=\"ref:{f}\"", .{std.zig.fmtString(value)});
+            try writer.print("link=\"ref:{f}\"", .{std.zig.fmtString(value.text)});
         },
         .uri => |value| {
             try writeAttrSeparator(writer, &first);
-            try writer.print("link=\"uri:{f}\"", .{std.zig.fmtString(value)});
+            try writer.print("link=\"uri:{f}\"", .{std.zig.fmtString(value.text)});
         },
     }
     if (span.attribs.lang.len != 0) {
@@ -381,7 +381,7 @@ fn dumpBlockListField(writer: anytype, indent: usize, key: []const u8, blocks: [
     }
 }
 
-fn dumpOptionalStringListField(writer: anytype, indent: usize, key: []const u8, values: []?[]const u8) !void {
+fn dumpOptionalStringListField(writer: anytype, indent: usize, key: []const u8, values: []?hdoc.Reference) !void {
     try writeIndent(writer, indent);
     if (values.len == 0) {
         try writer.print("{s}: []\n", .{key});
@@ -391,7 +391,7 @@ fn dumpOptionalStringListField(writer: anytype, indent: usize, key: []const u8, 
     for (values) |value| {
         try writeIndent(writer, indent + indent_step);
         try writer.writeAll("- ");
-        try writeOptionalStringValue(writer, value);
+        try writeOptionalStringValue(writer, if (value) |val| val.text else null);
         try writer.writeByte('\n');
     }
 }
@@ -420,8 +420,8 @@ fn dumpDocument(writer: anytype, doc: *const hdoc.Document) !void {
 test "dumpDocument escapes string values" {
     const title = "Doc \"Title\"\n";
     const span_text = "Hello \"world\"\n";
-    const link_ref = "section \"A\"";
-    const id_value = "id:1\n";
+    const link_ref: hdoc.Reference = .init("section \"A\"");
+    const id_value: hdoc.Reference = .init("id:1\n");
 
     var doc: hdoc.Document = .{
         .arena = std.heap.ArenaAllocator.init(std.testing.allocator),
@@ -453,7 +453,7 @@ test "dumpDocument escapes string values" {
     };
     doc.contents = blocks;
 
-    const ids = try arena_alloc.alloc(?[]const u8, 1);
+    const ids = try arena_alloc.alloc(?hdoc.Reference, 1);
     ids[0] = id_value;
     doc.ids = ids;
 
@@ -470,12 +470,12 @@ test "dumpDocument escapes string values" {
     const expected_span = try std.fmt.allocPrint(
         std.testing.allocator,
         "- [link=\"ref:{f}\"] \"{f}\"\n",
-        .{ std.zig.fmtString(link_ref), std.zig.fmtString(span_text) },
+        .{ std.zig.fmtString(link_ref.text), std.zig.fmtString(span_text) },
     );
     defer std.testing.allocator.free(expected_span);
     try std.testing.expect(std.mem.indexOf(u8, output, expected_span) != null);
 
-    const expected_id = try std.fmt.allocPrint(std.testing.allocator, "- \"{f}\"\n", .{std.zig.fmtString(id_value)});
+    const expected_id = try std.fmt.allocPrint(std.testing.allocator, "- \"{f}\"\n", .{std.zig.fmtString(id_value.text)});
     defer std.testing.allocator.free(expected_id);
     try std.testing.expect(std.mem.indexOf(u8, output, expected_id) != null);
 }

@@ -10,7 +10,7 @@ pub const Document = struct {
 
     // document contents:
     contents: []Block,
-    ids: []?[]const u8,
+    ids: []?Reference,
 
     // header information
     lang: ?[]const u8,
@@ -154,8 +154,8 @@ pub const ScriptPosition = enum {
 
 pub const Link = union(enum) {
     none,
-    ref: []const u8,
-    uri: []const u8,
+    ref: Reference,
+    uri: Uri,
 };
 
 /// HyperDoc Version Number
@@ -342,6 +342,30 @@ pub const Time = struct {
     }
 };
 
+/// Type-safe wrapper around a URI attribute.
+pub const Uri = struct {
+    pub const empty: Uri = .{ .text = "" };
+
+    text: []const u8,
+
+    pub fn init(text: []const u8) Uri {
+        // TODO: Add correctness validation here
+        return .{ .text = text };
+    }
+};
+
+/// Type-safe wrapper around a reference value (id/ref) attribute.
+pub const Reference = struct {
+    pub const empty: Reference = .{ .text = "" };
+
+    text: []const u8,
+
+    pub fn init(text: []const u8) Reference {
+        // TODO: Add correctness validation here
+        return .{ .text = text };
+    }
+};
+
 /// Parses a HyperDoc document.
 pub fn parse(
     allocator: std.mem.Allocator,
@@ -406,6 +430,8 @@ pub fn parse(
 }
 
 pub const SemanticAnalyzer = struct {
+    const whitespace_chars = " \t";
+
     const Header = struct {
         version: Version,
         lang: ?[]const u8,
@@ -420,7 +446,7 @@ pub const SemanticAnalyzer = struct {
 
     header: ?Header = null,
     blocks: std.ArrayList(Block) = .empty,
-    ids: std.ArrayList(?[]const u8) = .empty,
+    ids: std.ArrayList(?Reference) = .empty,
 
     fn append_node(sema: *SemanticAnalyzer, node: Parser.Node) error{OutOfMemory}!void {
         switch (node.type) {
@@ -482,7 +508,7 @@ pub const SemanticAnalyzer = struct {
         };
     }
 
-    fn translate_block_node(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, InvalidNodeType, BadAttributes, Unimplemented }!struct { Block, ?[]const u8 } {
+    fn translate_block_node(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, InvalidNodeType, BadAttributes, Unimplemented }!struct { Block, ?Reference } {
         std.debug.assert(node.type != .hdoc);
 
         switch (node.type) {
@@ -546,10 +572,10 @@ pub const SemanticAnalyzer = struct {
         return error.InvalidNodeType;
     }
 
-    fn translate_heading_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Heading, ?[]const u8 } {
+    fn translate_heading_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Heading, ?Reference } {
         const attrs = try sema.get_attributes(node, struct {
             lang: ?[]const u8 = null,
-            id: ?[]const u8 = null,
+            id: ?Reference = null,
         });
 
         const heading: Block.Heading = .{
@@ -709,23 +735,20 @@ pub const SemanticAnalyzer = struct {
             .@"\\link" => {
                 const props = try sema.get_attributes(node, struct {
                     lang: ?[]const u8 = null,
-                    uri: ?[]const u8 = null,
-                    ref: ?[]const u8 = null,
+                    uri: ?Uri = null,
+                    ref: ?Reference = null,
                 });
 
                 if (props.uri != null and props.ref != null) {
-                    try sema.emit_diagnostic(.invalid_link, node.location.offset); // TODO: Use proper attribute location
+                    try sema.emit_diagnostic(.invalid_link, node.location.offset);
                 }
 
                 const link: Link = if (props.uri) |uri| blk: {
-                    // TODO: Figure out where to put URI validation (not empty, no leading/trailing whitespace)
                     break :blk .{ .uri = uri };
                 } else if (props.ref) |ref| blk: {
-                    // TODO: Figure out where to put reference validation (no leading/trailing whitespace)
-                    // TODO: Reference validation must also happen for "id" attribute
                     break :blk .{ .ref = ref };
                 } else blk: {
-                    try sema.emit_diagnostic(.invalid_link, node.location.offset); // TODO: Use proper attribute location
+                    try sema.emit_diagnostic(.invalid_link, node.location.offset);
                     break :blk .none;
                 };
 
@@ -806,7 +829,6 @@ pub const SemanticAnalyzer = struct {
                 }
                 try text_buffer.ensureTotalCapacityPrecise(sema.arena, size);
 
-                var first_unpadded = true;
                 for (verbatim_lines, 0..) |line, index| {
                     if (index != 0) {
                         try text_buffer.append(sema.arena, '\n');
@@ -814,23 +836,12 @@ pub const SemanticAnalyzer = struct {
                     std.debug.assert(std.mem.startsWith(u8, line.text, "|"));
 
                     const is_padded = std.mem.startsWith(u8, line.text, "| ");
-
-                    if (!is_padded) {
-                        if (first_unpadded) {
-                            try sema.emit_diagnostic(.unpadded_verbatim_line, line.location.offset);
-                            first_unpadded = false;
-                        }
-                    }
-
                     const text = if (is_padded)
                         line.text[2..]
                     else
                         line.text[1..];
 
-                    const stripped = std.mem.trimRight(u8, text, " \t");
-                    if (text.len != stripped.len) {
-                        try sema.emit_diagnostic(.trailing_whitespace_in_verbatim_line, line.location.offset + stripped.len);
-                    }
+                    const stripped = std.mem.trimRight(u8, text, whitespace_chars);
 
                     text_buffer.appendSliceAssumeCapacity(stripped);
                 }
@@ -856,40 +867,50 @@ pub const SemanticAnalyzer = struct {
         }
     }
 
-    fn translate_paragraph_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Paragraph, ?[]const u8 } {
+    fn translate_paragraph_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Paragraph, ?Reference } {
         _ = sema;
         _ = node;
         return error.Unimplemented; // TODO: Implement this node type
     }
 
-    fn translate_list_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.List, ?[]const u8 } {
+    fn translate_list_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.List, ?Reference } {
         _ = sema;
         _ = node;
         return error.Unimplemented; // TODO: Implement this node type
     }
 
-    fn translate_image_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Image, ?[]const u8 } {
+    fn translate_image_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Image, ?Reference } {
         _ = sema;
         _ = node;
         return error.Unimplemented; // TODO: Implement this node type
     }
 
-    fn translate_preformatted_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Preformatted, ?[]const u8 } {
+    fn translate_preformatted_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Preformatted, ?Reference } {
         _ = sema;
         _ = node;
         return error.Unimplemented; // TODO: Implement this node type
     }
 
-    fn translate_toc_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.TableOfContents, ?[]const u8 } {
+    fn translate_toc_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.TableOfContents, ?Reference } {
         _ = sema;
         _ = node;
         return error.Unimplemented; // TODO: Implement this node type
     }
 
-    fn translate_table_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Table, ?[]const u8 } {
+    fn translate_table_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Table, ?Reference } {
         _ = sema;
         _ = node;
         return error.Unimplemented; // TODO: Implement this node type
+    }
+
+    fn get_attribute_location(node: Parser.Node, attrib_name: []const u8, comptime key: enum { name, value }) ?Parser.Location {
+        var i = node.attributes.items.len;
+        while (i > 0) {
+            i -= 1;
+            if (std.mem.eql(u8, node.attributes.items[i].name.text, attrib_name))
+                return @field(node.attributes.items[i], @tagName(key)).location;
+        }
+        return null;
     }
 
     fn get_attributes(sema: *SemanticAnalyzer, node: Parser.Node, comptime Attrs: type) error{ OutOfMemory, BadAttributes }!Attrs {
@@ -963,6 +984,22 @@ pub const SemanticAnalyzer = struct {
 
         return switch (T) {
             []const u8 => value,
+
+            Reference => {
+                const stripped = std.mem.trim(u8, value, whitespace_chars);
+                if (stripped.len != value.len) {
+                    try sema.emit_diagnostic(.attribute_leading_trailing_whitespace, attrib.location.offset);
+                }
+                return .init(stripped);
+            },
+
+            Uri => {
+                const stripped = std.mem.trim(u8, value, whitespace_chars);
+                if (stripped.len != value.len) {
+                    try sema.emit_diagnostic(.attribute_leading_trailing_whitespace, attrib.location.offset);
+                }
+                return .init(stripped);
+            },
 
             Version => Version.parse(value) catch return error.InvalidValue,
             DateTime => DateTime.parse(value) catch return error.InvalidValue,
@@ -1711,9 +1748,8 @@ pub const Diagnostic = struct {
         verbatim_missing_space,
         trailing_whitespace,
         empty_inline_body,
-        unpadded_verbatim_line,
-        trailing_whitespace_in_verbatim_line,
         redundant_inline: InlineUsageError,
+        attribute_leading_trailing_whitespace,
 
         pub fn severity(code: Code) Severity {
             return switch (code) {
@@ -1741,9 +1777,8 @@ pub const Diagnostic = struct {
                 .verbatim_missing_space,
                 .trailing_whitespace,
                 .empty_inline_body,
-                .unpadded_verbatim_line,
-                .trailing_whitespace_in_verbatim_line,
                 .redundant_inline,
+                .attribute_leading_trailing_whitespace,
                 => .warning,
             };
         }
@@ -1778,13 +1813,12 @@ pub const Diagnostic = struct {
 
                 .empty_inline_body => try w.writeAll("Inline body is empty."),
 
-                .unpadded_verbatim_line => try w.writeAll("Verbatim line is not properly padded with a space character at the start."),
-                .trailing_whitespace_in_verbatim_line => try w.writeAll("Trailing whitespace at end of verbatim line."),
-
                 .redundant_inline => |ctx| try w.print("The inline \\{t} has no effect.", .{ctx.attribute}),
                 .invalid_inline_combination => |ctx| try w.print("Cannot combine \\{t} with \\{t}.", .{ ctx.first, ctx.second }),
                 .link_not_nestable => try w.writeAll("Links are not nestable"),
                 .invalid_link => try w.writeAll("\\link requires either ref=\"…\" or uri=\"…\" attribute."),
+
+                .attribute_leading_trailing_whitespace => try w.writeAll("Attribute value has invalid leading or trailing whitespace."),
             }
         }
     };
