@@ -773,8 +773,35 @@ pub const SemanticAnalyzer = struct {
             .@"\\time",
             .@"\\datetime",
             => {
-                // TODO: Implement date/time translation
-                std.log.err("TODO: Implement {t}", .{node.type});
+                const props = try sema.get_attributes(node, struct {
+                    lang: ?[]const u8 = null,
+                    fmt: []const u8 = "",
+                });
+
+                var content_spans: std.ArrayList(Span) = .empty;
+                defer content_spans.deinit(sema.arena);
+
+                // TODO: Implement automatic space insertion.
+                //       This must be done when two consecutive nodes are separated by a space
+
+                try sema.translate_inline_body(&content_spans, node.body, .{});
+
+                // TODO: Convert the content_spans into a "rendered string".
+                const content_text = "<undefined>";
+
+                const content: Span.Content = switch (node.type) {
+                    .@"\\date" => try sema.parse_date_body(node, .date, Date, content_text, props.fmt),
+                    .@"\\time" => try sema.parse_date_body(node, .time, Time, content_text, props.fmt),
+                    .@"\\datetime" => try sema.parse_date_body(node, .datetime, DateTime, content_text, props.fmt),
+                    else => unreachable,
+                };
+
+                try spans.append(sema.arena, .{
+                    .content = content,
+                    .attribs = try sema.derive_attribute(node.location, attribs, .{
+                        .lang = attribs.lang,
+                    }),
+                });
             },
 
             .hdoc,
@@ -802,6 +829,40 @@ pub const SemanticAnalyzer = struct {
             .unknown_block,
             => @panic("PARSER ERROR: The parser emitted a block node inside an inline context"),
         }
+    }
+
+    fn parse_date_body(
+        sema: *SemanticAnalyzer,
+        node: Parser.Node,
+        comptime body: enum { date, time, datetime },
+        comptime DTValue: type,
+        value_str: []const u8,
+        format_str: []const u8,
+    ) !Span.Content {
+        const Format: type = DTValue.Format;
+
+        const value: DTValue = if (DTValue.parse(value_str)) |value|
+            value
+        else |_| blk: {
+            // TODO: Report error for invalid value
+            try sema.emit_diagnostic(.invalid_date_time, node.location.offset);
+            break :blk std.mem.zeroes(DTValue);
+        };
+
+        const format: Format = if (format_str.len == 0)
+            .default
+        else if (std.meta.stringToEnum(Format, format_str)) |format|
+            format
+        else blk: {
+            // TODO: Report error about invalid format
+            try sema.emit_diagnostic(.invalid_date_time_fmt, (get_attribute_location(node, "fmt", .value) orelse node.location).offset);
+            break :blk .default;
+        };
+
+        return @unionInit(Span.Content, @tagName(body), .{
+            .format = format,
+            .value = value,
+        });
     }
 
     fn translate_inline_body(sema: *SemanticAnalyzer, spans: *std.ArrayList(Span), body: Parser.Node.Body, attribs: Span.Attributes) error{ OutOfMemory, BadAttributes }!void {
@@ -1739,6 +1800,8 @@ pub const Diagnostic = struct {
         invalid_inline_combination: InlineCombinationError,
         link_not_nestable,
         invalid_link,
+        invalid_date_time,
+        invalid_date_time_fmt,
 
         // warnings:
         unknown_attribute: NodeAttributeError,
@@ -1768,6 +1831,8 @@ pub const Diagnostic = struct {
                 .invalid_inline_combination,
                 .link_not_nestable,
                 .invalid_link,
+                .invalid_date_time,
+                .invalid_date_time_fmt,
                 => .@"error",
 
                 .unknown_attribute,
@@ -1819,6 +1884,10 @@ pub const Diagnostic = struct {
                 .invalid_link => try w.writeAll("\\link requires either ref=\"…\" or uri=\"…\" attribute."),
 
                 .attribute_leading_trailing_whitespace => try w.writeAll("Attribute value has invalid leading or trailing whitespace."),
+
+                .invalid_date_time => try w.writeAll("Invalid date/time value."),
+
+                .invalid_date_time_fmt => try w.writeAll("Invalid 'fmt' for date/time value."),
             }
         }
     };
