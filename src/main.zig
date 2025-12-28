@@ -432,6 +432,7 @@ test "dumpDocument escapes string values" {
         .title = title,
         .author = null,
         .date = null,
+        .timezone = null,
     };
     defer doc.deinit();
 

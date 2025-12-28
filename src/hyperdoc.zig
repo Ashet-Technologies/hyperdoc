@@ -17,6 +17,7 @@ pub const Document = struct {
     title: ?[]const u8,
     author: ?[]const u8,
     date: ?DateTime,
+    timezone: ?[]const u8,
 
     pub fn deinit(doc: *Document) void {
         doc.arena.deinit();
@@ -189,7 +190,7 @@ pub const DateTime = struct {
     date: Date,
     time: Time,
 
-    pub fn parse(text: []const u8) !DateTime {
+    pub fn parse(text: []const u8, default_timezone: ?[]const u8) !DateTime {
         const split_index = std.mem.indexOfScalar(u8, text, 'T') orelse return error.InvalidValue;
 
         const head = text[0..split_index];
@@ -197,7 +198,7 @@ pub const DateTime = struct {
 
         return .{
             .date = try Date.parse(head),
-            .time = try Time.parse(tail),
+            .time = try Time.parse(tail, default_timezone),
         };
     }
 };
@@ -265,8 +266,9 @@ pub const Time = struct {
     microsecond: u20, // 0-999999
     zone_offset: i32, // in minutes
 
-    pub fn parse(text: []const u8) !Time {
-        if (text.len < 9) return error.InvalidValue;
+    pub fn parse(text: []const u8, default_timezone: ?[]const u8) !Time {
+        if (text.len < 8) // "HH:MM:SS"
+            return error.InvalidValue;
 
         const hour = std.fmt.parseInt(u8, text[0..2], 10) catch return error.InvalidValue;
         if (text[2] != ':') return error.InvalidValue;
@@ -279,23 +281,30 @@ pub const Time = struct {
         var index: usize = 8;
         var microsecond: u20 = 0;
 
-        if (index >= text.len) return error.InvalidValue;
+        if (index < text.len) {
+            if (text[index] == '.') {
+                const start = index + 1;
+                var end = start;
+                while (end < text.len and std.ascii.isDigit(text[end])) : (end += 1) {}
+                if (end == start) return error.InvalidValue;
 
-        if (text[index] == '.') {
-            const start = index + 1;
-            var end = start;
-            while (end < text.len and std.ascii.isDigit(text[end])) : (end += 1) {}
-            if (end == start) return error.InvalidValue;
-
-            const fraction_value = std.fmt.parseInt(u64, text[start..end], 10) catch return error.InvalidValue;
-            microsecond = fractionToMicrosecond(end - start, fraction_value) orelse return error.InvalidValue;
-            index = end;
+                const fraction_value = std.fmt.parseInt(u64, text[start..end], 10) catch return error.InvalidValue;
+                microsecond = fractionToMicrosecond(end - start, fraction_value) orelse return error.InvalidValue;
+                index = end;
+            }
         }
 
-        if (index >= text.len) return error.InvalidValue;
+        const timezone = if (index == text.len)
+            default_timezone orelse return error.MissingTimezone
+        else
+            text[index..];
 
-        if (text[index] == 'Z') {
-            if (index + 1 != text.len) return error.InvalidValue;
+        if (timezone.len != 1 and timezone.len != 6) // "Z" or "±HH:MM"
+            return error.InvalidValue;
+
+        if (timezone.len == 1) {
+            if (timezone[0] != 'Z')
+                return error.InvalidValue;
             return .{
                 .hour = @intCast(hour),
                 .minute = @intCast(minute),
@@ -304,15 +313,19 @@ pub const Time = struct {
                 .zone_offset = 0,
             };
         }
+        std.debug.assert(timezone.len == 6);
 
-        const sign_char = text[index];
-        if (sign_char != '+' and sign_char != '-') return error.InvalidValue;
-        const sign: i32 = if (sign_char == '+') 1 else -1;
+        const sign_char = timezone[0];
+        const sign: i32 = switch (sign_char) {
+            '+' => 1,
+            '-' => -1,
+            else => return error.InvalidValue,
+        };
+        if (timezone[3] != ':')
+            return error.InvalidValue;
 
-        if (text.len - index != 6) return error.InvalidValue;
-        const zone_hour = std.fmt.parseInt(u8, text[index + 1 .. index + 3], 10) catch return error.InvalidValue;
-        if (text[index + 3] != ':') return error.InvalidValue;
-        const zone_minute = std.fmt.parseInt(u8, text[index + 4 .. index + 6], 10) catch return error.InvalidValue;
+        const zone_hour = std.fmt.parseInt(u8, timezone[1..3], 10) catch return error.InvalidValue;
+        const zone_minute = std.fmt.parseInt(u8, timezone[4..6], 10) catch return error.InvalidValue;
 
         if (zone_hour > 23 or zone_minute > 59) return error.InvalidValue;
 
@@ -428,6 +441,7 @@ pub fn parse(
         .version = header.version,
         .author = header.author,
         .date = header.date,
+        .timezone = header.timezone,
     };
 }
 
@@ -460,6 +474,7 @@ pub const SemanticAnalyzer = struct {
         lang: ?[]const u8,
         title: ?[]const u8,
         author: ?[]const u8,
+        timezone: ?[]const u8,
         date: ?DateTime,
     };
 
@@ -520,6 +535,7 @@ pub const SemanticAnalyzer = struct {
             author: ?[]const u8 = null,
             date: ?DateTime = null,
             lang: ?[]const u8 = null,
+            tz: ?[]const u8 = null,
         });
 
         return .{
@@ -528,6 +544,7 @@ pub const SemanticAnalyzer = struct {
             .title = attrs.title,
             .author = attrs.author,
             .date = attrs.date,
+            .timezone = attrs.tz,
         };
     }
 
@@ -918,11 +935,28 @@ pub const SemanticAnalyzer = struct {
     ) !Span.Content {
         const Format: type = DTValue.Format;
 
-        const value: DTValue = if (DTValue.parse(value_str)) |value|
+        const timezone_hint: ?[]const u8 = if (sema.header) |header| header.timezone else null;
+
+        const value_or_err: error{ InvalidValue, MissingTimezone }!DTValue = switch (DTValue) {
+            Date => Date.parse(value_str),
+            Time => Time.parse(value_str, timezone_hint),
+            DateTime => DateTime.parse(value_str, timezone_hint),
+            else => unreachable,
+        };
+
+        const value: DTValue = if (value_or_err) |value|
             value
-        else |_| blk: {
-            // TODO: Report error for invalid value
-            try sema.emit_diagnostic(.invalid_date_time, node.location);
+        else |err| blk: {
+            switch (err) {
+                error.InvalidValue => {
+                    try sema.emit_diagnostic(.invalid_date_time, node.location);
+                },
+                error.MissingTimezone => {
+                    // TODO: Use (timezone_hint != null) to emit diagnostic for hint with
+                    //       adding `tz` attribute when all date/time values share a common base.
+                    try sema.emit_diagnostic(.invalid_date_time, node.location);
+                },
+            }
             break :blk std.mem.zeroes(DTValue);
         };
 
@@ -1118,6 +1152,11 @@ pub const SemanticAnalyzer = struct {
 
         const value = try sema.unescape_string(attrib);
 
+        const timezone_hint = if (sema.header) |header|
+            header.timezone
+        else
+            null;
+
         return switch (T) {
             []const u8 => value,
 
@@ -1138,9 +1177,9 @@ pub const SemanticAnalyzer = struct {
             },
 
             Version => Version.parse(value) catch return error.InvalidValue,
-            DateTime => DateTime.parse(value) catch return error.InvalidValue,
             Date => Date.parse(value) catch return error.InvalidValue,
-            Time => Time.parse(value) catch return error.InvalidValue,
+            Time => Time.parse(value, timezone_hint) catch return error.InvalidValue,
+            DateTime => DateTime.parse(value, timezone_hint) catch return error.InvalidValue,
 
             else => @compileError("Unsupported attribute type: " ++ @typeName(T)),
         };
