@@ -86,6 +86,96 @@ test "parser accept string literals and unescape" {
     try std.testing.expectEqualStrings("\"hello\\\\n\"", token.text);
 }
 
+test "semantic analyzer unescapes string literals" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const source = "\"line\\\\break\\nquote \\\" unicode \\u{1F600}\"";
+
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    var sema: hdoc.SemanticAnalyzer = .{
+        .arena = arena.allocator(),
+        .diagnostics = &diagnostics,
+        .code = source,
+    };
+
+    const token: hdoc.Parser.Token = .{ .text = source, .location = .{ .offset = 0, .length = source.len } };
+
+    const text = try sema.unescape_string(token);
+    try std.testing.expectEqualStrings("line\\break\nquote \" unicode 😀", text);
+    try std.testing.expect(!diagnostics.has_error());
+}
+
+test "semantic analyzer reports invalid string escapes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const source = "\"oops\\q\"";
+
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    var sema: hdoc.SemanticAnalyzer = .{
+        .arena = arena.allocator(),
+        .diagnostics = &diagnostics,
+        .code = source,
+    };
+
+    const token: hdoc.Parser.Token = .{ .text = source, .location = .{ .offset = 0, .length = source.len } };
+
+    const text = try sema.unescape_string(token);
+    try std.testing.expectEqualStrings("oops\\q", text);
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.items.items.len);
+    try std.testing.expect(diagnosticCodesEqual(diagnostics.items.items[0].code, .{ .invalid_string_escape = .{ .codepoint = 'q' } }));
+}
+
+test "semantic analyzer flags forbidden control characters" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const source = "\"tab\\u{9}\"";
+
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    var sema: hdoc.SemanticAnalyzer = .{
+        .arena = arena.allocator(),
+        .diagnostics = &diagnostics,
+        .code = source,
+    };
+
+    const token: hdoc.Parser.Token = .{ .text = source, .location = .{ .offset = 0, .length = source.len } };
+
+    const text = try sema.unescape_string(token);
+    try std.testing.expectEqualStrings("tab\t", text);
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.items.items.len);
+    try std.testing.expect(diagnosticCodesEqual(diagnostics.items.items[0].code, .{ .illegal_character = .{ .codepoint = 0x9 } }));
+}
+
+test "semantic analyzer forbids raw control characters" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const source = "\"bad\tvalue\"";
+
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    var sema: hdoc.SemanticAnalyzer = .{
+        .arena = arena.allocator(),
+        .diagnostics = &diagnostics,
+        .code = source,
+    };
+
+    const token: hdoc.Parser.Token = .{ .text = source, .location = .{ .offset = 0, .length = source.len } };
+    _ = try sema.unescape_string(token);
+
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.items.items.len);
+    try std.testing.expect(diagnosticCodesEqual(diagnostics.items.items[0].code, .{ .illegal_character = .{ .codepoint = 0x9 } }));
+}
+
 test "parser reports unterminated string literals" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -245,81 +335,187 @@ test "parser handles unknown node types" {
     }
 }
 
-fn diagnosticsContain(diag: *const hdoc.Diagnostics, expected: hdoc.Diagnostic.Code) bool {
-    for (diag.items.items) |item| {
-        if (std.meta.activeTag(item.code) == std.meta.activeTag(expected)) {
-            return true;
-        }
-    }
-    return false;
+fn diagnosticCodesEqual(a: hdoc.Diagnostic.Code, b: hdoc.Diagnostic.Code) bool {
+    if (std.meta.activeTag(a) != std.meta.activeTag(b)) return false;
+
+    return switch (a) {
+        .document_starts_with_bom,
+        .unterminated_inline_list,
+        .unterminated_string,
+        .unterminated_block_list,
+        .missing_hdoc_header,
+        .duplicate_hdoc_header,
+        .link_not_nestable,
+        .invalid_link,
+        .invalid_date_time,
+        .invalid_date_time_fmt,
+        .empty_verbatim_block,
+        .verbatim_missing_trailing_newline,
+        .verbatim_missing_space,
+        .trailing_whitespace,
+        .empty_inline_body,
+        .attribute_leading_trailing_whitespace,
+        .invalid_unicode_string_escape,
+        => true,
+
+        .unexpected_eof => |ctx| blk: {
+            const other = b.unexpected_eof;
+            break :blk ctx.expected_char == other.expected_char and std.mem.eql(u8, ctx.context, other.context);
+        },
+
+        .unexpected_character => |ctx| blk: {
+            const other = b.unexpected_character;
+            break :blk ctx.expected == other.expected and ctx.found == other.found;
+        },
+
+        .invalid_identifier_start => |ctx| blk: {
+            const other = b.invalid_identifier_start;
+            break :blk ctx.char == other.char;
+        },
+
+        .missing_attribute => |ctx| blk: {
+            const other = b.missing_attribute;
+            break :blk ctx.type == other.type and std.mem.eql(u8, ctx.name, other.name);
+        },
+
+        .invalid_attribute => |ctx| blk: {
+            const other = b.invalid_attribute;
+            break :blk ctx.type == other.type and std.mem.eql(u8, ctx.name, other.name);
+        },
+
+        .unknown_block_type => |ctx| blk: {
+            const other = b.unknown_block_type;
+            break :blk std.mem.eql(u8, ctx.name, other.name);
+        },
+
+        .invalid_block_type => |ctx| blk: {
+            const other = b.invalid_block_type;
+            break :blk std.mem.eql(u8, ctx.name, other.name);
+        },
+
+        .invalid_inline_combination => |ctx| blk: {
+            const other = b.invalid_inline_combination;
+            break :blk ctx.first == other.first and ctx.second == other.second;
+        },
+
+        .duplicate_attribute => |ctx| blk: {
+            const other = b.duplicate_attribute;
+            break :blk std.mem.eql(u8, ctx.name, other.name);
+        },
+
+        .unknown_attribute => |ctx| blk: {
+            const other = b.unknown_attribute;
+            break :blk ctx.type == other.type and std.mem.eql(u8, ctx.name, other.name);
+        },
+
+        .redundant_inline => |ctx| blk: {
+            const other = b.redundant_inline;
+            break :blk ctx.attribute == other.attribute;
+        },
+
+        .invalid_string_escape => |ctx| blk: {
+            break :blk b.invalid_string_escape.codepoint == ctx.codepoint;
+        },
+
+        .illegal_character => |ctx| blk: {
+            const other = b.illegal_character;
+            break :blk ctx.codepoint == other.codepoint;
+        },
+    };
 }
 
-test "parsing valid document yields empty diagnostics" {
+fn logDiagnostics(diag: *const hdoc.Diagnostics) void {
+    for (diag.items.items) |item| {
+        var buf: [256]u8 = undefined;
+        var stream = std.io.fixedBufferStream(&buf);
+        item.code.format(stream.writer()) catch {};
+        std.log.err("Diagnostic {d}:{d}: {s}", .{ item.location.line, item.location.column, stream.getWritten() });
+    }
+}
+
+fn validateDiagnostics(code: []const u8, expected: []const hdoc.Diagnostic.Code) !void {
+    try std.testing.expect(expected.len > 0);
+
     var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
     defer diagnostics.deinit();
 
-    var doc = try hdoc.parse(std.testing.allocator, "hdoc(version=\"2.0\");", &diagnostics);
+    const maybe_doc = hdoc.parse(std.testing.allocator, code, &diagnostics) catch |err| switch (err) {
+        error.OutOfMemory => return err,
+        else => null,
+    };
+    if (maybe_doc) |doc| {
+        var owned = doc;
+        defer owned.deinit();
+    }
+
+    if (diagnostics.items.items.len != expected.len) {
+        logDiagnostics(&diagnostics);
+    }
+    try std.testing.expectEqual(expected.len, diagnostics.items.items.len);
+    for (expected, 0..) |exp, idx| {
+        const actual = diagnostics.items.items[idx].code;
+        if (!diagnosticCodesEqual(actual, exp)) {
+            logDiagnostics(&diagnostics);
+            return error.MissingDiagnosticCode;
+        }
+    }
+}
+
+fn expectParseOk(code: []const u8) !void {
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    var doc = try hdoc.parse(std.testing.allocator, code, &diagnostics);
     defer doc.deinit();
 
-    try std.testing.expect(!diagnostics.has_error());
-    try std.testing.expect(!diagnostics.has_warning());
-    try std.testing.expectEqual(@as(usize, 0), diagnostics.items.items.len);
+    if (diagnostics.has_error() or diagnostics.has_warning()) {
+        logDiagnostics(&diagnostics);
+        return error.TestExpectedEqual;
+    }
+}
+
+fn expectParseNoFail(code: []const u8) !void {
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    var doc = hdoc.parse(std.testing.allocator, code, &diagnostics) catch |err| switch (err) {
+        error.OutOfMemory => return err,
+        else => {
+            logDiagnostics(&diagnostics);
+            return error.TestExpectedEqual;
+        },
+    };
+    defer doc.deinit();
+
+    if (diagnostics.has_error()) {
+        logDiagnostics(&diagnostics);
+        return error.TestExpectedEqual;
+    }
+}
+
+test "parsing valid document yields empty diagnostics" {
+    try expectParseOk("hdoc(version=\"2.0\");");
 }
 
 test "diagnostic codes are emitted for expected samples" {
-    const Case = struct {
-        code: hdoc.Diagnostic.Code,
-        samples: []const []const u8,
-    };
-
-    const cases = [_]Case{
-        .{ .code = .{ .unexpected_eof = .{ .context = "identifier", .expected_char = null } }, .samples = &.{"hdoc(version=\"2.0\"); h1("} },
-        .{ .code = .{ .unexpected_character = .{ .expected = '{', .found = '1' } }, .samples = &.{"hdoc(version=\"2.0\"); h1 123"} },
-        .{ .code = .unterminated_string, .samples = &.{"hdoc(version=\"2.0\"); h1 \"unterminated"} },
-        .{ .code = .{ .invalid_identifier_start = .{ .char = '-' } }, .samples = &.{"hdoc(version=\"2.0\"); -abc"} },
-        .{ .code = .unterminated_block_list, .samples = &.{"hdoc{h1 \"x\""} },
-        .{ .code = .unterminated_inline_list, .samples = &.{"hdoc(version=\"2.0\"); p {hello"} },
-        .{ .code = .{ .duplicate_attribute = .{ .name = "title" } }, .samples = &.{"hdoc(version=\"2.0\"); h1(lang=\"a\",lang=\"b\");"} },
-        .{ .code = .empty_verbatim_block, .samples = &.{"hdoc(version=\"2.0\"); pre:\n"} },
-        .{ .code = .verbatim_missing_trailing_newline, .samples = &.{"hdoc(version=\"2.0\"); pre:\n|line"} },
-        .{ .code = .verbatim_missing_space, .samples = &.{"hdoc(version=\"2.0\"); pre:\n|nospace\n"} },
-        .{ .code = .trailing_whitespace, .samples = &.{"hdoc(version=\"2.0\"); pre:\n| trailing \n"} },
-        .{ .code = .missing_hdoc_header, .samples = &.{"h1 \"Title\""} },
-        .{ .code = .duplicate_hdoc_header, .samples = &.{"hdoc(version=\"2.0\"); hdoc(version=\"2.0\");"} },
-    };
-
-    inline for (cases) |case| {
-        for (case.samples) |sample| {
-            var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
-            defer diagnostics.deinit();
-
-            const maybe_doc = hdoc.parse(std.testing.allocator, sample, &diagnostics) catch |err| switch (err) {
-                error.OutOfMemory => return err,
-                else => null,
-            };
-
-            if (maybe_doc) |doc| {
-                var owned_doc = doc;
-                defer owned_doc.deinit();
-            }
-
-            if (!diagnosticsContain(&diagnostics, case.code)) {
-                std.log.err("Diagnostics did not contain expected code: '{t}'", .{case.code});
-                for (diagnostics.items.items) |item| {
-                    std.log.err("  Emitted diagnostic: {f}", .{item.code});
-                }
-                return error.MissingDiagnosticCode;
-            }
-
-            const expected_severity = case.code.severity();
-            if (expected_severity == .@"error") {
-                try std.testing.expect(diagnostics.has_error());
-            } else {
-                try std.testing.expect(!diagnostics.has_error());
-                try std.testing.expect(diagnostics.has_warning());
-            }
-        }
-    }
+    try validateDiagnostics("hdoc(version=\"2.0\"); h1(", &.{.{ .unexpected_eof = .{ .context = "identifier", .expected_char = null } }});
+    try validateDiagnostics("hdoc(version=\"2.0\"); h1 123", &.{.{ .unexpected_character = .{ .expected = '{', .found = '1' } }});
+    try validateDiagnostics("hdoc(version=\"2.0\"); h1 \"unterminated", &.{.unterminated_string});
+    try validateDiagnostics("hdoc(version=\"2.0\"); -abc", &.{.{ .invalid_identifier_start = .{ .char = '-' } }});
+    try validateDiagnostics("hdoc{h1 \"x\"", &.{.unterminated_block_list});
+    try validateDiagnostics("hdoc(version=\"2.0\"); p {hello", &.{.unterminated_inline_list});
+    try validateDiagnostics(
+        "hdoc(version=\"2.0\"); h1(lang=\"a\",lang=\"b\");",
+        &.{ .{ .duplicate_attribute = .{ .name = "lang" } }, .empty_inline_body },
+    );
+    try validateDiagnostics("hdoc(version=\"2.0\"); pre:\n", &.{.empty_verbatim_block});
+    try validateDiagnostics("hdoc(version=\"2.0\"); pre:\n| line", &.{.verbatim_missing_trailing_newline});
+    try validateDiagnostics("hdoc(version=\"2.0\"); pre:\n|nospace\n", &.{.verbatim_missing_space});
+    try validateDiagnostics("hdoc(version=\"2.0\"); pre:\n| trailing \n", &.{.trailing_whitespace});
+    try validateDiagnostics("h1 \"Title\"", &.{.missing_hdoc_header});
+    try validateDiagnostics("hdoc(version=\"2.0\"); hdoc(version=\"2.0\");", &.{.duplicate_hdoc_header});
+    try validateDiagnostics("hdoc(version=\"2.0\"); h1 \"bad\\q\"", &.{.{ .invalid_string_escape = .{ .codepoint = 'q' } }});
+    try validateDiagnostics("hdoc(version=\"2.0\"); h1 \"bad\\u{9}\"", &.{.{ .illegal_character = .{ .codepoint = 0x9 } }});
 }
 
 test "parser reports unterminated inline lists" {

@@ -10,3 +10,8 @@
 - Run `zig build` to validate the main application still compiles
 - Test `./zig-out/bin/hyperdoc` with the `.hdoc` files in `examples/` and `test/`.
 - Avoid editing documentation unless the request explicitly asks for it.
+
+## Zig Programming Style
+
+- Do not use "inline functions" like `const func = struct { fn func(…) {} }.func;`
+- Zig has no methods. Functions used by "method like" functions can still be placed next to them, no need to put them into global scope nor into local scope.

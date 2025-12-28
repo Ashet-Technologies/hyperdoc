@@ -370,16 +370,18 @@ pub const Reference = struct {
 pub fn parse(
     allocator: std.mem.Allocator,
     /// The source code to be parsed
-    plain_text: []const u8,
+    raw_plain_text: []const u8,
     /// An optional diagnostics element that receives diagnostic messages like errors and warnings.
     /// If present, will be filled out by the parser.
     diagnostics: ?*Diagnostics,
-) error{ OutOfMemory, SyntaxError, MalformedDocument }!Document {
+) error{ OutOfMemory, SyntaxError, MalformedDocument, InvalidUtf8 }!Document {
+    const source_text = try remove_byte_order_mark(diagnostics, raw_plain_text);
+
     var arena = std.heap.ArenaAllocator.init(allocator);
     errdefer arena.deinit();
 
     var parser: Parser = .{
-        .code = plain_text,
+        .code = source_text,
         .arena = arena.allocator(),
         .diagnostics = diagnostics,
     };
@@ -387,7 +389,7 @@ pub fn parse(
     var sema: SemanticAnalyzer = .{
         .arena = arena.allocator(),
         .diagnostics = diagnostics,
-        .code = plain_text,
+        .code = source_text,
     };
 
     while (true) {
@@ -427,6 +429,27 @@ pub fn parse(
         .author = header.author,
         .date = header.date,
     };
+}
+
+pub fn remove_byte_order_mark(diagnostics: ?*Diagnostics, plain_text: []const u8) error{ OutOfMemory, InvalidUtf8 }![]const u8 {
+    // First check if all of our code is valid UTF-8
+    // and if it potentially starts with a BOM.
+    var view = std.unicode.Utf8View.init(plain_text) catch {
+        return error.InvalidUtf8;
+    };
+
+    var iter = view.iterator();
+
+    if (iter.nextCodepointSlice()) |slice| {
+        const codepoint = std.unicode.utf8Decode(slice) catch unreachable;
+        if (codepoint == 0xFEFF) {
+            if (diagnostics) |diag| {
+                try diag.add(.document_starts_with_bom, .{ .column = 1, .line = 1 });
+            }
+            return plain_text[slice.len..];
+        }
+    }
+    return plain_text;
 }
 
 pub const SemanticAnalyzer = struct {
@@ -1099,11 +1122,184 @@ pub const SemanticAnalyzer = struct {
         std.debug.assert(token.text.len >= 2);
         std.debug.assert(token.text[0] == '"' and token.text[token.text.len - 1] == '"');
 
-        _ = sema;
-        // TODO: Implement unescaping logic here.
+        const base_offset = token.location.offset + 1; // skip leading quote
+        const content = token.text[1 .. token.text.len - 1];
 
-        // For now, we just return the raw text.
-        return token.text[1 .. token.text.len - 1];
+        const Source = struct {
+            char: u8,
+            location: Parser.Location,
+        };
+
+        var output_buffer: std.MultiArrayList(Source) = .empty;
+        defer output_buffer.deinit(sema.arena);
+
+        try output_buffer.ensureTotalCapacity(sema.arena, content.len);
+
+        {
+            var out_chars_buffer: [4]u8 = undefined;
+
+            var i: usize = 0;
+            while (i < content.len) {
+                const start = i;
+
+                // We process bytes, even thought the input is UTF-8.
+                // This is fine as we only process ASCII-range escape sequences
+                const in_char = content[i];
+
+                // We process our in_char into 1..4 bytes, depending
+                // on the escape sequence. Worst input is \u{10FFFF}, which is
+                // encoded as {F4 8F BF BF}, so 4 bytes.
+                const out_chars: []const u8 = blk: {
+                    i += 1;
+                    if (in_char != '\\') {
+                        // Just return the actual character
+                        break :blk content[start..i];
+                    }
+
+                    // This would mean an uinterminated escape sequence, and
+                    // must be processed by the parser already:
+                    std.debug.assert(i < content.len);
+
+                    const esc_char = content[i];
+
+                    switch (esc_char) {
+                        '"' => {
+                            i += 1;
+                            break :blk "\"";
+                        },
+                        '\\' => {
+                            i += 1;
+                            break :blk "\\";
+                        },
+                        'n' => {
+                            i += 1;
+                            break :blk "\n";
+                        },
+                        'r' => {
+                            i += 1;
+                            break :blk "\r";
+                        },
+
+                        'u' => {
+                            while (content[i] != '}') {
+                                i += 1;
+                                if (i >= content.len) {
+                                    try sema.emit_diagnostic(.invalid_unicode_string_escape, .{ .offset = start, .length = i - start });
+                                    break :blk content[start..i];
+                                }
+                            }
+                            i += 1;
+                            const escape_part = content[start..i];
+                            std.debug.assert(escape_part.len > 2);
+                            std.debug.assert(escape_part[0] == '\\');
+                            std.debug.assert(escape_part[1] == 'u');
+                            std.debug.assert(escape_part[escape_part.len - 1] == '}');
+
+                            const location: Parser.Location = .{ .offset = start, .length = escape_part.len };
+
+                            if (escape_part[2] != '{') {
+                                try sema.emit_diagnostic(.invalid_unicode_string_escape, location);
+                            }
+
+                            const codepoint = std.fmt.parseInt(u21, escape_part[3 .. escape_part.len - 1], 16) catch {
+                                try sema.emit_diagnostic(.invalid_unicode_string_escape, location);
+                                break :blk "???";
+                            };
+
+                            const out_len = std.unicode.utf8Encode(codepoint, &out_chars_buffer) catch |err| switch (err) {
+                                error.Utf8CannotEncodeSurrogateHalf => {
+                                    try sema.emit_diagnostic(.{ .illegal_character = .{ .codepoint = codepoint } }, location);
+                                    break :blk "???";
+                                },
+                                error.CodepointTooLarge => {
+                                    try sema.emit_diagnostic(.invalid_unicode_string_escape, location);
+                                    break :blk "???";
+                                },
+                            };
+                            break :blk out_chars_buffer[0..out_len];
+                        },
+
+                        else => {
+                            // Unknown escape sequence, emit escaped char verbatim:
+                            // TODO: How to handle something like "\😭", which is
+                            //       definitly valid and in-scope.
+
+                            const len = std.unicode.utf8ByteSequenceLength(esc_char) catch unreachable;
+
+                            const esc_codepoint = std.unicode.utf8Decode(content[i .. i + len]) catch unreachable;
+
+                            i += len;
+
+                            try sema.emit_diagnostic(.{
+                                .invalid_string_escape = .{ .codepoint = esc_codepoint },
+                            }, .{ .offset = start, .length = i - start + 1 });
+
+                            break :blk content[start..i];
+                        },
+                    }
+                    @compileError("The switch above must be exhaustive and break to :blk for each code path.");
+                };
+
+                const loc: Parser.Location = .{
+                    .offset = base_offset + start,
+                    .length = i - start + 1,
+                };
+                for (out_chars) |out_char| {
+                    output_buffer.appendAssumeCapacity(.{
+                        .char = out_char,
+                        .location = loc,
+                    });
+                }
+            }
+        }
+
+        var output = output_buffer.toOwnedSlice();
+        errdefer output.deinit(sema.arena);
+
+        const view = std.unicode.Utf8View.init(output.items(.char)) catch {
+            std.log.err("invalid utf-8 input: \"{f}\"", .{std.zig.fmtString(output.items(.char))});
+            @panic("String unescape produced invalid UTF-8 sequence. This should not be possible.");
+        };
+
+        var iter = view.iterator();
+        while (iter.nextCodepointSlice()) |slice| {
+            const start = iter.i - slice.len;
+            const codepoint = std.unicode.utf8Decode(slice) catch unreachable;
+
+            if (is_illegal_character(codepoint)) {
+                try sema.emit_diagnostic(
+                    .{ .illegal_character = .{ .codepoint = codepoint } },
+                    output.get(start).location,
+                );
+            }
+        }
+
+        return view.bytes;
+    }
+
+    // TODO: Also validate the whole document against this rules.
+    fn is_illegal_character(codepoint: u21) bool {
+        // Surrogate codepoints are illegal, we're only ever using UTF-8 which doesn't need them.
+        if (std.unicode.isSurrogateCodepoint(codepoint))
+            return true;
+
+        // CR and LF are the only allowed control characters:
+        if (codepoint == std.ascii.control_code.cr)
+            return false;
+        if (codepoint == std.ascii.control_code.lf)
+            return false;
+
+        // Disallow characters from the "Control" category:
+        // <https://www.compart.com/en/unicode/category/Cc>
+        if (codepoint <= 0x1F) // C0 control characters
+            return true;
+        if (codepoint == 0x7F) // DEL
+            return true;
+        if (codepoint >= 0x80 and codepoint <= 0x9F) // C1 control characters
+            return true;
+
+        // All other characters are fine
+        return false;
     }
 };
 
@@ -1782,6 +1978,8 @@ pub const Diagnostic = struct {
     pub const InvalidBlockError = struct { name: []const u8 };
     pub const InlineUsageError = struct { attribute: InlineAttribute };
     pub const InlineCombinationError = struct { first: InlineAttribute, second: InlineAttribute };
+    pub const InvalidStringEscape = struct { codepoint: u21 };
+    pub const ForbiddenControlCharacter = struct { codepoint: u21 };
 
     pub const Code = union(enum) {
         // errors:
@@ -1802,8 +2000,12 @@ pub const Diagnostic = struct {
         invalid_link,
         invalid_date_time,
         invalid_date_time_fmt,
+        invalid_unicode_string_escape,
+        invalid_string_escape: InvalidStringEscape,
+        illegal_character: ForbiddenControlCharacter,
 
         // warnings:
+        document_starts_with_bom,
         unknown_attribute: NodeAttributeError,
         duplicate_attribute: DuplicateAttribute,
         empty_verbatim_block,
@@ -1833,6 +2035,9 @@ pub const Diagnostic = struct {
                 .invalid_link,
                 .invalid_date_time,
                 .invalid_date_time_fmt,
+                .invalid_string_escape,
+                .illegal_character,
+                .invalid_unicode_string_escape,
                 => .@"error",
 
                 .unknown_attribute,
@@ -1844,12 +2049,15 @@ pub const Diagnostic = struct {
                 .empty_inline_body,
                 .redundant_inline,
                 .attribute_leading_trailing_whitespace,
+                .document_starts_with_bom,
                 => .warning,
             };
         }
 
         pub fn format(code: Code, w: anytype) !void {
             switch (code) {
+                .document_starts_with_bom => try w.writeAll("Document starts with BOM (U+FEFF). HyperDoc recommends not using the BOM with UTF-8."),
+
                 .unterminated_inline_list => try w.writeAll("Inline list body is unterminated (missing '}' before end of file)."),
                 .unexpected_eof => |ctx| {
                     if (ctx.expected_char) |ch| {
@@ -1888,6 +2096,15 @@ pub const Diagnostic = struct {
                 .invalid_date_time => try w.writeAll("Invalid date/time value."),
 
                 .invalid_date_time_fmt => try w.writeAll("Invalid 'fmt' for date/time value."),
+
+                .invalid_string_escape => |ctx| if (ctx.codepoint > 0x20 and ctx.codepoint <= 0x7F)
+                    try w.print("\\{u} is not a valid escape sequence.", .{ctx.codepoint})
+                else
+                    try w.print("U+{X:0>2} is not a valid escape sequence.", .{ctx.codepoint}),
+
+                .invalid_unicode_string_escape => try w.writeAll("Invalid unicode escape sequence"),
+
+                .illegal_character => |ctx| try w.print("Forbidden control character U+{X:0>4}.", .{ctx.codepoint}),
             }
         }
     };
