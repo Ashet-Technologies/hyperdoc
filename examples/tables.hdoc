@@ -21,7 +21,7 @@ table(id="inventory") {
   row(title="Vegetables") {
     td "Carrots"
     td "7"
-    td { p { Store at \time(fmt="rough"){08:00:00}. } }
+    td { p { Store at \time(fmt="rough"){08:00:00Z}. } }
   }
   group { Pantry }
   row(title="Dry Goods") {

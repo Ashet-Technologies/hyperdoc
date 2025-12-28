@@ -253,7 +253,7 @@ fn dumpListItemsField(writer: anytype, indent: usize, key: []const u8, items: []
 
 fn dumpTableCell(writer: anytype, indent: usize, cell: hdoc.Block.TableCell) !void {
     try dumpOptionalStringField(writer, indent, "lang", cell.lang);
-    try dumpOptionalNumberField(writer, indent, "colspan", cell.colspan);
+    try dumpOptionalNumberField(writer, indent, "colspan", @as(?u32, cell.colspan));
     try dumpBlockListField(writer, indent, "content", cell.content);
 }
 

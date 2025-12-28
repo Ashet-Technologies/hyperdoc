@@ -11,6 +11,7 @@ ul {
   li "Item 1"
   li { p { Item 2 } }
 }
+
 ol {
   li "Item 1"
   li { p { Item 2 } }

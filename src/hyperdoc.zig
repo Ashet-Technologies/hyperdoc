@@ -113,7 +113,7 @@ pub const Block = union(enum) {
 
     pub const TableCell = struct {
         lang: ?[]const u8,
-        colspan: ?u32,
+        colspan: u32,
         content: []Block,
     };
 };
@@ -364,7 +364,7 @@ pub const Uri = struct {
     text: []const u8,
 
     pub fn init(text: []const u8) Uri {
-        // TODO: Add correctness validation here
+        // TODO: Add correctness validation here (IRI syntax, non-empty).
         return .{ .text = text };
     }
 };
@@ -376,7 +376,7 @@ pub const Reference = struct {
     text: []const u8,
 
     pub fn init(text: []const u8) Reference {
-        // TODO: Add correctness validation here
+        // TODO: Add correctness validation here (non-empty, allowed characters).
         return .{ .text = text };
     }
 };
@@ -433,6 +433,7 @@ pub fn parse(
 
     const header = sema.header orelse return error.MalformedDocument;
 
+    // TODO: Validate document-level semantic constraints (unique ids, ref resolution, table shape).
     return .{
         .arena = arena,
         .contents = try sema.blocks.toOwnedSlice(arena.allocator()),
@@ -703,27 +704,205 @@ pub const SemanticAnalyzer = struct {
     }
 
     fn translate_image_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Image, ?Reference } {
-        _ = sema;
-        _ = node;
-        return error.Unimplemented; // TODO: Implement this node type
+        const attrs = try sema.get_attributes(node, struct {
+            lang: ?[]const u8 = null,
+            id: ?Reference = null,
+            alt: ?[]const u8 = null,
+            path: []const u8,
+        });
+
+        // TODO: Enforce non-empty "path" (required) and "alt" (if provided).
+        const content = switch (node.body) {
+            .empty => @constCast(&[_]Span{}),
+            else => try sema.translate_inline(node),
+        };
+
+        const image: Block.Image = .{
+            .lang = attrs.lang,
+            .alt = attrs.alt,
+            .path = attrs.path,
+            .content = content,
+        };
+
+        return .{ image, attrs.id };
     }
 
     fn translate_preformatted_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Preformatted, ?Reference } {
-        _ = sema;
-        _ = node;
-        return error.Unimplemented; // TODO: Implement this node type
+        const attrs = try sema.get_attributes(node, struct {
+            lang: ?[]const u8 = null,
+            id: ?Reference = null,
+            syntax: ?[]const u8 = null,
+        });
+
+        const preformatted: Block.Preformatted = .{
+            .lang = attrs.lang,
+            .syntax = attrs.syntax,
+            .content = try sema.translate_inline(node),
+        };
+
+        return .{ preformatted, attrs.id };
     }
 
     fn translate_toc_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.TableOfContents, ?Reference } {
-        _ = sema;
-        _ = node;
-        return error.Unimplemented; // TODO: Implement this node type
+        const attrs = try sema.get_attributes(node, struct {
+            lang: ?[]const u8 = null,
+            id: ?Reference = null,
+            depth: ?u32 = null,
+        });
+
+        var depth: ?u8 = null;
+        if (attrs.depth) |depth_value| {
+            if (depth_value < 1 or depth_value > 3) {
+                try sema.emit_diagnostic(.{ .invalid_attribute = .{ .type = node.type, .name = "depth" } }, get_attribute_location(node, "depth", .value) orelse node.location);
+            } else {
+                depth = @intCast(depth_value);
+            }
+        }
+
+        switch (node.body) {
+            .empty => {},
+            .list => |child_nodes| {
+                for (child_nodes) |child_node| {
+                    try sema.emit_diagnostic(.illegal_child_item, child_node.location);
+                }
+            },
+            .string, .verbatim, .text_span => {
+                try sema.emit_diagnostic(.illegal_child_item, node.location);
+            },
+        }
+
+        const toc: Block.TableOfContents = .{
+            .lang = attrs.lang,
+            .depth = depth,
+        };
+
+        return .{ toc, attrs.id };
     }
 
     fn translate_table_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Table, ?Reference } {
-        _ = sema;
-        _ = node;
-        return error.Unimplemented; // TODO: Implement this node type
+        const attrs = try sema.get_attributes(node, struct {
+            lang: ?[]const u8 = null,
+            id: ?Reference = null,
+        });
+
+        var rows: std.ArrayList(Block.TableRow) = .empty;
+        defer rows.deinit(sema.arena);
+
+        switch (node.body) {
+            .list => |child_nodes| {
+                try rows.ensureTotalCapacityPrecise(sema.arena, child_nodes.len);
+                for (child_nodes) |child_node| {
+                    switch (child_node.type) {
+                        .columns => {
+                            const row_attrs = try sema.get_attributes(child_node, struct {
+                                lang: ?[]const u8 = null,
+                            });
+
+                            const cells = try sema.translate_table_cells(child_node);
+
+                            rows.appendAssumeCapacity(.{
+                                .columns = .{
+                                    .lang = row_attrs.lang,
+                                    .cells = cells,
+                                },
+                            });
+                        },
+                        .row => {
+                            const row_attrs = try sema.get_attributes(child_node, struct {
+                                lang: ?[]const u8 = null,
+                                title: ?[]const u8 = null,
+                            });
+
+                            const cells = try sema.translate_table_cells(child_node);
+
+                            rows.appendAssumeCapacity(.{
+                                .row = .{
+                                    .lang = row_attrs.lang,
+                                    .title = row_attrs.title,
+                                    .cells = cells,
+                                },
+                            });
+                        },
+                        .group => {
+                            const row_attrs = try sema.get_attributes(child_node, struct {
+                                lang: ?[]const u8 = null,
+                            });
+
+                            rows.appendAssumeCapacity(.{
+                                .group = .{
+                                    .lang = row_attrs.lang,
+                                    .content = try sema.translate_inline(child_node),
+                                },
+                            });
+                        },
+                        else => {
+                            try sema.emit_diagnostic(.illegal_child_item, child_node.location);
+                        },
+                    }
+                }
+            },
+            .empty, .string, .verbatim, .text_span => {
+                try sema.emit_diagnostic(.list_body_required, node.location);
+            },
+        }
+
+        // TODO: Validate column counts after colspan and title/group leading column rules.
+        const table: Block.Table = .{
+            .lang = attrs.lang,
+            .rows = try rows.toOwnedSlice(sema.arena),
+        };
+
+        return .{ table, attrs.id };
+    }
+
+    fn translate_table_cells(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, BadAttributes, InvalidNodeType, Unimplemented }![]Block.TableCell {
+        var cells: std.ArrayList(Block.TableCell) = .empty;
+        defer cells.deinit(sema.arena);
+
+        switch (node.body) {
+            .list => |child_nodes| {
+                try cells.ensureTotalCapacityPrecise(sema.arena, child_nodes.len);
+                for (child_nodes) |child_node| {
+                    const cell = sema.translate_table_cell_node(child_node) catch |err| switch (err) {
+                        error.InvalidNodeType => {
+                            try sema.emit_diagnostic(.illegal_child_item, child_node.location);
+                            continue;
+                        },
+                        else => |e| return e,
+                    };
+                    cells.appendAssumeCapacity(cell);
+                }
+            },
+            .empty, .string, .verbatim, .text_span => {
+                try sema.emit_diagnostic(.list_body_required, node.location);
+            },
+        }
+
+        return try cells.toOwnedSlice(sema.arena);
+    }
+
+    fn translate_table_cell_node(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, BadAttributes, InvalidNodeType, Unimplemented }!Block.TableCell {
+        switch (node.type) {
+            .td => {},
+            else => return error.InvalidNodeType,
+        }
+
+        const attrs = try sema.get_attributes(node, struct {
+            lang: ?[]const u8 = null,
+            colspan: ?u32 = null,
+        });
+
+        var colspan = attrs.colspan orelse 1;
+        if (colspan < 1) {
+            try sema.emit_diagnostic(.{ .invalid_attribute = .{ .type = node.type, .name = "colspan" } }, get_attribute_location(node, "colspan", .value) orelse node.location);
+            colspan = 1;
+        }
+
+        return .{
+            .lang = attrs.lang,
+            .colspan = colspan,
+            .content = try sema.translate_block_list(node, .text_to_p),
+        };
     }
 
     fn translate_list_item_node(sema: *SemanticAnalyzer, node: Parser.Node) !Block.ListItem {
@@ -979,10 +1158,11 @@ pub const SemanticAnalyzer = struct {
                 // TODO: Implement automatic space insertion.
                 //       This must be done when two consecutive nodes are separated by a space
 
+                // TODO: Enforce that date/time bodies only contain plain text/string/verbatim.
                 try sema.translate_inline_body(&content_spans, node.body, .{});
 
                 //  Convert the content_spans into a "rendered string".
-                const content_text = try sema.join_spans(content_spans.items, .no_space);
+                const content_text = try sema.render_spans_to_plaintext(content_spans.items, .no_space);
 
                 const content: Span.Content = switch (node.type) {
                     .@"\\date" => try sema.parse_date_body(node, .date, Date, content_text, props.fmt),
@@ -1081,7 +1261,7 @@ pub const SemanticAnalyzer = struct {
     }
 
     const JoinStyle = enum { no_space, one_space };
-    fn join_spans(sema: *SemanticAnalyzer, source_spans: []const Span, style: JoinStyle) ![]const u8 {
+    fn render_spans_to_plaintext(sema: *SemanticAnalyzer, source_spans: []const Span, style: JoinStyle) ![]const u8 {
         var len: usize = switch (style) {
             .no_space => 0,
             .one_space => (source_spans.len -| 1),
@@ -1191,6 +1371,7 @@ pub const SemanticAnalyzer = struct {
         const Fields = std.meta.FieldEnum(Attrs);
         const fields = @typeInfo(Attrs).@"struct".fields;
 
+        // TODO: Enforce per-attribute constraints from the spec (non-empty strings, lang tag format, etc).
         var required: std.EnumSet(Fields) = .initEmpty();
 
         var attrs: Attrs = undefined;
@@ -1425,9 +1606,9 @@ pub const SemanticAnalyzer = struct {
                         },
 
                         else => {
-                            // Unknown escape sequence, emit escaped char verbatim:
-                            // TODO: How to handle something like "\😭", which is
-                            //       definitly valid and in-scope.
+                            // Unknown escape sequence, emit escaped char verbatim. Use the full UTF-8 codepoint
+                            // inside the error message, so we can tell that "\😢" is not a valid escape sequence
+                            // instead of saying that "\{F0}" is not a valid escape sequence
 
                             const len = std.unicode.utf8ByteSequenceLength(esc_char) catch unreachable;
 
