@@ -335,93 +335,40 @@ test "parser handles unknown node types" {
     }
 }
 
-fn diagnosticCodesEqual(a: hdoc.Diagnostic.Code, b: hdoc.Diagnostic.Code) bool {
-    if (std.meta.activeTag(a) != std.meta.activeTag(b)) return false;
+fn diagnosticCodesEqual(lhs: hdoc.Diagnostic.Code, rhs: hdoc.Diagnostic.Code) bool {
+    if (std.meta.activeTag(lhs) != std.meta.activeTag(rhs))
+        return false;
 
-    return switch (a) {
-        .document_starts_with_bom,
-        .unterminated_inline_list,
-        .unterminated_string,
-        .unterminated_block_list,
-        .missing_hdoc_header,
-        .duplicate_hdoc_header,
-        .link_not_nestable,
-        .invalid_link,
-        .invalid_date_time,
-        .invalid_date_time_fmt,
-        .empty_verbatim_block,
-        .verbatim_missing_trailing_newline,
-        .verbatim_missing_space,
-        .trailing_whitespace,
-        .empty_inline_body,
-        .attribute_leading_trailing_whitespace,
-        .invalid_unicode_string_escape,
-        => true,
+    switch (lhs) {
+        inline else => |_, tag_value| {
+            const tag = @tagName(tag_value);
+            const a_struct = @field(lhs, tag);
+            const b_struct = @field(rhs, tag);
 
-        .unexpected_eof => |ctx| blk: {
-            const other = b.unexpected_eof;
-            break :blk ctx.expected_char == other.expected_char and std.mem.eql(u8, ctx.context, other.context);
+            const TagField = @FieldType(hdoc.Diagnostic.Code, tag);
+            const info = @typeInfo(TagField);
+
+            switch (info) {
+                .void => return true,
+
+                .@"struct" => |struct_info| {
+                    inline for (struct_info.fields) |fld| {
+                        const a = @field(a_struct, fld.name);
+                        const b = @field(b_struct, fld.name);
+                        const eql = switch (fld.type) {
+                            []const u8 => std.mem.eql(u8, a, b),
+                            else => (a == b),
+                        };
+                        if (!eql)
+                            return false;
+                    }
+                    return true;
+                },
+
+                else => @compileError("Unsupported type: " ++ @typeName(TagField)),
+            }
         },
-
-        .unexpected_character => |ctx| blk: {
-            const other = b.unexpected_character;
-            break :blk ctx.expected == other.expected and ctx.found == other.found;
-        },
-
-        .invalid_identifier_start => |ctx| blk: {
-            const other = b.invalid_identifier_start;
-            break :blk ctx.char == other.char;
-        },
-
-        .missing_attribute => |ctx| blk: {
-            const other = b.missing_attribute;
-            break :blk ctx.type == other.type and std.mem.eql(u8, ctx.name, other.name);
-        },
-
-        .invalid_attribute => |ctx| blk: {
-            const other = b.invalid_attribute;
-            break :blk ctx.type == other.type and std.mem.eql(u8, ctx.name, other.name);
-        },
-
-        .unknown_block_type => |ctx| blk: {
-            const other = b.unknown_block_type;
-            break :blk std.mem.eql(u8, ctx.name, other.name);
-        },
-
-        .invalid_block_type => |ctx| blk: {
-            const other = b.invalid_block_type;
-            break :blk std.mem.eql(u8, ctx.name, other.name);
-        },
-
-        .invalid_inline_combination => |ctx| blk: {
-            const other = b.invalid_inline_combination;
-            break :blk ctx.first == other.first and ctx.second == other.second;
-        },
-
-        .duplicate_attribute => |ctx| blk: {
-            const other = b.duplicate_attribute;
-            break :blk std.mem.eql(u8, ctx.name, other.name);
-        },
-
-        .unknown_attribute => |ctx| blk: {
-            const other = b.unknown_attribute;
-            break :blk ctx.type == other.type and std.mem.eql(u8, ctx.name, other.name);
-        },
-
-        .redundant_inline => |ctx| blk: {
-            const other = b.redundant_inline;
-            break :blk ctx.attribute == other.attribute;
-        },
-
-        .invalid_string_escape => |ctx| blk: {
-            break :blk b.invalid_string_escape.codepoint == ctx.codepoint;
-        },
-
-        .illegal_character => |ctx| blk: {
-            const other = b.illegal_character;
-            break :blk ctx.codepoint == other.codepoint;
-        },
-    };
+    }
 }
 
 fn logDiagnostics(diag: *const hdoc.Diagnostics) void {
