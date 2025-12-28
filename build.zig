@@ -45,7 +45,7 @@ pub fn build(b: *std.Build) void {
                 rawFileMod(b, "examples/featurematrix.hdoc"),
                 rawFileMod(b, "examples/demo.hdoc"),
                 rawFileMod(b, "examples/guide.hdoc"),
-                rawFileMod(b, "test/parser/stress.hdoc"),
+                rawFileMod(b, "test/accept/stress.hdoc"),
             },
         }),
         .use_llvm = true,

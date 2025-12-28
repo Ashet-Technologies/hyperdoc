@@ -1190,7 +1190,7 @@ pub const SemanticAnalyzer = struct {
                             }
                             i += 1;
                             const escape_part = content[start..i];
-                            std.debug.assert(escape_part.len > 2);
+                            std.debug.assert(escape_part.len >= 3);
                             std.debug.assert(escape_part[0] == '\\');
                             std.debug.assert(escape_part[1] == 'u');
                             std.debug.assert(escape_part[escape_part.len - 1] == '}');
@@ -1199,6 +1199,14 @@ pub const SemanticAnalyzer = struct {
 
                             if (escape_part[2] != '{') {
                                 try sema.emit_diagnostic(.invalid_unicode_string_escape, location);
+                                break :blk "???";
+                            }
+
+                            if (escape_part.len == 4) {
+                                // Empty escape: \u{}
+                                std.debug.assert(std.mem.eql(u8, escape_part, "\\u{}"));
+                                try sema.emit_diagnostic(.invalid_unicode_string_escape, location);
+                                break :blk "???";
                             }
 
                             const codepoint = std.fmt.parseInt(u21, escape_part[3 .. escape_part.len - 1], 16) catch {
@@ -2185,7 +2193,134 @@ test "fuzz parser" {
             @embedFile("examples/featurematrix.hdoc"),
             @embedFile("examples/demo.hdoc"),
             @embedFile("examples/guide.hdoc"),
-            @embedFile("test/parser/stress.hdoc"),
+            @embedFile("test/accept/stress.hdoc"),
+        },
+    });
+}
+
+test "fuzz string unescape" {
+    const Impl = struct {
+        fn testOne(impl: @This(), string_literal: []const u8) !void {
+            // Don't test if the string doesn't follow our rules:
+            if (string_literal.len < 2)
+                return;
+            if (string_literal[0] != '"' or string_literal[string_literal.len - 1] != '"')
+                return;
+            if (string_literal.len >= 3 and string_literal[string_literal.len - 2] == '\\')
+                return;
+
+            // Check for valid UTF-8
+            _ = std.unicode.utf8CountCodepoints(string_literal) catch return;
+
+            _ = impl;
+
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+
+            var diagnostics: Diagnostics = .init(std.testing.allocator);
+            defer diagnostics.deinit();
+
+            var sema: SemanticAnalyzer = .{
+                .arena = arena.allocator(),
+                .code = string_literal,
+                .diagnostics = &diagnostics,
+            };
+
+            const output = try sema.unescape_string(.{
+                .location = .{ .offset = 0, .length = string_literal.len },
+                .text = string_literal,
+            });
+
+            _ = output;
+        }
+    };
+
+    try std.testing.fuzz(Impl{}, Impl.testOne, .{
+        .corpus = &.{
+            \\""
+            ,
+            \\"hello"
+            ,
+            \\"simple ASCII 123"
+            ,
+            \\"quote: \"inside\" ok"
+            ,
+            \\"backslash: \\ path"
+            ,
+            \\"mixed: \"a\" and \\b\\"
+            ,
+            \\"line1\nline2"
+            ,
+            \\"windows\r\nnew line"
+            ,
+            \\"unicode snowman: \u{2603} yay"
+            ,
+            \\"emoji: \u{1F642} smile"
+            ,
+            \\"CJK: \u{65E5}\u{672C}\u{8A9E}"
+            ,
+            \\"math: \u{221E} infinity"
+            ,
+            \\"euro: \u{20AC} symbol"
+            ,
+            \\"accented: café"
+            ,
+            \\"escaped braces: \u{7B} \u{7D}"
+            ,
+            \\"leading zeros: \u{000041} is A"
+            ,
+            \\"json-ish: {\"k\":\"v\"}"
+            ,
+            \\"literal sequence: \\\" done"
+            ,
+            \\"multiple lines:\n- one\n- two"
+            ,
+            \\"CR only:\rreturn"
+            ,
+            \\"mix: \u{1F4A1} idea \"quoted\" \\slash"
+            ,
+            //
+            // Adversarial ones:
+            //
+            \\"tab escape: \t is not allowed"
+            ,
+            \\"backspace: \b not allowed"
+            ,
+            \\"null: \0 not allowed"
+            ,
+            \\"hex escape: \x20 not allowed"
+            ,
+            \\"octal-ish: \123 not allowed"
+            ,
+            \\"single quote escape: \' not allowed"
+            ,
+            \\"unicode short form: \u0041 not allowed"
+            ,
+            \\"empty unicode: \u{} not allowed"
+            ,
+            \\"missing closing brace: \u{41 not closed"
+            ,
+            \\"missing opening brace: \u41} not opened"
+            ,
+            \\"non-hex digit: \u{12G} invalid"
+            ,
+            \\"too many digits: \u{1234567} invalid"
+            ,
+            \\"out of range: \u{110000} invalid"
+            ,
+            \\"surrogate: \u{D800} invalid"
+            ,
+            \\"forbidden NUL via unicode: \u{0} invalid"
+            ,
+            \\"forbidden TAB via unicode: \u{9} invalid"
+            ,
+            \\"forbidden C1 control: \u{80} invalid"
+            ,
+            \\"unknown escape: \q invalid"
+            ,
+            \\"backslash-space escape: \ a invalid"
+            ,
+            \\"bad hex tail: \u{1F60Z} invalid"
         },
     });
 }

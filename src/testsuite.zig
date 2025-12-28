@@ -1,15 +1,12 @@
 const std = @import("std");
 const hdoc = @import("./hyperdoc.zig");
 
-fn testAcceptDocument(document: []const u8) !void {
-    var doc = try hdoc.parse(std.testing.allocator, document, null);
-    defer doc.deinit();
+test "validate examples directory" {
+    try parseDirectoryTree("examples");
 }
 
-fn parseFile(path: []const u8) !void {
-    const source = try std.fs.cwd().readFileAlloc(std.testing.allocator, path, 10 * 1024 * 1024);
-    defer std.testing.allocator.free(source);
-    try testAcceptDocument(source);
+test "validate tests directory" {
+    try parseDirectoryTree("test/accept");
 }
 
 fn parseDirectoryTree(path: []const u8) !void {
@@ -25,16 +22,13 @@ fn parseDirectoryTree(path: []const u8) !void {
         if (!std.mem.endsWith(u8, entry.path, ".hdoc"))
             continue;
 
-        const full_path = try std.fs.path.join(std.testing.allocator, &.{ path, entry.path });
-        defer std.testing.allocator.free(full_path);
+        errdefer std.log.err("failed to process \"{f}/{f}\"", .{ std.zig.fmtString(entry.path), std.zig.fmtString(entry.basename) });
 
-        try parseFile(full_path);
+        const source = try entry.dir.readFileAlloc(std.testing.allocator, entry.basename, 10 * 1024 * 1024);
+        defer std.testing.allocator.free(source);
+
+        try expectParseOk(source);
     }
-}
-
-test "parser accepts examples and test documents" {
-    try parseDirectoryTree("examples");
-    try parseDirectoryTree("test");
 }
 
 test "parser accept identifier and word tokens" {
