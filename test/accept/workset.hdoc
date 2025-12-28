@@ -4,3 +4,10 @@ h1:
 | Hello, World!
 
 h2{Hello \em{World}!}
+
+p { This is a span. }
+
+ul {
+  li "Item 1"
+  li { p { Item 2 } }
+}

@@ -63,7 +63,7 @@ pub const Block = union(enum) {
 
     pub const ListItem = struct {
         lang: ?[]const u8,
-        content: []Span,
+        content: []Block,
     };
 
     pub const Image = struct {
@@ -114,7 +114,7 @@ pub const Block = union(enum) {
     pub const TableCell = struct {
         lang: ?[]const u8,
         colspan: ?u32,
-        content: []Span,
+        content: []Block,
     };
 };
 
@@ -550,6 +550,7 @@ pub const SemanticAnalyzer = struct {
         };
     }
 
+    /// Translates a top-level block node.
     fn translate_block_node(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, InvalidNodeType, BadAttributes, Unimplemented }!struct { Block, ?Reference } {
         std.debug.assert(node.type != .hdoc);
 
@@ -659,9 +660,46 @@ pub const SemanticAnalyzer = struct {
     }
 
     fn translate_list_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.List, ?Reference } {
-        _ = sema;
-        _ = node;
-        return error.Unimplemented; // TODO: Implement this node type
+        const attrs = try sema.get_attributes(node, struct {
+            lang: ?[]const u8 = null,
+            id: ?Reference = null,
+            first: ?u32 = null,
+        });
+
+        if (attrs.first != null and node.type != .ol) {
+            try sema.emit_diagnostic(.{ .invalid_attribute = .{ .type = node.type, .name = "first" } }, get_attribute_location(node, "first", .name).?);
+        }
+
+        var children: std.ArrayList(Block.ListItem) = .empty;
+        defer children.deinit(sema.arena);
+
+        switch (node.body) {
+            .list => |child_nodes| {
+                try children.ensureTotalCapacityPrecise(sema.arena, child_nodes.len);
+                for (child_nodes) |child_node| {
+                    const list_item = sema.translate_list_item_node(child_node) catch |err| switch (err) {
+                        error.InvalidNodeType => {
+                            try sema.emit_diagnostic(.illegal_child_item, node.location);
+                            continue;
+                        },
+                        else => |e| return e,
+                    };
+                    children.appendAssumeCapacity(list_item);
+                }
+            },
+
+            .empty, .string, .text_span, .verbatim => {
+                try sema.emit_diagnostic(.list_body_required, node.location);
+            },
+        }
+
+        const list: Block.List = .{
+            .first = attrs.first,
+            .lang = attrs.lang,
+            .items = try children.toOwnedSlice(sema.arena),
+        };
+
+        return .{ list, attrs.id };
     }
 
     fn translate_image_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Image, ?Reference } {
@@ -688,6 +726,67 @@ pub const SemanticAnalyzer = struct {
         return error.Unimplemented; // TODO: Implement this node type
     }
 
+    fn translate_list_item_node(sema: *SemanticAnalyzer, node: Parser.Node) !Block.ListItem {
+        switch (node.type) {
+            .li => {},
+            else => return error.InvalidNodeType,
+        }
+
+        const attrs = try sema.get_attributes(node, struct {
+            lang: ?[]const u8 = null,
+        });
+
+        return .{
+            .lang = attrs.lang,
+            .content = try sema.translate_block_list(node, .text_to_p),
+        };
+    }
+
+    const BlockTextUpgrade = enum { no_upgrade, text_to_p };
+
+    fn translate_block_list(sema: *SemanticAnalyzer, node: Parser.Node, upgrade: BlockTextUpgrade) error{ Unimplemented, InvalidNodeType, OutOfMemory, BadAttributes }![]Block {
+        switch (node.body) {
+            .list => |child_nodes| {
+                var blocks: std.ArrayList(Block) = .empty;
+                defer blocks.deinit(sema.arena);
+
+                try blocks.ensureTotalCapacityPrecise(sema.arena, child_nodes.len);
+
+                for (child_nodes) |child_node| {
+                    const block, const id = try sema.translate_block_node(child_node);
+                    if (id != null) {
+                        try sema.emit_diagnostic(.illegal_id_attribute, get_attribute_location(child_node, "id", .name).?);
+                    }
+                    blocks.appendAssumeCapacity(block);
+                }
+
+                return try blocks.toOwnedSlice(sema.arena);
+            },
+
+            .empty, .string, .verbatim, .text_span => switch (upgrade) {
+                .no_upgrade => {
+                    try sema.emit_diagnostic(.list_body_required, node.location); // TODO: Use better diagnostic
+                    return &.{};
+                },
+                .text_to_p => {
+                    const spans = try sema.translate_inline(node);
+
+                    const blocks = try sema.arena.alloc(Block, 1);
+                    blocks[0] = .{
+                        .paragraph = .{
+                            .kind = .p,
+                            .lang = null,
+                            .content = spans,
+                        },
+                    };
+
+                    return blocks;
+                },
+            },
+        }
+    }
+
+    /// Translates a node into a sequence of inline spans.
     fn translate_inline(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, BadAttributes }![]Span {
         var spans: std.ArrayList(Span) = .empty;
         errdefer spans.deinit(sema.arena);
@@ -923,7 +1022,10 @@ pub const SemanticAnalyzer = struct {
             .td,
             .li,
             .unknown_block,
-            => @panic("PARSER ERROR: The parser emitted a block node inside an inline context"),
+            => {
+                std.log.err("type: {t} location: {}", .{ node.type, node.location });
+                @panic("PARSER ERROR: The parser emitted a block node inside an inline context");
+            },
         }
     }
 
@@ -1161,6 +1263,8 @@ pub const SemanticAnalyzer = struct {
 
         return switch (T) {
             []const u8 => value,
+
+            u32 => std.fmt.parseInt(u32, value, 10) catch return error.InvalidValue,
 
             Reference => {
                 const stripped = std.mem.trim(u8, value, whitespace_chars);
@@ -2104,6 +2208,9 @@ pub const Diagnostic = struct {
         invalid_unicode_string_escape,
         invalid_string_escape: InvalidStringEscape,
         illegal_character: ForbiddenControlCharacter,
+        illegal_child_item,
+        list_body_required,
+        illegal_id_attribute,
 
         // warnings:
         document_starts_with_bom,
@@ -2139,6 +2246,9 @@ pub const Diagnostic = struct {
                 .invalid_string_escape,
                 .illegal_character,
                 .invalid_unicode_string_escape,
+                .illegal_child_item,
+                .list_body_required,
+                .illegal_id_attribute,
                 => .@"error",
 
                 .unknown_attribute,
@@ -2206,6 +2316,11 @@ pub const Diagnostic = struct {
                 .invalid_unicode_string_escape => try w.writeAll("Invalid unicode escape sequence"),
 
                 .illegal_character => |ctx| try w.print("Forbidden control character U+{X:0>4}.", .{ctx.codepoint}),
+
+                .list_body_required => try w.writeAll("Node requires list body."),
+                .illegal_child_item => try w.writeAll("Node not allowed here."),
+
+                .illegal_id_attribute => try w.writeAll("Attribute 'id' not allowed here."),
             }
         }
     };

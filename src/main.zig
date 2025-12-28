@@ -234,7 +234,7 @@ fn dumpSpanListField(writer: anytype, indent: usize, key: []const u8, spans: []c
 
 fn dumpListItem(writer: anytype, indent: usize, item: hdoc.Block.ListItem) !void {
     try dumpOptionalStringField(writer, indent, "lang", item.lang);
-    try dumpSpanListField(writer, indent, "content", item.content);
+    try dumpBlockListField(writer, indent, "content", item.content);
 }
 
 fn dumpListItemsField(writer: anytype, indent: usize, key: []const u8, items: []const hdoc.Block.ListItem) !void {
@@ -254,7 +254,7 @@ fn dumpListItemsField(writer: anytype, indent: usize, key: []const u8, items: []
 fn dumpTableCell(writer: anytype, indent: usize, cell: hdoc.Block.TableCell) !void {
     try dumpOptionalStringField(writer, indent, "lang", cell.lang);
     try dumpOptionalNumberField(writer, indent, "colspan", cell.colspan);
-    try dumpSpanListField(writer, indent, "content", cell.content);
+    try dumpBlockListField(writer, indent, "content", cell.content);
 }
 
 fn dumpTableCellsField(writer: anytype, indent: usize, key: []const u8, cells: []const hdoc.Block.TableCell) !void {
@@ -367,7 +367,7 @@ fn dumpBlockInline(writer: anytype, indent: usize, block: hdoc.Block) !void {
     }
 }
 
-fn dumpBlockListField(writer: anytype, indent: usize, key: []const u8, blocks: []const hdoc.Block) !void {
+fn dumpBlockListField(writer: anytype, indent: usize, key: []const u8, blocks: []const hdoc.Block) @TypeOf(writer).Error!void {
     try writeIndent(writer, indent);
     if (blocks.len == 0) {
         try writer.print("{s}: []\n", .{key});
