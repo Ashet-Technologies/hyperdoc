@@ -694,7 +694,7 @@ pub const SemanticAnalyzer = struct {
         }
 
         const list: Block.List = .{
-            .first = attrs.first,
+            .first = attrs.first orelse if (node.type == .ol) 1 else null,
             .lang = attrs.lang,
             .items = try children.toOwnedSlice(sema.arena),
         };
