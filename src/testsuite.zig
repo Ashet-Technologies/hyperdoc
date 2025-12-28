@@ -16,18 +16,26 @@ fn parseDirectoryTree(path: []const u8) !void {
     var walker = try dir.walk(std.testing.allocator);
     defer walker.deinit();
 
+    var path_buffer: std.array_list.Managed(u8) = .init(std.testing.allocator);
+    defer path_buffer.deinit();
+
     while (try walker.next()) |entry| {
         if (entry.kind != .file)
             continue;
         if (!std.mem.endsWith(u8, entry.path, ".hdoc"))
             continue;
 
-        errdefer std.log.err("failed to process \"{f}/{f}\"", .{ std.zig.fmtString(entry.path), std.zig.fmtString(entry.basename) });
+        errdefer std.log.err("failed to process \"{f}/{f}\"", .{ std.zig.fmtString(path), std.zig.fmtString(entry.path) });
 
         const source = try entry.dir.readFileAlloc(std.testing.allocator, entry.basename, 10 * 1024 * 1024);
         defer std.testing.allocator.free(source);
 
-        try expectParseOk(source);
+        path_buffer.clearRetainingCapacity();
+        try path_buffer.appendSlice(path);
+        try path_buffer.append('/');
+        try path_buffer.appendSlice(entry.path);
+
+        try expectParseOk(.{ .file_path = path_buffer.items }, source);
     }
 }
 
@@ -365,16 +373,20 @@ fn diagnosticCodesEqual(lhs: hdoc.Diagnostic.Code, rhs: hdoc.Diagnostic.Code) bo
     }
 }
 
-fn logDiagnostics(diag: *const hdoc.Diagnostics) void {
+const LogDiagOptions = struct {
+    file_path: []const u8 = "",
+};
+
+fn logDiagnostics(diag: *const hdoc.Diagnostics, opts: LogDiagOptions) void {
     for (diag.items.items) |item| {
         var buf: [256]u8 = undefined;
         var stream = std.io.fixedBufferStream(&buf);
         item.code.format(stream.writer()) catch {};
-        std.log.err("Diagnostic {d}:{d}: {s}", .{ item.location.line, item.location.column, stream.getWritten() });
+        std.log.err("Diagnostic {s}:{d}:{d}: {s}", .{ opts.file_path, item.location.line, item.location.column, stream.getWritten() });
     }
 }
 
-fn validateDiagnostics(code: []const u8, expected: []const hdoc.Diagnostic.Code) !void {
+fn validateDiagnostics(opts: LogDiagOptions, code: []const u8, expected: []const hdoc.Diagnostic.Code) !void {
     try std.testing.expect(expected.len > 0);
 
     var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
@@ -390,19 +402,19 @@ fn validateDiagnostics(code: []const u8, expected: []const hdoc.Diagnostic.Code)
     }
 
     if (diagnostics.items.items.len != expected.len) {
-        logDiagnostics(&diagnostics);
+        logDiagnostics(&diagnostics, opts);
     }
     try std.testing.expectEqual(expected.len, diagnostics.items.items.len);
     for (expected, 0..) |exp, idx| {
         const actual = diagnostics.items.items[idx].code;
         if (!diagnosticCodesEqual(actual, exp)) {
-            logDiagnostics(&diagnostics);
+            logDiagnostics(&diagnostics, opts);
             return error.MissingDiagnosticCode;
         }
     }
 }
 
-fn expectParseOk(code: []const u8) !void {
+fn expectParseOk(opts: LogDiagOptions, code: []const u8) !void {
     var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
     defer diagnostics.deinit();
 
@@ -410,12 +422,12 @@ fn expectParseOk(code: []const u8) !void {
     defer doc.deinit();
 
     if (diagnostics.has_error() or diagnostics.has_warning()) {
-        logDiagnostics(&diagnostics);
+        logDiagnostics(&diagnostics, opts);
         return error.TestExpectedEqual;
     }
 }
 
-fn expectParseNoFail(code: []const u8) !void {
+fn expectParseNoFail(opts: LogDiagOptions, code: []const u8) !void {
     var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
     defer diagnostics.deinit();
 
@@ -429,34 +441,35 @@ fn expectParseNoFail(code: []const u8) !void {
     defer doc.deinit();
 
     if (diagnostics.has_error()) {
-        logDiagnostics(&diagnostics);
+        logDiagnostics(&diagnostics, opts);
         return error.TestExpectedEqual;
     }
 }
 
 test "parsing valid document yields empty diagnostics" {
-    try expectParseOk("hdoc(version=\"2.0\");");
+    try expectParseOk(.{}, "hdoc(version=\"2.0\");");
 }
 
 test "diagnostic codes are emitted for expected samples" {
-    try validateDiagnostics("hdoc(version=\"2.0\"); h1(", &.{.{ .unexpected_eof = .{ .context = "identifier", .expected_char = null } }});
-    try validateDiagnostics("hdoc(version=\"2.0\"); h1 123", &.{.{ .unexpected_character = .{ .expected = '{', .found = '1' } }});
-    try validateDiagnostics("hdoc(version=\"2.0\"); h1 \"unterminated", &.{.unterminated_string});
-    try validateDiagnostics("hdoc(version=\"2.0\"); -abc", &.{.{ .invalid_identifier_start = .{ .char = '-' } }});
-    try validateDiagnostics("hdoc{h1 \"x\"", &.{.unterminated_block_list});
-    try validateDiagnostics("hdoc(version=\"2.0\"); p {hello", &.{.unterminated_inline_list});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); h1(", &.{.{ .unexpected_eof = .{ .context = "identifier", .expected_char = null } }});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); h1 123", &.{.{ .unexpected_character = .{ .expected = '{', .found = '1' } }});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); h1 \"unterminated", &.{.unterminated_string});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); -abc", &.{.{ .invalid_identifier_start = .{ .char = '-' } }});
+    try validateDiagnostics(.{}, "hdoc{h1 \"x\"", &.{.unterminated_block_list});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); p {hello", &.{.unterminated_inline_list});
     try validateDiagnostics(
+        .{},
         "hdoc(version=\"2.0\"); h1(lang=\"a\",lang=\"b\");",
         &.{ .{ .duplicate_attribute = .{ .name = "lang" } }, .empty_inline_body },
     );
-    try validateDiagnostics("hdoc(version=\"2.0\"); pre:\n", &.{.empty_verbatim_block});
-    try validateDiagnostics("hdoc(version=\"2.0\"); pre:\n| line", &.{.verbatim_missing_trailing_newline});
-    try validateDiagnostics("hdoc(version=\"2.0\"); pre:\n|nospace\n", &.{.verbatim_missing_space});
-    try validateDiagnostics("hdoc(version=\"2.0\"); pre:\n| trailing \n", &.{.trailing_whitespace});
-    try validateDiagnostics("h1 \"Title\"", &.{.missing_hdoc_header});
-    try validateDiagnostics("hdoc(version=\"2.0\"); hdoc(version=\"2.0\");", &.{.duplicate_hdoc_header});
-    try validateDiagnostics("hdoc(version=\"2.0\"); h1 \"bad\\q\"", &.{.{ .invalid_string_escape = .{ .codepoint = 'q' } }});
-    try validateDiagnostics("hdoc(version=\"2.0\"); h1 \"bad\\u{9}\"", &.{.{ .illegal_character = .{ .codepoint = 0x9 } }});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); pre:\n", &.{.empty_verbatim_block});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); pre:\n| line", &.{.verbatim_missing_trailing_newline});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); pre:\n|nospace\n", &.{.verbatim_missing_space});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); pre:\n| trailing \n", &.{.trailing_whitespace});
+    try validateDiagnostics(.{}, "h1 \"Title\"", &.{.missing_hdoc_header});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); hdoc(version=\"2.0\");", &.{.duplicate_hdoc_header});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); h1 \"bad\\q\"", &.{.{ .invalid_string_escape = .{ .codepoint = 'q' } }});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); h1 \"bad\\u{9}\"", &.{.{ .illegal_character = .{ .codepoint = 0x9 } }});
 }
 
 test "parser reports unterminated inline lists" {

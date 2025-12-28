@@ -616,9 +616,27 @@ pub const SemanticAnalyzer = struct {
     }
 
     fn translate_paragraph_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Paragraph, ?Reference } {
-        _ = sema;
-        _ = node;
-        return error.Unimplemented; // TODO: Implement this node type
+        const attrs = try sema.get_attributes(node, struct {
+            lang: ?[]const u8 = null,
+            id: ?Reference = null,
+        });
+
+        const heading: Block.Paragraph = .{
+            .kind = switch (node.type) {
+                .p => .p,
+                .note => .note,
+                .warning => .warning,
+                .danger => .danger,
+                .tip => .tip,
+                .quote => .quote,
+                .spoiler => .spoiler,
+                else => unreachable,
+            },
+            .lang = attrs.lang,
+            .content = try sema.translate_inline(node),
+        };
+
+        return .{ heading, attrs.id };
     }
 
     fn translate_list_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.List, ?Reference } {
