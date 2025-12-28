@@ -863,8 +863,8 @@ pub const SemanticAnalyzer = struct {
 
                 try sema.translate_inline_body(&content_spans, node.body, .{});
 
-                // TODO: Convert the content_spans into a "rendered string".
-                const content_text = "<undefined>";
+                //  Convert the content_spans into a "rendered string".
+                const content_text = try sema.join_spans(content_spans.items, .no_space);
 
                 const content: Span.Content = switch (node.type) {
                     .@"\\date" => try sema.parse_date_body(node, .date, Date, content_text, props.fmt),
@@ -940,6 +940,40 @@ pub const SemanticAnalyzer = struct {
             .format = format,
             .value = value,
         });
+    }
+
+    const JoinStyle = enum { no_space, one_space };
+    fn join_spans(sema: *SemanticAnalyzer, source_spans: []const Span, style: JoinStyle) ![]const u8 {
+        var len: usize = switch (style) {
+            .no_space => 0,
+            .one_space => (source_spans.len -| 1),
+        };
+        for (source_spans) |span| {
+            len += switch (span.content) {
+                .text => |str| str.len,
+                .date, .time, .datetime => @panic("TODO: Implement date-to-text conversion!"),
+            };
+        }
+
+        var output_str: std.ArrayList(u8) = .empty;
+        defer output_str.deinit(sema.arena);
+
+        try output_str.ensureTotalCapacityPrecise(sema.arena, len);
+
+        for (source_spans, 0..) |span, index| {
+            switch (style) {
+                .no_space => {},
+                .one_space => if (index > 0)
+                    output_str.appendAssumeCapacity(' '),
+            }
+
+            switch (span.content) {
+                .text => |str| output_str.appendSliceAssumeCapacity(str),
+                .date, .time, .datetime => @panic("TODO: Implement date-to-text conversion!"),
+            }
+        }
+
+        return try output_str.toOwnedSlice(sema.arena);
     }
 
     fn translate_inline_body(sema: *SemanticAnalyzer, spans: *std.ArrayList(Span), body: Parser.Node.Body, attribs: Span.Attributes) error{ OutOfMemory, BadAttributes }!void {

@@ -72,7 +72,7 @@ img(id="fig-diagram", alt="Diagram showing a HyperDoc example", path="./assets/d
 h2(id="dates") { Dates and Times }
 
 p {
-  The event was announced on \date(fmt="long"){2025-12-17} at \time(fmt="short"){13:45:00}.
+  The event was announced on \date(fmt="long"){2025-12-17} at \time(fmt="short"){13:45:00Z}.
   A combined timestamp looks like \datetime(fmt="iso"){2025-12-17T13:45:00Z}.
 }
 
