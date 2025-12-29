@@ -513,6 +513,8 @@ pub fn parse(
     const header = sema.header orelse return error.MalformedDocument;
 
     const content_ids = try sema.ids.toOwnedSlice(arena.allocator());
+    const id_locations = sema.id_locations.items;
+    std.debug.assert(id_locations.len == content_ids.len);
 
     var id_map: std.StringArrayHashMapUnmanaged(usize) = .empty;
     errdefer id_map.deinit(arena.allocator());
@@ -521,24 +523,22 @@ pub fn parse(
 
     for (content_ids, 0..) |id_or_null, index| {
         const id = id_or_null orelse continue;
+        const id_location = id_locations[index] orelse Parser.Location{ .offset = 0, .length = 0 };
 
         const gop = id_map.getOrPutAssumeCapacity(id.text);
         if (gop.found_existing) {
             try sema.emit_diagnostic(
                 .{ .duplicate_id = .{ .ref = id.text } },
-                .{ .offset = 0, .length = 0 }, // TODO: Figure out proper node location
+                id_location,
             );
             continue;
         }
         gop.value_ptr.* = index;
     }
 
-    // TODO: Validate document-level semantic constraints (ref resolution).
+    try sema.validate_references(&id_map);
 
-    const doc_lang = header.lang orelse blk: {
-        // TODO: Emit diagnostic warning for missing document language.
-        break :blk LanguageTag.inherit;
-    };
+    const doc_lang = header.lang orelse LanguageTag.inherit;
 
     return .{
         .arena = arena,
@@ -577,15 +577,68 @@ pub fn clean_utf8_input(diagnostics: ?*Diagnostics, raw_plain_text: []const u8) 
     }
     const source_head = iter.i;
 
+    var line: u32 = 1;
+    var column: u32 = 1;
+    var saw_invalid = false;
+
+    var prev_was_cr = false;
+    var prev_cr_location: Diagnostic.Location = undefined;
+
     while (iter.nextCodepointSlice()) |slice| {
         const codepoint = std.unicode.utf8Decode(slice) catch unreachable;
 
-        // TODO: Write codepoint validation which rejects the file if invalid codepoints are detected and
-        //       emits warnings for TAB characters.
-        //       Bare CR is forbidden, just CR LF or LF is allowed.
+        const location: Diagnostic.Location = .{ .line = line, .column = column };
 
-        _ = codepoint;
+        if (prev_was_cr) {
+            if (codepoint != '\n') {
+                if (diagnostics) |diag| {
+                    try diag.add(.bare_carriage_return, prev_cr_location);
+                }
+                saw_invalid = true;
+            }
+            prev_was_cr = false;
+            if (codepoint == '\n') {
+                continue;
+            }
+        }
+
+        if (codepoint == '\r') {
+            prev_was_cr = true;
+            prev_cr_location = location;
+            line += 1;
+            column = 1;
+            continue;
+        }
+
+        if (codepoint == '\n') {
+            line += 1;
+            column = 1;
+            continue;
+        }
+
+        if (codepoint == '\t') {
+            if (diagnostics) |diag| {
+                try diag.add(.tab_character, location);
+            }
+        } else if (SemanticAnalyzer.is_illegal_character(codepoint)) {
+            if (diagnostics) |diag| {
+                try diag.add(.{ .illegal_character = .{ .codepoint = codepoint } }, location);
+            }
+            saw_invalid = true;
+        }
+
+        column += 1;
     }
+
+    if (prev_was_cr) {
+        if (diagnostics) |diag| {
+            try diag.add(.bare_carriage_return, prev_cr_location);
+        }
+        saw_invalid = true;
+    }
+
+    if (saw_invalid)
+        return error.InvalidUtf8;
 
     return raw_plain_text[source_head..];
 }
@@ -602,6 +655,11 @@ pub const SemanticAnalyzer = struct {
         date: ?DateTime,
     };
 
+    const RefUse = struct {
+        ref: Reference,
+        location: Parser.Location,
+    };
+
     arena: std.mem.Allocator,
     diagnostics: ?*Diagnostics,
     code: []const u8,
@@ -609,6 +667,8 @@ pub const SemanticAnalyzer = struct {
     header: ?Header = null,
     blocks: std.ArrayList(Block) = .empty,
     ids: std.ArrayList(?Reference) = .empty,
+    id_locations: std.ArrayList(?Parser.Location) = .empty,
+    pending_refs: std.ArrayList(RefUse) = .empty,
 
     fn append_node(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, UnsupportedVersion }!void {
         switch (node.type) {
@@ -654,8 +714,14 @@ pub const SemanticAnalyzer = struct {
                     },
                 };
 
+                const id_location = if (id != null)
+                    get_attribute_location(node, "id", .value) orelse get_attribute_location(node, "id", .name) orelse node.location
+                else
+                    null;
+
                 try sema.blocks.append(sema.arena, block);
                 try sema.ids.append(sema.arena, id);
+                try sema.id_locations.append(sema.arena, id_location);
             },
         }
     }
@@ -672,6 +738,11 @@ pub const SemanticAnalyzer = struct {
             tz: ?TimeZoneOffset = null,
         });
 
+        const lang_location = get_attribute_location(node, "lang", .name);
+        if (lang_location == null) {
+            try sema.emit_diagnostic(.missing_document_language, node.location);
+        }
+
         if (attrs.version.major != 2)
             return error.UnsupportedVersion;
         if (attrs.version.minor != 0)
@@ -679,7 +750,7 @@ pub const SemanticAnalyzer = struct {
 
         return .{
             .version = attrs.version,
-            .lang = attrs.lang,
+            .lang = if (lang_location != null) attrs.lang else null,
             .title = attrs.title,
             .author = attrs.author,
             .date = attrs.date,
@@ -810,8 +881,10 @@ pub const SemanticAnalyzer = struct {
         var children: std.ArrayList(Block.ListItem) = .empty;
         defer children.deinit(sema.arena);
 
+        var saw_list_body = false;
         switch (node.body) {
             .list => |child_nodes| {
+                saw_list_body = true;
                 try children.ensureTotalCapacityPrecise(sema.arena, child_nodes.len);
                 for (child_nodes) |child_node| {
                     const list_item = sema.translate_list_item_node(child_node) catch |err| switch (err) {
@@ -830,7 +903,9 @@ pub const SemanticAnalyzer = struct {
             },
         }
 
-        // TODO: Validate `children.items.len >= 1`
+        if (saw_list_body and children.items.len == 0) {
+            try sema.emit_diagnostic(.list_body_required, node.location);
+        }
 
         const list: Block.List = .{
             .first = attrs.first orelse if (node.type == .ol) 1 else null,
@@ -858,15 +933,13 @@ pub const SemanticAnalyzer = struct {
         if (path.len == 0) {
             // The path must be non-empty.
 
-            // TODO: Implement better diagnostic message
-            try sema.emit_diagnostic(.{ .invalid_attribute = .{ .type = .img, .name = "path" } }, get_attribute_location(node, "path", .value).?);
+            try sema.emit_diagnostic(.{ .empty_attribute = .{ .type = .img, .name = "path" } }, get_attribute_location(node, "path", .value).?);
         }
 
         if (attrs.alt != null and alt.len == 0) {
             // If alt is present, it must be non-empty, and not fully whitespace.
 
-            // TODO: Implement better diagnostic message
-            try sema.emit_diagnostic(.{ .invalid_attribute = .{ .type = .img, .name = "alt" } }, get_attribute_location(node, "alt", .value).?);
+            try sema.emit_diagnostic(.{ .empty_attribute = .{ .type = .img, .name = "alt" } }, get_attribute_location(node, "alt", .value).?);
         }
 
         const image: Block.Image = .{
@@ -1039,8 +1112,10 @@ pub const SemanticAnalyzer = struct {
         var cells: std.ArrayList(Block.TableCell) = .empty;
         defer cells.deinit(sema.arena);
 
+        var saw_list_body = false;
         switch (node.body) {
             .list => |child_nodes| {
+                saw_list_body = true;
                 try cells.ensureTotalCapacityPrecise(sema.arena, child_nodes.len);
                 for (child_nodes) |child_node| {
                     const cell = sema.translate_table_cell_node(child_node) catch |err| switch (err) {
@@ -1058,7 +1133,9 @@ pub const SemanticAnalyzer = struct {
             },
         }
 
-        // TODO: Validate `children.items.len >= 1`
+        if (saw_list_body and cells.items.len == 0) {
+            try sema.emit_diagnostic(.list_body_required, node.location);
+        }
 
         return try cells.toOwnedSlice(sema.arena);
     }
@@ -1126,7 +1203,7 @@ pub const SemanticAnalyzer = struct {
 
             .empty, .string, .verbatim, .text_span => switch (upgrade) {
                 .no_upgrade => {
-                    try sema.emit_diagnostic(.list_body_required, node.location); // TODO: Use better diagnostic
+                    try sema.emit_diagnostic(.{ .block_list_required = .{ .type = node.type } }, node.location);
                     return &.{};
                 },
                 .text_to_p => {
@@ -1406,6 +1483,13 @@ pub const SemanticAnalyzer = struct {
                     break :blk .none;
                 };
 
+                if (props.ref) |ref| {
+                    if (props.uri == null) {
+                        const ref_location = get_attribute_location(node, "ref", .value) orelse node.location;
+                        try sema.pending_refs.append(sema.arena, .{ .ref = ref, .location = ref_location });
+                    }
+                }
+
                 try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
                     .lang = props.lang,
                     .link = link,
@@ -1523,16 +1607,12 @@ pub const SemanticAnalyzer = struct {
         const value: DTValue = if (value_or_err) |value|
             value
         else |err| blk: {
-            std.log.warn("failed to parse {t}: \"{s}\"", .{ body, value_str });
             switch (err) {
                 error.InvalidValue => {
                     try sema.emit_diagnostic(.invalid_date_time, node.location);
                 },
                 error.MissingTimezone => {
-                    std.log.err("emit missing timezone for {}", .{node.location});
-                    // TODO: Use (timezone_hint != null) to emit diagnostic for hint with
-                    //       adding `tz` attribute when all date/time values share a common base.
-                    try sema.emit_diagnostic(.invalid_date_time, node.location);
+                    try sema.emit_diagnostic(.missing_timezone, node.location);
                 },
             }
             break :blk std.mem.zeroes(DTValue);
@@ -1543,8 +1623,7 @@ pub const SemanticAnalyzer = struct {
         else if (std.meta.stringToEnum(Format, format_str)) |format|
             format
         else blk: {
-            // TODO: Report error about invalid format
-            try sema.emit_diagnostic(.invalid_date_time_fmt, get_attribute_location(node, "fmt", .value) orelse node.location);
+            try sema.emit_diagnostic(.{ .invalid_date_time_fmt = .{ .fmt = format_str } }, get_attribute_location(node, "fmt", .value) orelse node.location);
             break :blk .default;
         };
 
@@ -1767,6 +1846,14 @@ pub const SemanticAnalyzer = struct {
         };
     }
 
+    fn validate_references(sema: *SemanticAnalyzer, id_map: *const std.StringArrayHashMapUnmanaged(usize)) !void {
+        for (sema.pending_refs.items) |ref_use| {
+            if (!id_map.contains(ref_use.ref.text)) {
+                try sema.emit_diagnostic(.{ .unknown_id = .{ .ref = ref_use.ref.text } }, ref_use.location);
+            }
+        }
+    }
+
     fn emit_diagnostic(sema: *SemanticAnalyzer, code: Diagnostic.Code, location: Parser.Location) !void {
         if (sema.diagnostics) |diag| {
             try diag.add(code, sema.make_location(location.offset));
@@ -1967,7 +2054,6 @@ pub const SemanticAnalyzer = struct {
         return view.bytes;
     }
 
-    // TODO: Also validate the whole document against this rules.
     fn is_illegal_character(codepoint: u21) bool {
         // Surrogate codepoints are illegal, we're only ever using UTF-8 which doesn't need them.
         if (std.unicode.isSurrogateCodepoint(codepoint))
@@ -2694,11 +2780,13 @@ pub const Diagnostic = struct {
     pub const InvalidIdentifierStart = struct { char: u8 };
     pub const DuplicateAttribute = struct { name: []const u8 };
     pub const NodeAttributeError = struct { type: Parser.NodeType, name: []const u8 };
+    pub const NodeBodyError = struct { type: Parser.NodeType };
     pub const MissingHdocHeader = struct {};
     pub const DuplicateHdocHeader = struct {};
     pub const InvalidBlockError = struct { name: []const u8 };
     pub const InlineUsageError = struct { attribute: InlineAttribute };
     pub const InlineCombinationError = struct { first: InlineAttribute, second: InlineAttribute };
+    pub const DateTimeFormatError = struct { fmt: []const u8 };
     pub const InvalidStringEscape = struct { codepoint: u21 };
     pub const ForbiddenControlCharacter = struct { codepoint: u21 };
     pub const TableShapeError = struct { actual: usize, expected: usize };
@@ -2716,17 +2804,21 @@ pub const Diagnostic = struct {
         duplicate_hdoc_header: DuplicateHdocHeader,
         missing_attribute: NodeAttributeError,
         invalid_attribute: NodeAttributeError,
+        empty_attribute: NodeAttributeError,
         unknown_block_type: InvalidBlockError,
         invalid_block_type: InvalidBlockError,
+        block_list_required: NodeBodyError,
         invalid_inline_combination: InlineCombinationError,
         link_not_nestable,
         invalid_link,
         invalid_date_time,
         nested_date_time,
-        invalid_date_time_fmt,
+        invalid_date_time_fmt: DateTimeFormatError,
+        missing_timezone,
         invalid_unicode_string_escape,
         invalid_string_escape: InvalidStringEscape,
         illegal_character: ForbiddenControlCharacter,
+        bare_carriage_return,
         illegal_child_item,
         list_body_required,
         illegal_id_attribute,
@@ -2736,6 +2828,7 @@ pub const Diagnostic = struct {
 
         // warnings:
         document_starts_with_bom,
+        missing_document_language,
         unknown_attribute: NodeAttributeError,
         duplicate_attribute: DuplicateAttribute,
         empty_verbatim_block,
@@ -2745,6 +2838,7 @@ pub const Diagnostic = struct {
         empty_inline_body,
         redundant_inline: InlineUsageError,
         attribute_leading_trailing_whitespace,
+        tab_character,
 
         pub fn severity(code: Code) Severity {
             return switch (code) {
@@ -2758,15 +2852,19 @@ pub const Diagnostic = struct {
                 .duplicate_hdoc_header,
                 .invalid_attribute,
                 .missing_attribute,
+                .empty_attribute,
                 .unknown_block_type,
                 .invalid_block_type,
+                .block_list_required,
                 .invalid_inline_combination,
                 .link_not_nestable,
                 .invalid_link,
                 .invalid_date_time,
                 .invalid_date_time_fmt,
+                .missing_timezone,
                 .invalid_string_escape,
                 .illegal_character,
+                .bare_carriage_return,
                 .invalid_unicode_string_escape,
                 .illegal_child_item,
                 .list_body_required,
@@ -2777,6 +2875,7 @@ pub const Diagnostic = struct {
                 .unknown_id,
                 => .@"error",
 
+                .missing_document_language,
                 .unknown_attribute,
                 .duplicate_attribute,
                 .empty_verbatim_block,
@@ -2786,6 +2885,7 @@ pub const Diagnostic = struct {
                 .empty_inline_body,
                 .redundant_inline,
                 .attribute_leading_trailing_whitespace,
+                .tab_character,
                 .document_starts_with_bom,
                 => .warning,
             };
@@ -2817,9 +2917,11 @@ pub const Diagnostic = struct {
 
                 .missing_attribute => |ctx| try w.print("Missing required attribute '{s}' for node type '{t}'.", .{ ctx.name, ctx.type }),
                 .invalid_attribute => |ctx| try w.print("Invalid value for attribute '{s}' for node type '{t}'.", .{ ctx.name, ctx.type }),
+                .empty_attribute => |ctx| try w.print("Attribute '{s}' for node type '{t}' must be non-empty.", .{ ctx.name, ctx.type }),
                 .unknown_attribute => |ctx| try w.print("Unknown attribute '{s}' for node type '{t}'.", .{ ctx.name, ctx.type }),
                 .unknown_block_type => |ctx| try w.print("Unknown block type '{s}'.", .{ctx.name}),
                 .invalid_block_type => |ctx| try w.print("Invalid block type '{s}' in this context.", .{ctx.name}),
+                .block_list_required => |ctx| try w.print("Node type '{t}' requires a block list body.", .{ctx.type}),
 
                 .empty_inline_body => try w.writeAll("Inline body is empty."),
 
@@ -2832,7 +2934,9 @@ pub const Diagnostic = struct {
 
                 .invalid_date_time => try w.writeAll("Invalid date/time value."),
 
-                .invalid_date_time_fmt => try w.writeAll("Invalid 'fmt' for date/time value."),
+                .missing_timezone => try w.writeAll("Missing timezone offset; add a 'tz' header attribute or include a timezone in the value."),
+
+                .invalid_date_time_fmt => |ctx| try w.print("Invalid 'fmt' value '{s}' for date/time.", .{ctx.fmt}),
 
                 .invalid_string_escape => |ctx| if (ctx.codepoint > 0x20 and ctx.codepoint <= 0x7F)
                     try w.print("\\{u} is not a valid escape sequence.", .{ctx.codepoint})
@@ -2842,6 +2946,7 @@ pub const Diagnostic = struct {
                 .invalid_unicode_string_escape => try w.writeAll("Invalid unicode escape sequence"),
 
                 .illegal_character => |ctx| try w.print("Forbidden control character U+{X:0>4}.", .{ctx.codepoint}),
+                .bare_carriage_return => try w.writeAll("Bare carriage return (CR) is not allowed; use LF or CRLF."),
 
                 .list_body_required => try w.writeAll("Node requires list body."),
                 .illegal_child_item => try w.writeAll("Node not allowed here."),
@@ -2854,6 +2959,9 @@ pub const Diagnostic = struct {
 
                 .duplicate_id => |ctx| try w.print("The id \"{s}\" is already taken by another node.", .{ctx.ref}),
                 .unknown_id => |ctx| try w.print("The referenced id \"{s}\" does not exist.", .{ctx.ref}),
+
+                .missing_document_language => try w.writeAll("Document language is missing; set lang on the hdoc header."),
+                .tab_character => try w.writeAll("Tab character is not allowed; use spaces instead."),
             }
         }
     };
@@ -2910,6 +3018,113 @@ pub const InlineAttribute = enum {
     link,
     syntax,
 };
+
+test "diagnostics for missing language and empty image attributes" {
+    var diagnostics: Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source =
+        \\hdoc(version="2.0");
+        \\img(path="", alt="");
+    ;
+
+    var doc = try parse(std.testing.allocator, source, &diagnostics);
+    defer doc.deinit();
+
+    var saw_missing_lang = false;
+    var saw_empty_path = false;
+    var saw_empty_alt = false;
+
+    for (diagnostics.items.items) |item| {
+        switch (item.code) {
+            .missing_document_language => saw_missing_lang = true,
+            .empty_attribute => |ctx| {
+                if (ctx.type == .img and std.mem.eql(u8, ctx.name, "path")) {
+                    saw_empty_path = true;
+                }
+                if (ctx.type == .img and std.mem.eql(u8, ctx.name, "alt")) {
+                    saw_empty_alt = true;
+                }
+            },
+            else => {},
+        }
+    }
+
+    try std.testing.expect(saw_missing_lang);
+    try std.testing.expect(saw_empty_path);
+    try std.testing.expect(saw_empty_alt);
+}
+
+test "diagnostics for missing timezone and unknown id" {
+    var diagnostics: Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source =
+        \\hdoc(version="2.0");
+        \\p{ \time"12:00:00" \link(ref="missing"){missing} }
+    ;
+
+    var doc = try parse(std.testing.allocator, source, &diagnostics);
+    defer doc.deinit();
+
+    var saw_missing_timezone = false;
+    var saw_unknown_id = false;
+
+    for (diagnostics.items.items) |item| {
+        switch (item.code) {
+            .missing_timezone => saw_missing_timezone = true,
+            .unknown_id => |ctx| {
+                if (std.mem.eql(u8, ctx.ref, "missing")) {
+                    saw_unknown_id = true;
+                }
+            },
+            else => {},
+        }
+    }
+
+    try std.testing.expect(saw_missing_timezone);
+    try std.testing.expect(saw_unknown_id);
+}
+
+test "diagnostics for tab characters" {
+    var diagnostics: Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source = "hdoc(version=\"2.0\");\n\tp{ ok }";
+
+    var doc = try parse(std.testing.allocator, source, &diagnostics);
+    defer doc.deinit();
+
+    var saw_tab = false;
+
+    for (diagnostics.items.items) |item| {
+        switch (item.code) {
+            .tab_character => saw_tab = true,
+            else => {},
+        }
+    }
+
+    try std.testing.expect(saw_tab);
+}
+
+test "diagnostics for bare carriage return" {
+    var diagnostics: Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source = "hdoc(version=\"2.0\");\r";
+
+    try std.testing.expectError(error.InvalidUtf8, parse(std.testing.allocator, source, &diagnostics));
+
+    var saw_bare_cr = false;
+    for (diagnostics.items.items) |item| {
+        switch (item.code) {
+            .bare_carriage_return => saw_bare_cr = true,
+            else => {},
+        }
+    }
+
+    try std.testing.expect(saw_bare_cr);
+}
 
 test "fuzz parser" {
     const Impl = struct {

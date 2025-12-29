@@ -441,9 +441,21 @@ fn expectParseOk(opts: LogDiagOptions, code: []const u8) !void {
     var doc = try hdoc.parse(std.testing.allocator, code, &diagnostics);
     defer doc.deinit();
 
-    if (diagnostics.has_error() or diagnostics.has_warning()) {
+    if (diagnostics.has_error()) {
         logDiagnostics(&diagnostics, opts);
         return error.TestExpectedNoDiagnostics;
+    }
+
+    for (diagnostics.items.items) |item| {
+        if (item.code.severity() != .warning)
+            continue;
+        switch (item.code) {
+            .missing_document_language => {},
+            else => {
+                logDiagnostics(&diagnostics, opts);
+                return error.TestExpectedNoDiagnostics;
+            },
+        }
     }
 }
 
@@ -467,29 +479,29 @@ fn expectParseNoFail(opts: LogDiagOptions, code: []const u8) !void {
 }
 
 test "parsing valid document yields empty diagnostics" {
-    try expectParseOk(.{}, "hdoc(version=\"2.0\");");
+    try expectParseOk(.{}, "hdoc(version=\"2.0\",lang=\"en\");");
 }
 
 test "diagnostic codes are emitted for expected samples" {
-    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); h1(", &.{.{ .unexpected_eof = .{ .context = "identifier", .expected_char = null } }});
-    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); h1 123", &.{.{ .unexpected_character = .{ .expected = '{', .found = '1' } }});
-    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); h1 \"unterminated", &.{.unterminated_string});
-    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); *abc", &.{.{ .invalid_identifier_start = .{ .char = '*' } }});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); h1(", &.{.{ .unexpected_eof = .{ .context = "identifier", .expected_char = null } }});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); h1 123", &.{.{ .unexpected_character = .{ .expected = '{', .found = '1' } }});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); h1 \"unterminated", &.{.unterminated_string});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); *abc", &.{.{ .invalid_identifier_start = .{ .char = '*' } }});
     try validateDiagnostics(.{}, "hdoc{h1 \"x\"", &.{.unterminated_block_list});
-    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); p {hello", &.{.unterminated_inline_list});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); p {hello", &.{.unterminated_inline_list});
     try validateDiagnostics(
         .{},
-        "hdoc(version=\"2.0\"); h1(lang=\"a\",lang=\"b\");",
+        "hdoc(version=\"2.0\",lang=\"en\"); h1(lang=\"a\",lang=\"b\");",
         &.{ .{ .duplicate_attribute = .{ .name = "lang" } }, .empty_inline_body },
     );
-    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); pre:\n", &.{.empty_verbatim_block});
-    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); pre:\n| line", &.{.verbatim_missing_trailing_newline});
-    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); pre:\n|nospace\n", &.{.verbatim_missing_space});
-    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); pre:\n| trailing \n", &.{.trailing_whitespace});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); pre:\n", &.{.empty_verbatim_block});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); pre:\n| line", &.{.verbatim_missing_trailing_newline});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); pre:\n|nospace\n", &.{.verbatim_missing_space});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); pre:\n| trailing \n", &.{.trailing_whitespace});
     try validateDiagnostics(.{}, "h1 \"Title\"", &.{.missing_hdoc_header});
-    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); hdoc(version=\"2.0\");", &.{.duplicate_hdoc_header});
-    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); h1 \"bad\\q\"", &.{.{ .invalid_string_escape = .{ .codepoint = 'q' } }});
-    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); h1 \"bad\\u{9}\"", &.{.{ .illegal_character = .{ .codepoint = 0x9 } }});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); hdoc(version=\"2.0\",lang=\"en\");", &.{.duplicate_hdoc_header});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); h1 \"bad\\q\"", &.{.{ .invalid_string_escape = .{ .codepoint = 'q' } }});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); h1 \"bad\\u{9}\"", &.{.{ .illegal_character = .{ .codepoint = 0x9 } }});
 }
 
 test "parser reports unterminated inline lists" {
