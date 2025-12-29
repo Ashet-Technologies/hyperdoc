@@ -1,5 +1,8 @@
 const std = @import("std");
-const parser_toolkit = @import("parser-toolkit");
+
+pub const render = struct {
+    pub const yaml = @import("render/dump.zig").render;
+};
 
 /// A HyperDoc document. Contains both memory and
 /// tree structure of the document.
