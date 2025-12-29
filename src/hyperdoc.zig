@@ -17,11 +17,11 @@ pub const Document = struct {
     id_map: std.StringArrayHashMapUnmanaged(usize), // id -> index
 
     // header information
-    lang: ?[]const u8,
+    lang: LanguageTag = .inherit, // inherit here means "unset"
     title: ?[]const u8,
     author: ?[]const u8,
     date: ?DateTime,
-    timezone: ?[]const u8,
+    timezone: ?TimeZoneOffset,
 
     pub fn deinit(doc: *Document) void {
         doc.arena.deinit();
@@ -45,7 +45,7 @@ pub const Block = union(enum) {
 
     pub const Heading = struct {
         level: HeadingLevel,
-        lang: ?[]const u8,
+        lang: LanguageTag,
         content: []Span,
     };
 
@@ -53,43 +53,43 @@ pub const Block = union(enum) {
 
     pub const Paragraph = struct {
         kind: ParagraphKind,
-        lang: ?[]const u8,
+        lang: LanguageTag,
         content: []Span,
     };
 
     pub const ParagraphKind = enum { p, note, warning, danger, tip, quote, spoiler };
 
     pub const List = struct {
-        lang: ?[]const u8,
+        lang: LanguageTag,
         first: ?u32,
         items: []ListItem,
     };
 
     pub const ListItem = struct {
-        lang: ?[]const u8,
+        lang: LanguageTag,
         content: []Block,
     };
 
     pub const Image = struct {
-        lang: ?[]const u8,
+        lang: LanguageTag,
         alt: []const u8, // empty means none
         path: []const u8,
         content: []Span,
     };
 
     pub const Preformatted = struct {
-        lang: ?[]const u8,
+        lang: LanguageTag,
         syntax: ?[]const u8,
         content: []Span,
     };
 
     pub const TableOfContents = struct {
-        lang: ?[]const u8,
+        lang: LanguageTag,
         depth: ?u8,
     };
 
     pub const Table = struct {
-        lang: ?[]const u8,
+        lang: LanguageTag,
         rows: []TableRow,
     };
 
@@ -100,23 +100,23 @@ pub const Block = union(enum) {
     };
 
     pub const TableColumns = struct {
-        lang: ?[]const u8,
+        lang: LanguageTag,
         cells: []TableCell,
     };
 
     pub const TableDataRow = struct {
-        lang: ?[]const u8,
+        lang: LanguageTag,
         title: ?[]const u8,
         cells: []TableCell,
     };
 
     pub const TableGroup = struct {
-        lang: ?[]const u8,
+        lang: LanguageTag,
         content: []Span,
     };
 
     pub const TableCell = struct {
-        lang: ?[]const u8,
+        lang: LanguageTag,
         colspan: u32,
         content: []Block,
     };
@@ -138,7 +138,7 @@ pub const Span = struct {
     };
 
     pub const Attributes = struct {
-        lang: []const u8 = "", // empty is absence
+        lang: LanguageTag = .inherit,
         position: ScriptPosition = .baseline,
         em: bool = false,
         mono: bool = false,
@@ -158,12 +158,12 @@ pub const Span = struct {
                 return false;
 
             // string comparison:
-            if (!std.mem.eql(u8, lhs.lang, rhs.lang))
-                return false;
             if (!std.mem.eql(u8, lhs.syntax, rhs.syntax))
                 return false;
 
             // complex comparison
+            if (!lhs.lang.eql(rhs.lang))
+                return false;
             if (!lhs.link.eql(rhs.link))
                 return false;
 
@@ -227,7 +227,7 @@ pub const DateTime = struct {
     date: Date,
     time: Time,
 
-    pub fn parse(text: []const u8, default_timezone: ?[]const u8) !DateTime {
+    pub fn parse(text: []const u8, timezone_hint: ?TimeZoneOffset) !DateTime {
         const split_index = std.mem.indexOfScalar(u8, text, 'T') orelse return error.InvalidValue;
 
         const head = text[0..split_index];
@@ -235,7 +235,7 @@ pub const DateTime = struct {
 
         return .{
             .date = try Date.parse(head),
-            .time = try Time.parse(tail, default_timezone),
+            .time = try Time.parse(tail, timezone_hint),
         };
     }
 };
@@ -303,9 +303,9 @@ pub const Time = struct {
     minute: u6, // 0-59
     second: u6, // 0-59
     microsecond: u20, // 0-999999
-    zone_offset: i32, // in minutes
+    timezone: TimeZoneOffset,
 
-    pub fn parse(text: []const u8, default_timezone: ?[]const u8) !Time {
+    pub fn parse(text: []const u8, timezone_hint: ?TimeZoneOffset) !Time {
         if (text.len < 8) // "HH:MM:SS"
             return error.InvalidValue;
 
@@ -334,23 +334,59 @@ pub const Time = struct {
         }
 
         const timezone = if (index == text.len)
-            default_timezone orelse return error.MissingTimezone
+            timezone_hint orelse return error.MissingTimezone
         else
-            text[index..];
+            try TimeZoneOffset.parse(text[index..]);
 
+        return .{
+            .hour = @intCast(hour),
+            .minute = @intCast(minute),
+            .second = @intCast(second),
+            .microsecond = microsecond,
+            .timezone = timezone,
+        };
+    }
+
+    fn fractionToMicrosecond(len: usize, value: u64) ?u20 {
+        const micro: u64 = switch (len) {
+            1 => value * 100_000,
+            2 => value * 10_000,
+            3 => value * 1_000,
+            6 => value,
+            9 => value / 1_000,
+            else => return null,
+        };
+        if (micro > 999_999) return null;
+        return @intCast(micro);
+    }
+};
+
+/// A time offset to timezones in minutes.
+pub const TimeZoneOffset = enum(i32) {
+    utc = 0,
+
+    _,
+
+    pub fn from_hhmm(hour: i8, minute: u8) error{InvalidValue}!TimeZoneOffset {
+        const hour_pos = @abs(hour);
+        const sign = std.math.sign(hour);
+
+        if (hour < -23 and hour > 23)
+            return error.InvalidValue;
+        if (minute >= 60)
+            return error.InvalidValue;
+
+        return @enumFromInt(@as(i32, sign) * (hour_pos * @as(i32, 60) + minute));
+    }
+
+    pub fn parse(timezone: []const u8) error{InvalidValue}!TimeZoneOffset {
         if (timezone.len != 1 and timezone.len != 6) // "Z" or "±HH:MM"
             return error.InvalidValue;
 
         if (timezone.len == 1) {
             if (timezone[0] != 'Z')
                 return error.InvalidValue;
-            return .{
-                .hour = @intCast(hour),
-                .minute = @intCast(minute),
-                .second = @intCast(second),
-                .microsecond = microsecond,
-                .zone_offset = 0,
-            };
+            return .utc;
         }
         std.debug.assert(timezone.len == 6);
 
@@ -371,26 +407,7 @@ pub const Time = struct {
         const zone_total: u16 = @as(u16, zone_hour) * 60 + zone_minute;
         const offset_minutes: i32 = sign * @as(i32, zone_total);
 
-        return .{
-            .hour = @intCast(hour),
-            .minute = @intCast(minute),
-            .second = @intCast(second),
-            .microsecond = microsecond,
-            .zone_offset = offset_minutes,
-        };
-    }
-
-    fn fractionToMicrosecond(len: usize, value: u64) ?u20 {
-        const micro: u64 = switch (len) {
-            1 => value * 100_000,
-            2 => value * 10_000,
-            3 => value * 1_000,
-            6 => value,
-            9 => value / 1_000,
-            else => return null,
-        };
-        if (micro > 999_999) return null;
-        return @intCast(micro);
+        return @enumFromInt(offset_minutes);
     }
 };
 
@@ -412,9 +429,32 @@ pub const Reference = struct {
 
     text: []const u8,
 
-    pub fn init(text: []const u8) Reference {
+    pub fn parse(text: []const u8) !Reference {
         // TODO: Add correctness validation here (non-empty, allowed characters).
         return .{ .text = text };
+    }
+
+    pub fn eql(lhs: Reference, rhs: Reference) bool {
+        return std.mem.eql(u8, lhs.text, rhs.text);
+    }
+};
+
+/// A BCP 47 language tag.
+pub const LanguageTag = struct {
+    //! https://datatracker.ietf.org/doc/html/rfc5646
+
+    /// The empty language tag means that the language is inherited from the parent.
+    pub const inherit: LanguageTag = .{ .text = "" };
+
+    text: []const u8,
+
+    pub fn parse(tag_str: []const u8) !LanguageTag {
+        // TODO: Implement proper BCP 47 tag verification
+        return .{ .text = tag_str };
+    }
+
+    pub fn eql(lhs: LanguageTag, rhs: LanguageTag) bool {
+        return std.mem.eql(u8, lhs.text, rhs.text);
     }
 };
 
@@ -495,13 +535,18 @@ pub fn parse(
 
     // TODO: Validate document-level semantic constraints (ref resolution).
 
+    const doc_lang = header.lang orelse blk: {
+        // TODO: Emit diagnostic warning for missing document language.
+        break :blk LanguageTag.inherit;
+    };
+
     return .{
         .arena = arena,
         .contents = try sema.blocks.toOwnedSlice(arena.allocator()),
         .content_ids = content_ids,
         .id_map = id_map,
 
-        .lang = header.lang,
+        .lang = doc_lang,
         .title = header.title,
         .version = header.version,
         .author = header.author,
@@ -550,10 +595,10 @@ pub const SemanticAnalyzer = struct {
 
     const Header = struct {
         version: Version,
-        lang: ?[]const u8,
+        lang: ?LanguageTag,
         title: ?[]const u8,
         author: ?[]const u8,
-        timezone: ?[]const u8,
+        timezone: ?TimeZoneOffset,
         date: ?DateTime,
     };
 
@@ -623,16 +668,14 @@ pub const SemanticAnalyzer = struct {
             title: ?[]const u8 = null,
             author: ?[]const u8 = null,
             date: ?DateTime = null,
-            lang: ?[]const u8 = null, // TODO: Introduce with "LanguageTag" type for all "lang" attributes which performs proper validation
-            tz: ?[]const u8 = null,
+            lang: LanguageTag = .inherit,
+            tz: ?TimeZoneOffset = null,
         });
 
         if (attrs.version.major != 2)
             return error.UnsupportedVersion;
         if (attrs.version.minor != 0)
             return error.UnsupportedVersion;
-
-        // TODO: Validate TZ format
 
         return .{
             .version = attrs.version,
@@ -711,7 +754,7 @@ pub const SemanticAnalyzer = struct {
 
     fn translate_heading_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Heading, ?Reference } {
         const attrs = try sema.get_attributes(node, struct {
-            lang: ?[]const u8 = null,
+            lang: LanguageTag = .inherit,
             id: ?Reference = null,
         });
 
@@ -731,7 +774,7 @@ pub const SemanticAnalyzer = struct {
 
     fn translate_paragraph_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Paragraph, ?Reference } {
         const attrs = try sema.get_attributes(node, struct {
-            lang: ?[]const u8 = null,
+            lang: LanguageTag = .inherit,
             id: ?Reference = null,
         });
 
@@ -755,7 +798,7 @@ pub const SemanticAnalyzer = struct {
 
     fn translate_list_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.List, ?Reference } {
         const attrs = try sema.get_attributes(node, struct {
-            lang: ?[]const u8 = null,
+            lang: LanguageTag = .inherit,
             id: ?Reference = null,
             first: ?u32 = null,
         });
@@ -800,7 +843,7 @@ pub const SemanticAnalyzer = struct {
 
     fn translate_image_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Image, ?Reference } {
         const attrs = try sema.get_attributes(node, struct {
-            lang: ?[]const u8 = null,
+            lang: LanguageTag = .inherit,
             id: ?Reference = null,
             alt: ?[]const u8 = null,
             path: []const u8,
@@ -838,7 +881,7 @@ pub const SemanticAnalyzer = struct {
 
     fn translate_preformatted_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Preformatted, ?Reference } {
         const attrs = try sema.get_attributes(node, struct {
-            lang: ?[]const u8 = null,
+            lang: LanguageTag = .inherit,
             id: ?Reference = null,
             syntax: ?[]const u8 = null,
         });
@@ -854,7 +897,7 @@ pub const SemanticAnalyzer = struct {
 
     fn translate_toc_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.TableOfContents, ?Reference } {
         const attrs = try sema.get_attributes(node, struct {
-            lang: ?[]const u8 = null,
+            lang: LanguageTag = .inherit,
             id: ?Reference = null,
             depth: ?u32 = null,
         });
@@ -890,7 +933,7 @@ pub const SemanticAnalyzer = struct {
 
     fn translate_table_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Table, ?Reference } {
         const attrs = try sema.get_attributes(node, struct {
-            lang: ?[]const u8 = null,
+            lang: LanguageTag = .inherit,
             id: ?Reference = null,
         });
 
@@ -906,7 +949,7 @@ pub const SemanticAnalyzer = struct {
                     switch (child_node.type) {
                         .columns => {
                             const row_attrs = try sema.get_attributes(child_node, struct {
-                                lang: ?[]const u8 = null,
+                                lang: LanguageTag = .inherit,
                             });
 
                             const cells = try sema.translate_table_cells(child_node);
@@ -933,7 +976,7 @@ pub const SemanticAnalyzer = struct {
                         },
                         .row => {
                             const row_attrs = try sema.get_attributes(child_node, struct {
-                                lang: ?[]const u8 = null,
+                                lang: LanguageTag = .inherit,
                                 title: ?[]const u8 = null,
                             });
 
@@ -963,7 +1006,7 @@ pub const SemanticAnalyzer = struct {
                         },
                         .group => {
                             const row_attrs = try sema.get_attributes(child_node, struct {
-                                lang: ?[]const u8 = null,
+                                lang: LanguageTag = .inherit,
                             });
 
                             rows.appendAssumeCapacity(.{
@@ -1027,7 +1070,7 @@ pub const SemanticAnalyzer = struct {
         }
 
         const attrs = try sema.get_attributes(node, struct {
-            lang: ?[]const u8 = null,
+            lang: LanguageTag = .inherit,
             colspan: ?u32 = null,
         });
 
@@ -1051,7 +1094,7 @@ pub const SemanticAnalyzer = struct {
         }
 
         const attrs = try sema.get_attributes(node, struct {
-            lang: ?[]const u8 = null,
+            lang: LanguageTag = .inherit,
         });
 
         return .{
@@ -1093,7 +1136,7 @@ pub const SemanticAnalyzer = struct {
                     blocks[0] = .{
                         .paragraph = .{
                             .kind = .p,
-                            .lang = null,
+                            .lang = .inherit,
                             .content = spans,
                         },
                     };
@@ -1218,7 +1261,7 @@ pub const SemanticAnalyzer = struct {
     };
 
     pub const AttribOverrides = struct {
-        lang: ?[]const u8 = null,
+        lang: ?LanguageTag = null,
         em: ?bool = null,
         mono: ?bool = null,
         strike: ?bool = null,
@@ -1301,7 +1344,7 @@ pub const SemanticAnalyzer = struct {
 
             .@"\\em" => {
                 const props = try sema.get_attributes(node, struct {
-                    lang: ?[]const u8 = null,
+                    lang: LanguageTag = .inherit,
                 });
 
                 try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
@@ -1312,7 +1355,7 @@ pub const SemanticAnalyzer = struct {
 
             .@"\\strike" => {
                 const props = try sema.get_attributes(node, struct {
-                    lang: ?[]const u8 = null,
+                    lang: LanguageTag = .inherit,
                 });
 
                 try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
@@ -1323,7 +1366,7 @@ pub const SemanticAnalyzer = struct {
 
             .@"\\sub" => {
                 const props = try sema.get_attributes(node, struct {
-                    lang: ?[]const u8 = null,
+                    lang: LanguageTag = .inherit,
                 });
 
                 try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
@@ -1334,7 +1377,7 @@ pub const SemanticAnalyzer = struct {
 
             .@"\\sup" => {
                 const props = try sema.get_attributes(node, struct {
-                    lang: ?[]const u8 = null,
+                    lang: LanguageTag = .inherit,
                 });
 
                 try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
@@ -1345,7 +1388,7 @@ pub const SemanticAnalyzer = struct {
 
             .@"\\link" => {
                 const props = try sema.get_attributes(node, struct {
-                    lang: ?[]const u8 = null,
+                    lang: LanguageTag = .inherit,
                     uri: ?Uri = null,
                     ref: ?Reference = null,
                 });
@@ -1371,7 +1414,7 @@ pub const SemanticAnalyzer = struct {
 
             .@"\\mono" => {
                 const props = try sema.get_attributes(node, struct {
-                    lang: ?[]const u8 = null,
+                    lang: LanguageTag = .inherit,
                     syntax: []const u8 = "",
                 });
                 try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
@@ -1386,7 +1429,7 @@ pub const SemanticAnalyzer = struct {
             .@"\\datetime",
             => blk: {
                 const props = try sema.get_attributes(node, struct {
-                    lang: ?[]const u8 = null,
+                    lang: LanguageTag = .inherit,
                     fmt: []const u8 = "",
                 });
 
@@ -1468,7 +1511,7 @@ pub const SemanticAnalyzer = struct {
     ) !Span.Content {
         const Format: type = DTValue.Format;
 
-        const timezone_hint: ?[]const u8 = if (sema.header) |header| header.timezone else null;
+        const timezone_hint: ?TimeZoneOffset = if (sema.header) |header| header.timezone else null;
 
         const value_or_err: error{ InvalidValue, MissingTimezone }!DTValue = switch (DTValue) {
             Date => Date.parse(value_str),
@@ -1692,7 +1735,12 @@ pub const SemanticAnalyzer = struct {
             return try sema.cast_value(attrib, @typeInfo(T).optional.child);
         }
 
-        const value = try sema.unescape_string(attrib);
+        const unstripped_value = try sema.unescape_string(attrib);
+
+        const value = std.mem.trim(u8, unstripped_value, whitespace_chars);
+        if (value.len != unstripped_value.len) {
+            try sema.emit_diagnostic(.attribute_leading_trailing_whitespace, attrib.location);
+        }
 
         const timezone_hint = if (sema.header) |header|
             header.timezone
@@ -1704,26 +1752,16 @@ pub const SemanticAnalyzer = struct {
 
             u32 => std.fmt.parseInt(u32, value, 10) catch return error.InvalidValue,
 
-            Reference => {
-                const stripped = std.mem.trim(u8, value, whitespace_chars);
-                if (stripped.len != value.len) {
-                    try sema.emit_diagnostic(.attribute_leading_trailing_whitespace, attrib.location);
-                }
-                return .init(stripped);
-            },
+            Reference => Reference.parse(value) catch return error.InvalidValue,
 
-            Uri => {
-                const stripped = std.mem.trim(u8, value, whitespace_chars);
-                if (stripped.len != value.len) {
-                    try sema.emit_diagnostic(.attribute_leading_trailing_whitespace, attrib.location);
-                }
-                return .init(stripped);
-            },
+            Uri => Uri.init(value),
 
             Version => Version.parse(value) catch return error.InvalidValue,
             Date => Date.parse(value) catch return error.InvalidValue,
             Time => Time.parse(value, timezone_hint) catch return error.InvalidValue,
             DateTime => DateTime.parse(value, timezone_hint) catch return error.InvalidValue,
+            LanguageTag => LanguageTag.parse(value) catch return error.InvalidValue,
+            TimeZoneOffset => TimeZoneOffset.parse(value) catch return error.InvalidValue,
 
             else => @compileError("Unsupported attribute type: " ++ @typeName(T)),
         };

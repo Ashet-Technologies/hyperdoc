@@ -129,7 +129,7 @@ attribute_list  ::= "(" , ws ,
 attribute       ::= attr_key , ws , "=" , ws , string_literal ;
 
 (*
-  Attribute keys may include '-' and ':' in addition to node-name characters.
+  Attribute keys may include '-' in addition to node-name characters.
 *)
 attr_key        ::= attr_key_char , { attr_key_char } ;
 

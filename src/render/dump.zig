@@ -142,9 +142,9 @@ fn writeSpanAttributes(writer: *Writer, span: hdoc.Span) Writer.Error!void {
             try writer.print("link=\"uri:{f}\"", .{std.zig.fmtString(value.text)});
         },
     }
-    if (span.attribs.lang.len != 0) {
+    if (span.attribs.lang.text.len != 0) {
         try writeAttrSeparator(writer, &first);
-        try writer.print("lang=\"{f}\"", .{std.zig.fmtString(span.attribs.lang)});
+        try writer.print("lang=\"{f}\"", .{std.zig.fmtString(span.attribs.lang.text)});
     }
     if (span.attribs.syntax.len != 0) {
         try writeAttrSeparator(writer, &first);
@@ -275,7 +275,7 @@ fn dumpOptionalStringListField(writer: *Writer, indent: usize, key: []const u8, 
 }
 
 fn dumpListItem(writer: *Writer, indent: usize, item: hdoc.Block.ListItem) Writer.Error!void {
-    try dumpOptionalStringFieldInline(writer, "lang", item.lang);
+    try dumpOptionalStringFieldInline(writer, "lang", item.lang.text);
     try dumpBlockListField(writer, indent + indent_step, "content", item.content);
 }
 
@@ -294,7 +294,7 @@ fn dumpListItemsField(writer: *Writer, indent: usize, key: []const u8, items: []
 }
 
 fn dumpTableCell(writer: *Writer, indent: usize, cell: hdoc.Block.TableCell) Writer.Error!void {
-    try dumpOptionalStringFieldInline(writer, "lang", cell.lang);
+    try dumpOptionalStringFieldInline(writer, "lang", cell.lang.text);
     try dumpOptionalNumberField(writer, indent + indent_step, "colspan", @as(?u32, cell.colspan));
     try dumpBlockListField(writer, indent + indent_step, "content", cell.content);
 }
@@ -314,18 +314,18 @@ fn dumpTableCellsField(writer: *Writer, indent: usize, key: []const u8, cells: [
 }
 
 fn dumpTableColumns(writer: *Writer, indent: usize, columns: hdoc.Block.TableColumns) Writer.Error!void {
-    try dumpOptionalStringField(writer, indent, "lang", columns.lang);
+    try dumpOptionalStringField(writer, indent, "lang", columns.lang.text);
     try dumpTableCellsField(writer, indent, "cells", columns.cells);
 }
 
 fn dumpTableDataRow(writer: *Writer, indent: usize, row: hdoc.Block.TableDataRow) Writer.Error!void {
-    try dumpOptionalStringFieldWithIndent(writer, indent, "lang", row.lang);
+    try dumpOptionalStringFieldWithIndent(writer, indent, "lang", row.lang.text);
     try dumpOptionalStringField(writer, indent, "title", row.title);
     try dumpTableCellsField(writer, indent, "cells", row.cells);
 }
 
 fn dumpTableGroup(writer: *Writer, indent: usize, group: hdoc.Block.TableGroup) Writer.Error!void {
-    try dumpOptionalStringFieldWithIndent(writer, indent, "lang", group.lang);
+    try dumpOptionalStringFieldWithIndent(writer, indent, "lang", group.lang.text);
     try dumpSpanListField(writer, indent, "content", group.content);
 }
 
@@ -365,42 +365,42 @@ fn dumpBlockInline(writer: *Writer, indent: usize, block: hdoc.Block) Writer.Err
         .heading => |heading| {
             try writeTypeTag(writer, "heading");
             try dumpEnumField(writer, indent + indent_step, "level", heading.level);
-            try dumpOptionalStringField(writer, indent + indent_step, "lang", heading.lang);
+            try dumpOptionalStringField(writer, indent + indent_step, "lang", heading.lang.text);
             try dumpSpanListField(writer, indent + indent_step, "content", heading.content);
         },
         .paragraph => |paragraph| {
             try writeTypeTag(writer, "paragraph");
             try dumpEnumField(writer, indent + indent_step, "kind", paragraph.kind);
-            try dumpOptionalStringField(writer, indent + indent_step, "lang", paragraph.lang);
+            try dumpOptionalStringField(writer, indent + indent_step, "lang", paragraph.lang.text);
             try dumpSpanListField(writer, indent + indent_step, "content", paragraph.content);
         },
         .list => |list| {
             try writeTypeTag(writer, "list");
-            try dumpOptionalStringField(writer, indent + indent_step, "lang", list.lang);
+            try dumpOptionalStringField(writer, indent + indent_step, "lang", list.lang.text);
             try dumpOptionalNumberField(writer, indent + indent_step, "first", list.first);
             try dumpListItemsField(writer, indent + indent_step, "items", list.items);
         },
         .image => |image| {
             try writeTypeTag(writer, "image");
-            try dumpOptionalStringField(writer, indent + indent_step, "lang", image.lang);
+            try dumpOptionalStringField(writer, indent + indent_step, "lang", image.lang.text);
             try dumpOptionalStringField(writer, indent + indent_step, "alt", image.alt);
             try dumpOptionalStringField(writer, indent + indent_step, "path", image.path);
             try dumpSpanListField(writer, indent + indent_step, "content", image.content);
         },
         .preformatted => |preformatted| {
             try writeTypeTag(writer, "preformatted");
-            try dumpOptionalStringField(writer, indent + indent_step, "lang", preformatted.lang);
+            try dumpOptionalStringField(writer, indent + indent_step, "lang", preformatted.lang.text);
             try dumpOptionalStringField(writer, indent + indent_step, "syntax", preformatted.syntax);
             try dumpSpanListField(writer, indent + indent_step, "content", preformatted.content);
         },
         .toc => |toc| {
             try writeTypeTag(writer, "toc");
-            try dumpOptionalStringField(writer, indent + indent_step, "lang", toc.lang);
+            try dumpOptionalStringField(writer, indent + indent_step, "lang", toc.lang.text);
             try dumpOptionalNumberField(writer, indent + indent_step, "depth", toc.depth);
         },
         .table => |table| {
             try writeTypeTag(writer, "table");
-            try dumpOptionalStringField(writer, indent + indent_step, "lang", table.lang);
+            try dumpOptionalStringField(writer, indent + indent_step, "lang", table.lang.text);
             try dumpTableRowsField(writer, indent + indent_step, "rows", table.rows);
         },
     }
@@ -419,7 +419,7 @@ fn dumpOptionalDateTimeField(writer: *Writer, indent: usize, key: []const u8, va
 fn dumpDocument(writer: *Writer, doc: *const hdoc.Document) Writer.Error!void {
     try writer.writeAll("document:\n");
     try dumpVersion(writer, indent_step, doc.version);
-    try dumpOptionalStringField(writer, indent_step, "lang", doc.lang);
+    try dumpOptionalStringField(writer, indent_step, "lang", doc.lang.text);
     try dumpOptionalStringField(writer, indent_step, "title", doc.title);
     try dumpOptionalStringField(writer, indent_step, "author", doc.author);
     try dumpOptionalDateTimeField(writer, indent_step, "date", doc.date);
