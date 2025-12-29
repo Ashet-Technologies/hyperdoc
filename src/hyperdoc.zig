@@ -71,8 +71,8 @@ pub const Block = union(enum) {
 
     pub const Image = struct {
         lang: ?[]const u8,
-        alt: ?[]const u8,
-        path: ?[]const u8,
+        alt: []const u8, // empty means none
+        path: []const u8,
         content: []Span,
     };
 
@@ -469,7 +469,7 @@ pub fn parse(
 
     const header = sema.header orelse return error.MalformedDocument;
 
-    // TODO: Validate document-level semantic constraints (unique ids, ref resolution, table shape).
+    // TODO: Validate document-level semantic constraints (unique ids, ref resolution).
     return .{
         .arena = arena,
         .contents = try sema.blocks.toOwnedSlice(arena.allocator()),
@@ -747,12 +747,30 @@ pub const SemanticAnalyzer = struct {
             path: []const u8,
         });
 
-        // TODO: Enforce non-empty "path" (required) and "alt" (if provided).
+        const alt = if (attrs.alt) |alt|
+            std.mem.trim(u8, alt, whitespace_chars)
+        else
+            "";
+
+        const path = std.mem.trim(u8, attrs.path, whitespace_chars);
+        if (path.len == 0) {
+            // The path must be non-empty.
+
+            // TODO: Implement better diagnostic message
+            try sema.emit_diagnostic(.{ .invalid_attribute = .{ .type = .img, .name = "path" } }, get_attribute_location(node, "path", .value).?);
+        }
+
+        if (attrs.alt != null and alt.len == 0) {
+            // If alt is present, it must be non-empty, and not fully whitespace.
+
+            // TODO: Implement better diagnostic message
+            try sema.emit_diagnostic(.{ .invalid_attribute = .{ .type = .img, .name = "alt" } }, get_attribute_location(node, "alt", .value).?);
+        }
 
         const image: Block.Image = .{
             .lang = attrs.lang,
-            .alt = attrs.alt,
-            .path = attrs.path,
+            .alt = alt,
+            .path = path,
             .content = try sema.translate_inline(node, .allow_empty, .one_space),
         };
 
@@ -820,6 +838,8 @@ pub const SemanticAnalyzer = struct {
         var rows: std.ArrayList(Block.TableRow) = .empty;
         defer rows.deinit(sema.arena);
 
+        var column_count: ?usize = null;
+
         switch (node.body) {
             .list => |child_nodes| {
                 try rows.ensureTotalCapacityPrecise(sema.arena, child_nodes.len);
@@ -831,13 +851,26 @@ pub const SemanticAnalyzer = struct {
                             });
 
                             const cells = try sema.translate_table_cells(child_node);
-
                             rows.appendAssumeCapacity(.{
                                 .columns = .{
                                     .lang = row_attrs.lang,
                                     .cells = cells,
                                 },
                             });
+
+                            var width: usize = 0;
+                            for (cells) |cell| {
+                                std.debug.assert(cell.colspan > 0);
+                                width += cell.colspan;
+                            }
+
+                            column_count = column_count orelse width;
+                            if (width != column_count) {
+                                try sema.emit_diagnostic(.{ .column_count_mismatch = .{
+                                    .expected = column_count.?,
+                                    .actual = width,
+                                } }, child_node.location);
+                            }
                         },
                         .row => {
                             const row_attrs = try sema.get_attributes(child_node, struct {
@@ -854,6 +887,20 @@ pub const SemanticAnalyzer = struct {
                                     .cells = cells,
                                 },
                             });
+
+                            var width: usize = 0;
+                            for (cells) |cell| {
+                                std.debug.assert(cell.colspan > 0);
+                                width += cell.colspan;
+                            }
+
+                            column_count = column_count orelse width;
+                            if (width != column_count) {
+                                try sema.emit_diagnostic(.{ .column_count_mismatch = .{
+                                    .expected = column_count.?,
+                                    .actual = width,
+                                } }, child_node.location);
+                            }
                         },
                         .group => {
                             const row_attrs = try sema.get_attributes(child_node, struct {
@@ -878,7 +925,6 @@ pub const SemanticAnalyzer = struct {
             },
         }
 
-        // TODO: Validate column counts after colspan and title/group leading column rules.
         const table: Block.Table = .{
             .lang = attrs.lang,
             .rows = try rows.toOwnedSlice(sema.arena),
@@ -1002,12 +1048,8 @@ pub const SemanticAnalyzer = struct {
         var spans: std.ArrayList(Span) = .empty;
         defer spans.deinit(sema.arena);
 
-        // TODO: Implement automatic space insertion.
-        //       This must be done when two consecutive nodes are separated by a space
-
         try sema.translate_inline_body(&spans, node.body, .{}, empty_handling);
 
-        // TODO: Use different whitespace strategies here:
         return try sema.compact_spans(spans.items, whitespace_handling);
     }
 
@@ -1280,17 +1322,33 @@ pub const SemanticAnalyzer = struct {
             .@"\\date",
             .@"\\time",
             .@"\\datetime",
-            => {
+            => blk: {
                 const props = try sema.get_attributes(node, struct {
                     lang: ?[]const u8 = null,
                     fmt: []const u8 = "",
                 });
 
-                // TODO: Enforce that date/time bodies only contain plain text/string/verbatim.
                 const content_spans = try sema.translate_inline(node, .emit_diagnostic, .one_space);
 
+                // Enforce that date/time bodies only contain plain text/string/verbatim.
+                // HyperDoc cannot format date/time values on it's own so we can't render
+                // \date, \time and \datetime into a string. It also doesn't make any sense
+                // to nest them.
+                for (content_spans) |span| {
+                    switch (span.content) {
+                        .text => {},
+                        .date, .time, .datetime => {
+                            try sema.emit_diagnostic(.nested_date_time, span.location);
+                            break :blk;
+                        },
+                    }
+                }
+
                 //  Convert the content_spans into a "rendered string".
-                const content_text = try sema.render_spans_to_plaintext(content_spans, .no_space);
+                const content_text = sema.render_spans_to_plaintext(content_spans) catch |err| switch (err) {
+                    error.DateTimeRenderingUnsupported => unreachable,
+                    else => |e| return e,
+                };
 
                 const content: Span.Content = switch (node.type) {
                     .@"\\date" => try sema.parse_date_body(node, .date, Date, content_text, props.fmt),
@@ -1391,16 +1449,12 @@ pub const SemanticAnalyzer = struct {
         });
     }
 
-    const JoinStyle = enum { no_space, one_space };
-    fn render_spans_to_plaintext(sema: *SemanticAnalyzer, source_spans: []const Span, style: JoinStyle) ![]const u8 {
-        var len: usize = switch (style) {
-            .no_space => 0,
-            .one_space => (source_spans.len -| 1),
-        };
+    fn render_spans_to_plaintext(sema: *SemanticAnalyzer, source_spans: []const Span) error{ OutOfMemory, DateTimeRenderingUnsupported }![]const u8 {
+        var len: usize = 0;
         for (source_spans) |span| {
             len += switch (span.content) {
                 .text => |str| str.len,
-                .date, .time, .datetime => @panic("TODO: Implement date-to-text conversion!"),
+                .date, .time, .datetime => return error.DateTimeRenderingUnsupported,
             };
         }
 
@@ -1409,16 +1463,10 @@ pub const SemanticAnalyzer = struct {
 
         try output_str.ensureTotalCapacityPrecise(sema.arena, len);
 
-        for (source_spans, 0..) |span, index| {
-            switch (style) {
-                .no_space => {},
-                .one_space => if (index > 0)
-                    output_str.appendAssumeCapacity(' '),
-            }
-
+        for (source_spans) |span| {
             switch (span.content) {
                 .text => |str| output_str.appendSliceAssumeCapacity(str),
-                .date, .time, .datetime => @panic("TODO: Implement date-to-text conversion!"),
+                .date, .time, .datetime => unreachable,
             }
         }
 
@@ -1519,7 +1567,6 @@ pub const SemanticAnalyzer = struct {
         const Fields = std.meta.FieldEnum(Attrs);
         const fields = @typeInfo(Attrs).@"struct".fields;
 
-        // TODO: Enforce per-attribute constraints from the spec (non-empty strings, lang tag format, etc).
         var required: std.EnumSet(Fields) = .initEmpty();
 
         var attrs: Attrs = undefined;
@@ -2535,6 +2582,7 @@ pub const Diagnostic = struct {
     pub const InlineCombinationError = struct { first: InlineAttribute, second: InlineAttribute };
     pub const InvalidStringEscape = struct { codepoint: u21 };
     pub const ForbiddenControlCharacter = struct { codepoint: u21 };
+    pub const TableShapeError = struct { actual: usize, expected: usize };
 
     pub const Code = union(enum) {
         // errors:
@@ -2554,6 +2602,7 @@ pub const Diagnostic = struct {
         link_not_nestable,
         invalid_link,
         invalid_date_time,
+        nested_date_time,
         invalid_date_time_fmt,
         invalid_unicode_string_escape,
         invalid_string_escape: InvalidStringEscape,
@@ -2561,6 +2610,7 @@ pub const Diagnostic = struct {
         illegal_child_item,
         list_body_required,
         illegal_id_attribute,
+        column_count_mismatch: TableShapeError,
 
         // warnings:
         document_starts_with_bom,
@@ -2599,6 +2649,8 @@ pub const Diagnostic = struct {
                 .illegal_child_item,
                 .list_body_required,
                 .illegal_id_attribute,
+                .nested_date_time,
+                .column_count_mismatch,
                 => .@"error",
 
                 .unknown_attribute,
@@ -2671,6 +2723,10 @@ pub const Diagnostic = struct {
                 .illegal_child_item => try w.writeAll("Node not allowed here."),
 
                 .illegal_id_attribute => try w.writeAll("Attribute 'id' not allowed here."),
+
+                .nested_date_time => try w.writeAll("Nesting \\date, \\time and \\datetime is not allowed."),
+
+                .column_count_mismatch => |ctx| try w.print("Expected {} columns, but found {}", .{ ctx.expected, ctx.actual }),
             }
         }
     };
