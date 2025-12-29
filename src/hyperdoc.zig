@@ -144,10 +144,35 @@ pub const Span = struct {
         strike: bool = false,
         link: Link = .none,
         syntax: []const u8 = "", // empty is absence
+
+        pub fn eql(lhs: Attributes, rhs: Attributes) bool {
+            // Trivial comparisons:
+            if (lhs.position != rhs.position)
+                return false;
+            if (lhs.em != rhs.em)
+                return false;
+            if (lhs.mono != rhs.mono)
+                return false;
+            if (lhs.strike != rhs.strike)
+                return false;
+
+            // string comparison:
+            if (!std.mem.eql(u8, lhs.lang, rhs.lang))
+                return false;
+            if (!std.mem.eql(u8, lhs.syntax, rhs.syntax))
+                return false;
+
+            // complex comparison
+            if (!lhs.link.eql(rhs.link))
+                return false;
+
+            return true;
+        }
     };
 
     content: Content,
     attribs: Attributes,
+    location: Parser.Location,
 };
 
 pub const ScriptPosition = enum {
@@ -160,6 +185,14 @@ pub const Link = union(enum) {
     none,
     ref: Reference,
     uri: Uri,
+
+    pub fn eql(lhs: Link, rhs: Link) bool {
+        return switch (lhs) {
+            .none => (rhs == .none),
+            .ref => (rhs == .ref) and std.mem.eql(u8, lhs.ref.text, rhs.ref.text),
+            .uri => (rhs == .uri) and std.mem.eql(u8, lhs.uri.text, rhs.uri.text),
+        };
+    }
 };
 
 /// HyperDoc Version Number
@@ -473,7 +506,7 @@ pub fn remove_byte_order_mark(diagnostics: ?*Diagnostics, plain_text: []const u8
 }
 
 pub const SemanticAnalyzer = struct {
-    const whitespace_chars = " \t";
+    const whitespace_chars = " \t\r\n";
 
     const Header = struct {
         version: Version,
@@ -967,17 +1000,119 @@ pub const SemanticAnalyzer = struct {
     /// Translates a node into a sequence of inline spans.
     fn translate_inline(sema: *SemanticAnalyzer, node: Parser.Node, empty_handling: EmptyHandling) error{ OutOfMemory, BadAttributes }![]Span {
         var spans: std.ArrayList(Span) = .empty;
-        errdefer spans.deinit(sema.arena);
+        defer spans.deinit(sema.arena);
 
         // TODO: Implement automatic space insertion.
         //       This must be done when two consecutive nodes are separated by a space
 
         try sema.translate_inline_body(&spans, node.body, .{}, empty_handling);
 
-        // TODO: Compact spans by joining spans with equal properties
-
-        return try spans.toOwnedSlice(sema.arena);
+        // TODO: Use different whitespace strategies here:
+        return try sema.compact_spans(spans.items, .one_space);
     }
+
+    const Whitespace = enum {
+        one_space,
+        keep_space,
+    };
+
+    /// Compacts and merges spans of equal attributes by `whitespace` ruling.
+    fn compact_spans(sema: *SemanticAnalyzer, input: []const Span, whitespace: Whitespace) ![]Span {
+        var merger: SpanMerger = .{
+            .arena = sema.arena,
+            .whitespace = whitespace,
+        };
+
+        for (input) |span| {
+            try merger.push(span);
+        }
+
+        try merger.flush();
+
+        return try merger.output.toOwnedSlice(sema.arena);
+    }
+
+    /// Checks if only
+    fn is_only_whitespace(str: []const u8) bool {
+        return std.mem.indexOfNone(u8, str, whitespace_chars) == null;
+    }
+
+    const SpanMerger = struct {
+        arena: std.mem.Allocator,
+        whitespace: Whitespace,
+
+        output: std.ArrayList(Span) = .empty,
+
+        span_start: usize = 0,
+        current_span: std.ArrayList(u8) = .empty,
+        attribs: Span.Attributes = .{},
+        last_end: usize = std.math.maxInt(usize),
+
+        fn push(merger: *SpanMerger, span: Span) !void {
+            if (merger.last_end == std.math.maxInt(usize)) {
+                merger.last_end = span.location.offset;
+            }
+
+            if (!span.attribs.eql(merger.attribs)) {
+                try merger.flush_internal(.keep);
+                std.debug.assert(merger.current_span.items.len == 0);
+                merger.attribs = span.attribs;
+                std.debug.assert(span.attribs.eql(merger.attribs));
+            }
+            switch (span.content) {
+                .date, .time, .datetime => {
+                    // All date/time/datetime require to be passed verbatim into the output
+                    try merger.flush_internal(.keep);
+                    std.debug.assert(merger.current_span.items.len == 0);
+
+                    try merger.output.append(merger.arena, span);
+                },
+                .text => |text_content| {
+                    std.debug.assert(span.attribs.eql(merger.attribs));
+
+                    const append_text, const skip_head = if (is_only_whitespace(text_content))
+                        switch (merger.whitespace) {
+                            .one_space => .{ " ", true },
+                            .keep_space => .{ text_content, false },
+                        }
+                    else
+                        .{ text_content, false };
+
+                    // check if we already have text, and if not, if we should keep the whitespace
+                    if (merger.current_span.items.len > 0 or !skip_head) {
+                        try merger.current_span.appendSlice(merger.arena, append_text);
+                    }
+                },
+            }
+            merger.last_end = span.location.offset_one_after();
+        }
+
+        pub fn flush(merger: *SpanMerger) !void {
+            return merger.flush_internal(.strip);
+        }
+
+        fn flush_internal(merger: *SpanMerger, mode: enum { strip, keep }) !void {
+            if (merger.current_span.items.len == 0)
+                return;
+
+            const raw_string = try merger.current_span.toOwnedSlice(merger.arena);
+
+            const string = switch (mode) {
+                .strip => std.mem.trimRight(u8, raw_string, whitespace_chars),
+                .keep => raw_string,
+            };
+
+            try merger.output.append(merger.arena, .{
+                .attribs = merger.attribs,
+                .content = .{ .text = string },
+                .location = .{
+                    .offset = merger.span_start,
+                    .length = merger.last_end - merger.span_start,
+                },
+            });
+            merger.span_start = merger.last_end;
+        }
+    };
 
     pub const AttribOverrides = struct {
         lang: ?[]const u8 = null,
@@ -1169,6 +1304,7 @@ pub const SemanticAnalyzer = struct {
                     .attribs = try sema.derive_attribute(node.location, attribs, .{
                         .lang = attribs.lang,
                     }),
+                    .location = node.location,
                 });
             },
 
@@ -1224,11 +1360,13 @@ pub const SemanticAnalyzer = struct {
         const value: DTValue = if (value_or_err) |value|
             value
         else |err| blk: {
+            std.log.warn("failed to parse {t}: \"{s}\"", .{ body, value_str });
             switch (err) {
                 error.InvalidValue => {
                     try sema.emit_diagnostic(.invalid_date_time, node.location);
                 },
                 error.MissingTimezone => {
+                    std.log.err("emit missing timezone for {}", .{node.location});
                     // TODO: Use (timezone_hint != null) to emit diagnostic for hint with
                     //       adding `tz` attribute when all date/time values share a common base.
                     try sema.emit_diagnostic(.invalid_date_time, node.location);
@@ -1304,6 +1442,7 @@ pub const SemanticAnalyzer = struct {
                 try spans.append(sema.arena, .{
                     .content = .{ .text = text },
                     .attribs = attribs,
+                    .location = string_body.location,
                 });
             },
 
@@ -1334,9 +1473,19 @@ pub const SemanticAnalyzer = struct {
                     text_buffer.appendSliceAssumeCapacity(stripped);
                 }
 
+                const location: Parser.Location = if (verbatim_lines.len > 0) blk: {
+                    const head = verbatim_lines[0].location.offset;
+                    const tail = verbatim_lines[verbatim_lines.len - 1].location.offset_one_after();
+                    break :blk .{
+                        .offset = head,
+                        .length = tail - head,
+                    };
+                } else .{ .offset = 0, .length = 0 };
+
                 try spans.append(sema.arena, .{
                     .content = .{ .text = try text_buffer.toOwnedSlice(sema.arena) },
                     .attribs = attribs,
+                    .location = location,
                 });
             },
 
@@ -1350,6 +1499,7 @@ pub const SemanticAnalyzer = struct {
                 try spans.append(sema.arena, .{
                     .content = .{ .text = text_span.text },
                     .attribs = attribs,
+                    .location = text_span.location,
                 });
             },
         }
@@ -1854,7 +2004,24 @@ pub const Parser = struct {
         var nesting: usize = 0;
 
         while (true) {
-            parser.skip_whitespace();
+            // If necessary, emit a whitespace span:
+            {
+                const before = parser.offset;
+                parser.skip_whitespace();
+                const after = parser.offset;
+                std.debug.assert(after >= before);
+                if (after > before) {
+                    // We've skipped over whitespace, so we emit a "whitespace" node here:
+                    const whitespace = parser.slice(before, after);
+                    try children.append(parser.arena, .{
+                        .location = whitespace.location,
+                        .type = .text,
+                        .body = .{
+                            .text_span = whitespace,
+                        },
+                    });
+                }
+            }
 
             const head = parser.peek_char() orelse {
                 emitDiagnostic(parser, .unterminated_inline_list, parser.make_diagnostic_location(parser.offset));
@@ -2187,6 +2354,10 @@ pub const Parser = struct {
     pub const Location = struct {
         offset: usize,
         length: usize,
+
+        pub fn offset_one_after(loc: Location) usize {
+            return loc.offset + loc.length;
+        }
     };
 
     pub const NodeType = enum {

@@ -4,7 +4,7 @@ p {
   In the meeting notes (version 3.2.1), someone wrote: The "simple" migration is no longer simple. They listed
   steps like: export → transform → validate → import, then added a parenthetical aside (which itself contained
   parentheses): "Use the staging key (not the production key (seriously))". A different person pasted a pseudo-path,
-  /var/tmp/builds/2025-12-23/, and then warned, "If you see `NULL` in the output, don't 'fix' it by replacing it with
+  /var/tmp/builds/\date(fmt="iso"){2025-12-23}/, and then warned, "If you see \mono{NULL} in the output, don't 'fix' it by replacing it with
   '0'—that's how we broke reporting last time."
 }
 

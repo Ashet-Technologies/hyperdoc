@@ -294,16 +294,25 @@ test "parser handles inline node lists" {
     try std.testing.expectEqual(hdoc.Parser.NodeType.p, node.type);
     switch (node.body) {
         .list => |children| {
-            try std.testing.expectEqual(@as(usize, 2), children.len);
-            try std.testing.expectEqual(hdoc.Parser.NodeType.text, children[0].type);
-            try std.testing.expectEqual(@as(usize, 5), children[0].location.length);
+            try std.testing.expectEqual(@as(usize, 5), children.len);
 
-            try std.testing.expectEqual(hdoc.Parser.NodeType.@"\\em", children[1].type);
-            switch (children[1].body) {
+            try std.testing.expectEqual(.text, children[0].type);
+            try std.testing.expectEqual(.text, children[1].type);
+            try std.testing.expectEqual(.text, children[2].type);
+            try std.testing.expectEqual(.@"\\em", children[3].type);
+            try std.testing.expectEqual(.text, children[4].type);
+
+            try std.testing.expectEqual(" ".len, children[0].location.length);
+            try std.testing.expectEqual("Hello".len, children[1].location.length);
+            try std.testing.expectEqual(" ".len, children[2].location.length);
+            try std.testing.expectEqual("\\em{world}".len, children[3].location.length);
+            try std.testing.expectEqual(" ".len, children[4].location.length);
+
+            switch (children[3].body) {
                 .list => |inline_children| {
-                    try std.testing.expectEqual(@as(usize, 1), inline_children.len);
-                    try std.testing.expectEqual(hdoc.Parser.NodeType.text, inline_children[0].type);
-                    try std.testing.expectEqual(@as(usize, 5), inline_children[0].location.length);
+                    try std.testing.expectEqual(1, inline_children.len);
+                    try std.testing.expectEqual(.text, inline_children[0].type);
+                    try std.testing.expectEqual("world".len, inline_children[0].location.length);
                 },
                 else => return error.TestExpectedEqual,
             }
@@ -423,7 +432,7 @@ fn expectParseOk(opts: LogDiagOptions, code: []const u8) !void {
 
     if (diagnostics.has_error() or diagnostics.has_warning()) {
         logDiagnostics(&diagnostics, opts);
-        return error.TestExpectedEqual;
+        return error.TestExpectedNoDiagnostics;
     }
 }
 
@@ -442,7 +451,7 @@ fn expectParseNoFail(opts: LogDiagOptions, code: []const u8) !void {
 
     if (diagnostics.has_error()) {
         logDiagnostics(&diagnostics, opts);
-        return error.TestExpectedEqual;
+        return error.TestExpectedNoErrors;
     }
 }
 
