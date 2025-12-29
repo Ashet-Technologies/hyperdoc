@@ -13,7 +13,8 @@ pub const Document = struct {
 
     // document contents:
     contents: []Block,
-    ids: []?Reference,
+    content_ids: []?Reference,
+    id_map: std.StringArrayHashMapUnmanaged(usize), // id -> index
 
     // header information
     lang: ?[]const u8,
@@ -469,11 +470,34 @@ pub fn parse(
 
     const header = sema.header orelse return error.MalformedDocument;
 
-    // TODO: Validate document-level semantic constraints (unique ids, ref resolution).
+    const content_ids = try sema.ids.toOwnedSlice(arena.allocator());
+
+    var id_map: std.StringArrayHashMapUnmanaged(usize) = .empty;
+    errdefer id_map.deinit(arena.allocator());
+
+    try id_map.ensureTotalCapacity(arena.allocator(), content_ids.len);
+
+    for (content_ids, 0..) |id_or_null, index| {
+        const id = id_or_null orelse continue;
+
+        const gop = id_map.getOrPutAssumeCapacity(id.text);
+        if (gop.found_existing) {
+            try sema.emit_diagnostic(
+                .{ .duplicate_id = .{ .ref = id.text } },
+                .{ .offset = 0, .length = 0 }, // TODO: Figure out proper node location
+            );
+            continue;
+        }
+        gop.value_ptr.* = index;
+    }
+
+    // TODO: Validate document-level semantic constraints (ref resolution).
+
     return .{
         .arena = arena,
         .contents = try sema.blocks.toOwnedSlice(arena.allocator()),
-        .ids = try sema.ids.toOwnedSlice(arena.allocator()),
+        .content_ids = content_ids,
+        .id_map = id_map,
 
         .lang = header.lang,
         .title = header.title,
@@ -2583,6 +2607,7 @@ pub const Diagnostic = struct {
     pub const InvalidStringEscape = struct { codepoint: u21 };
     pub const ForbiddenControlCharacter = struct { codepoint: u21 };
     pub const TableShapeError = struct { actual: usize, expected: usize };
+    pub const ReferenceError = struct { ref: []const u8 };
 
     pub const Code = union(enum) {
         // errors:
@@ -2611,6 +2636,8 @@ pub const Diagnostic = struct {
         list_body_required,
         illegal_id_attribute,
         column_count_mismatch: TableShapeError,
+        duplicate_id: ReferenceError,
+        unknown_id: ReferenceError,
 
         // warnings:
         document_starts_with_bom,
@@ -2651,6 +2678,8 @@ pub const Diagnostic = struct {
                 .illegal_id_attribute,
                 .nested_date_time,
                 .column_count_mismatch,
+                .duplicate_id,
+                .unknown_id,
                 => .@"error",
 
                 .unknown_attribute,
@@ -2727,6 +2756,9 @@ pub const Diagnostic = struct {
                 .nested_date_time => try w.writeAll("Nesting \\date, \\time and \\datetime is not allowed."),
 
                 .column_count_mismatch => |ctx| try w.print("Expected {} columns, but found {}", .{ ctx.expected, ctx.actual }),
+
+                .duplicate_id => |ctx| try w.print("The id \"{s}\" is already taken by another node.", .{ctx.ref}),
+                .unknown_id => |ctx| try w.print("The referenced id \"{s}\" does not exist.", .{ctx.ref}),
             }
         }
     };

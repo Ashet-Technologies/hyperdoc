@@ -424,7 +424,8 @@ fn dumpDocument(writer: *Writer, doc: *const hdoc.Document) Writer.Error!void {
     try dumpOptionalStringField(writer, indent_step, "author", doc.author);
     try dumpOptionalDateTimeField(writer, indent_step, "date", doc.date);
     try dumpBlockListField(writer, indent_step, "contents", doc.contents);
-    try dumpOptionalStringListField(writer, indent_step, "ids", doc.ids);
+    try dumpOptionalStringListField(writer, indent_step, "ids", doc.content_ids);
+    // TODO: Dump ID map
 }
 
 pub fn render(doc: hdoc.Document, writer: *Writer) Writer.Error!void {
