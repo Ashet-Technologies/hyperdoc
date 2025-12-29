@@ -633,7 +633,7 @@ pub const SemanticAnalyzer = struct {
                 else => unreachable,
             },
             .lang = attrs.lang,
-            .content = try sema.translate_inline(node),
+            .content = try sema.translate_inline(node, .emit_diagnostic),
         };
 
         return .{ heading, attrs.id };
@@ -657,7 +657,7 @@ pub const SemanticAnalyzer = struct {
                 else => unreachable,
             },
             .lang = attrs.lang,
-            .content = try sema.translate_inline(node),
+            .content = try sema.translate_inline(node, .emit_diagnostic),
         };
 
         return .{ heading, attrs.id };
@@ -715,16 +715,12 @@ pub const SemanticAnalyzer = struct {
         });
 
         // TODO: Enforce non-empty "path" (required) and "alt" (if provided).
-        const content = switch (node.body) {
-            .empty => @constCast(&[_]Span{}),
-            else => try sema.translate_inline(node),
-        };
 
         const image: Block.Image = .{
             .lang = attrs.lang,
             .alt = attrs.alt,
             .path = attrs.path,
-            .content = content,
+            .content = try sema.translate_inline(node, .allow_empty),
         };
 
         return .{ image, attrs.id };
@@ -740,7 +736,7 @@ pub const SemanticAnalyzer = struct {
         const preformatted: Block.Preformatted = .{
             .lang = attrs.lang,
             .syntax = attrs.syntax,
-            .content = try sema.translate_inline(node),
+            .content = try sema.translate_inline(node, .emit_diagnostic),
         };
 
         return .{ preformatted, attrs.id };
@@ -834,7 +830,7 @@ pub const SemanticAnalyzer = struct {
                             rows.appendAssumeCapacity(.{
                                 .group = .{
                                     .lang = row_attrs.lang,
-                                    .content = try sema.translate_inline(child_node),
+                                    .content = try sema.translate_inline(child_node, .emit_diagnostic),
                                 },
                             });
                         },
@@ -951,7 +947,7 @@ pub const SemanticAnalyzer = struct {
                     return &.{};
                 },
                 .text_to_p => {
-                    const spans = try sema.translate_inline(node);
+                    const spans = try sema.translate_inline(node, .emit_diagnostic);
 
                     const blocks = try sema.arena.alloc(Block, 1);
                     blocks[0] = .{
@@ -969,14 +965,14 @@ pub const SemanticAnalyzer = struct {
     }
 
     /// Translates a node into a sequence of inline spans.
-    fn translate_inline(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, BadAttributes }![]Span {
+    fn translate_inline(sema: *SemanticAnalyzer, node: Parser.Node, empty_handling: EmptyHandling) error{ OutOfMemory, BadAttributes }![]Span {
         var spans: std.ArrayList(Span) = .empty;
         errdefer spans.deinit(sema.arena);
 
         // TODO: Implement automatic space insertion.
         //       This must be done when two consecutive nodes are separated by a space
 
-        try sema.translate_inline_body(&spans, node.body, .{});
+        try sema.translate_inline_body(&spans, node.body, .{}, empty_handling);
 
         // TODO: Compact spans by joining spans with equal properties
 
@@ -1063,7 +1059,7 @@ pub const SemanticAnalyzer = struct {
         switch (node.type) {
             .unknown_inline,
             .text,
-            => try sema.translate_inline_body(spans, node.body, attribs),
+            => try sema.translate_inline_body(spans, node.body, attribs, .emit_diagnostic),
 
             .@"\\em" => {
                 const props = try sema.get_attributes(node, struct {
@@ -1073,7 +1069,7 @@ pub const SemanticAnalyzer = struct {
                 try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
                     .lang = props.lang,
                     .em = true,
-                }));
+                }), .emit_diagnostic);
             },
 
             .@"\\strike" => {
@@ -1084,7 +1080,7 @@ pub const SemanticAnalyzer = struct {
                 try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
                     .lang = props.lang,
                     .strike = true,
-                }));
+                }), .emit_diagnostic);
             },
 
             .@"\\sub" => {
@@ -1095,7 +1091,7 @@ pub const SemanticAnalyzer = struct {
                 try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
                     .lang = props.lang,
                     .position = .superscript,
-                }));
+                }), .emit_diagnostic);
             },
 
             .@"\\sup" => {
@@ -1106,7 +1102,7 @@ pub const SemanticAnalyzer = struct {
                 try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
                     .lang = props.lang,
                     .position = .subscript,
-                }));
+                }), .emit_diagnostic);
             },
 
             .@"\\link" => {
@@ -1131,7 +1127,7 @@ pub const SemanticAnalyzer = struct {
 
                 try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
                     .link = link,
-                }));
+                }), .emit_diagnostic);
             },
 
             .@"\\mono" => {
@@ -1143,7 +1139,7 @@ pub const SemanticAnalyzer = struct {
                     .mono = true,
                     .lang = props.lang,
                     .syntax = props.syntax,
-                }));
+                }), .emit_diagnostic);
             },
 
             .@"\\date",
@@ -1155,17 +1151,11 @@ pub const SemanticAnalyzer = struct {
                     fmt: []const u8 = "",
                 });
 
-                var content_spans: std.ArrayList(Span) = .empty;
-                defer content_spans.deinit(sema.arena);
-
-                // TODO: Implement automatic space insertion.
-                //       This must be done when two consecutive nodes are separated by a space
-
                 // TODO: Enforce that date/time bodies only contain plain text/string/verbatim.
-                try sema.translate_inline_body(&content_spans, node.body, .{});
+                const content_spans = try sema.translate_inline(node, .emit_diagnostic);
 
                 //  Convert the content_spans into a "rendered string".
-                const content_text = try sema.render_spans_to_plaintext(content_spans.items, .no_space);
+                const content_text = try sema.render_spans_to_plaintext(content_spans, .no_space);
 
                 const content: Span.Content = switch (node.type) {
                     .@"\\date" => try sema.parse_date_body(node, .date, Date, content_text, props.fmt),
@@ -1297,10 +1287,15 @@ pub const SemanticAnalyzer = struct {
         return try output_str.toOwnedSlice(sema.arena);
     }
 
-    fn translate_inline_body(sema: *SemanticAnalyzer, spans: *std.ArrayList(Span), body: Parser.Node.Body, attribs: Span.Attributes) error{ OutOfMemory, BadAttributes }!void {
+    const EmptyHandling = enum {
+        allow_empty,
+        emit_diagnostic,
+    };
+    fn translate_inline_body(sema: *SemanticAnalyzer, spans: *std.ArrayList(Span), body: Parser.Node.Body, attribs: Span.Attributes, empty_handling: EmptyHandling) error{ OutOfMemory, BadAttributes }!void {
         switch (body) {
-            .empty => |location| {
-                try sema.emit_diagnostic(.empty_inline_body, location);
+            .empty => |location| switch (empty_handling) {
+                .allow_empty => {},
+                .emit_diagnostic => try sema.emit_diagnostic(.empty_inline_body, location),
             },
 
             .string => |string_body| {
