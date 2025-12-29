@@ -608,3 +608,110 @@ test "DateTime.parse accepts ISO date-time" {
 
     try std.testing.expectError(error.InvalidValue, hdoc.DateTime.parse("2025-12-25 22:31:50Z", null));
 }
+
+test "diagnostics for missing language and empty image attributes" {
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source =
+        \\hdoc(version="2.0");
+        \\img(path="", alt="");
+    ;
+
+    var doc = try hdoc.parse(std.testing.allocator, source, &diagnostics);
+    defer doc.deinit();
+
+    var saw_missing_lang = false;
+    var saw_empty_path = false;
+    var saw_empty_alt = false;
+
+    for (diagnostics.items.items) |item| {
+        switch (item.code) {
+            .missing_document_language => saw_missing_lang = true,
+            .empty_attribute => |ctx| {
+                if (ctx.type == .img and std.mem.eql(u8, ctx.name, "path")) {
+                    saw_empty_path = true;
+                }
+                if (ctx.type == .img and std.mem.eql(u8, ctx.name, "alt")) {
+                    saw_empty_alt = true;
+                }
+            },
+            else => {},
+        }
+    }
+
+    try std.testing.expect(saw_missing_lang);
+    try std.testing.expect(saw_empty_path);
+    try std.testing.expect(saw_empty_alt);
+}
+
+test "diagnostics for missing timezone and unknown id" {
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source =
+        \\hdoc(version="2.0");
+        \\p{ \time"12:00:00" \link(ref="missing"){missing} }
+    ;
+
+    var doc = try hdoc.parse(std.testing.allocator, source, &diagnostics);
+    defer doc.deinit();
+
+    var saw_missing_timezone = false;
+    var saw_unknown_id = false;
+
+    for (diagnostics.items.items) |item| {
+        switch (item.code) {
+            .missing_timezone => saw_missing_timezone = true,
+            .unknown_id => |ctx| {
+                if (std.mem.eql(u8, ctx.ref, "missing")) {
+                    saw_unknown_id = true;
+                }
+            },
+            else => {},
+        }
+    }
+
+    try std.testing.expect(saw_missing_timezone);
+    try std.testing.expect(saw_unknown_id);
+}
+
+test "diagnostics for tab characters" {
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source = "hdoc(version=\"2.0\");\n\tp{ ok }";
+
+    var doc = try hdoc.parse(std.testing.allocator, source, &diagnostics);
+    defer doc.deinit();
+
+    var saw_tab = false;
+
+    for (diagnostics.items.items) |item| {
+        switch (item.code) {
+            .tab_character => saw_tab = true,
+            else => {},
+        }
+    }
+
+    try std.testing.expect(saw_tab);
+}
+
+test "diagnostics for bare carriage return" {
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source = "hdoc(version=\"2.0\");\r";
+
+    try std.testing.expectError(error.InvalidUtf8, hdoc.parse(std.testing.allocator, source, &diagnostics));
+
+    var saw_bare_cr = false;
+    for (diagnostics.items.items) |item| {
+        switch (item.code) {
+            .bare_carriage_return => saw_bare_cr = true,
+            else => {},
+        }
+    }
+
+    try std.testing.expect(saw_bare_cr);
+}
