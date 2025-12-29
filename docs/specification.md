@@ -133,7 +133,7 @@ attribute       ::= attr_key , ws , "=" , ws , string_literal ;
 *)
 attr_key        ::= attr_key_char , { attr_key_char } ;
 
-attr_key_char   ::= "A"…"Z" | "a"…"z" | "0"…"9" | "_" | "-" | ":" | "\" ;
+attr_key_char   ::= "A"…"Z" | "a"…"z" | "0"…"9" | "_" | "-" | "\" ;
 
 
 (* ---------- Block-list content ---------- *)
@@ -703,8 +703,8 @@ Adds a hyperlink to the contents. This allows a reader to navigate by typically 
 
 | Element    | Attribute | Function                                                                                                    |
 | ---------- | --------- | ----------------------------------------------------------------------------------------------------------- |
-| `date`     | `fmt`     | `year`, `month`, `day`, `weekday`, `short`, `long`, `relative`.                                             |
-| `time`     | `fmt`     | `short`, `long`, `rough`, `relative`.                                                                       |
+| `date`     | `fmt`     | `year`, `month`, `day`, `weekday`, `short`, `long`, `relative`, `iso` (raw ISO 8601).                       |
+| `time`     | `fmt`     | `short`, `long`, `rough`, `relative`, `iso` (raw ISO 8601).                                                 |
 | `datetime` | `fmt`     | `short` (localized date+time), `long` (localized date+time with seconds), `relative`, `iso` (raw ISO 8601). |
 
 Renders a [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601#Combined_date_and_time_representations) date, time or date+time in a localized manner.

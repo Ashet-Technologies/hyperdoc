@@ -1,4 +1,4 @@
-hdoc(version="2.0");
+hdoc(version="2.0",);
 
 p {
   In the meeting notes (version 3.2.1), someone wrote: The "simple" migration is no longer simple. They listed

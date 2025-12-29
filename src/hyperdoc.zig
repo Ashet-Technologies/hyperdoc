@@ -426,8 +426,10 @@ pub fn parse(
     /// An optional diagnostics element that receives diagnostic messages like errors and warnings.
     /// If present, will be filled out by the parser.
     diagnostics: ?*Diagnostics,
-) error{ OutOfMemory, SyntaxError, MalformedDocument, InvalidUtf8 }!Document {
-    const source_text = try remove_byte_order_mark(diagnostics, raw_plain_text);
+) error{ OutOfMemory, SyntaxError, MalformedDocument, UnsupportedVersion, InvalidUtf8 }!Document {
+    const source_text = try clean_utf8_input(diagnostics, raw_plain_text);
+
+    // We now know that the source code is 'fine' and
 
     var arena = std.heap.ArenaAllocator.init(allocator);
     errdefer arena.deinit();
@@ -508,25 +510,39 @@ pub fn parse(
     };
 }
 
-pub fn remove_byte_order_mark(diagnostics: ?*Diagnostics, plain_text: []const u8) error{ OutOfMemory, InvalidUtf8 }![]const u8 {
+pub fn clean_utf8_input(diagnostics: ?*Diagnostics, raw_plain_text: []const u8) error{ OutOfMemory, InvalidUtf8 }![]const u8 {
+
     // First check if all of our code is valid UTF-8
     // and if it potentially starts with a BOM.
-    var view = std.unicode.Utf8View.init(plain_text) catch {
+    var view = std.unicode.Utf8View.init(raw_plain_text) catch {
         return error.InvalidUtf8;
     };
 
     var iter = view.iterator();
-
     if (iter.nextCodepointSlice()) |slice| {
         const codepoint = std.unicode.utf8Decode(slice) catch unreachable;
         if (codepoint == 0xFEFF) {
             if (diagnostics) |diag| {
                 try diag.add(.document_starts_with_bom, .{ .column = 1, .line = 1 });
             }
-            return plain_text[slice.len..];
+            std.debug.assert(iter.i == slice.len);
+        } else {
+            iter.i = 0; // Reset iterator to start position
         }
     }
-    return plain_text;
+    const source_head = iter.i;
+
+    while (iter.nextCodepointSlice()) |slice| {
+        const codepoint = std.unicode.utf8Decode(slice) catch unreachable;
+
+        // TODO: Write codepoint validation which rejects the file if invalid codepoints are detected and
+        //       emits warnings for TAB characters.
+        //       Bare CR is forbidden, just CR LF or LF is allowed.
+
+        _ = codepoint;
+    }
+
+    return raw_plain_text[source_head..];
 }
 
 pub const SemanticAnalyzer = struct {
@@ -549,16 +565,26 @@ pub const SemanticAnalyzer = struct {
     blocks: std.ArrayList(Block) = .empty,
     ids: std.ArrayList(?Reference) = .empty,
 
-    fn append_node(sema: *SemanticAnalyzer, node: Parser.Node) error{OutOfMemory}!void {
+    fn append_node(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, UnsupportedVersion }!void {
         switch (node.type) {
             .hdoc => {
-                if (sema.header != null) {
-                    try sema.emit_diagnostic(.duplicate_hdoc_header, node.location);
-                }
-                sema.header = sema.translate_header_node(node) catch |err| switch (err) {
-                    error.OutOfMemory => |e| return e,
+                const header = sema.translate_header_node(node) catch |err| switch (err) {
+                    error.OutOfMemory, error.UnsupportedVersion => |e| return e,
                     error.BadAttributes => null,
                 };
+                if (sema.header != null) {
+                    try sema.emit_diagnostic(.duplicate_hdoc_header, node.location);
+                } else {
+                    sema.header = header orelse .{
+                        .version = .{ .major = 2, .minor = 0 },
+                        .lang = null,
+                        .title = null,
+                        .author = null,
+                        .timezone = null,
+                        .date = null,
+                    };
+                }
+                std.debug.assert(sema.header != null);
             },
 
             else => {
@@ -589,7 +615,7 @@ pub const SemanticAnalyzer = struct {
         }
     }
 
-    fn translate_header_node(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, BadAttributes }!Header {
+    fn translate_header_node(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, BadAttributes, UnsupportedVersion }!Header {
         std.debug.assert(node.type == .hdoc);
 
         const attrs = try sema.get_attributes(node, struct {
@@ -597,9 +623,16 @@ pub const SemanticAnalyzer = struct {
             title: ?[]const u8 = null,
             author: ?[]const u8 = null,
             date: ?DateTime = null,
-            lang: ?[]const u8 = null,
+            lang: ?[]const u8 = null, // TODO: Introduce with "LanguageTag" type for all "lang" attributes which performs proper validation
             tz: ?[]const u8 = null,
         });
+
+        if (attrs.version.major != 2)
+            return error.UnsupportedVersion;
+        if (attrs.version.minor != 0)
+            return error.UnsupportedVersion;
+
+        // TODO: Validate TZ format
 
         return .{
             .version = attrs.version,
@@ -753,6 +786,8 @@ pub const SemanticAnalyzer = struct {
                 try sema.emit_diagnostic(.list_body_required, node.location);
             },
         }
+
+        // TODO: Validate `children.items.len >= 1`
 
         const list: Block.List = .{
             .first = attrs.first orelse if (node.type == .ol) 1 else null,
@@ -979,6 +1014,8 @@ pub const SemanticAnalyzer = struct {
                 try sema.emit_diagnostic(.list_body_required, node.location);
             },
         }
+
+        // TODO: Validate `children.items.len >= 1`
 
         return try cells.toOwnedSlice(sema.arena);
     }
@@ -1291,7 +1328,7 @@ pub const SemanticAnalyzer = struct {
 
                 try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
                     .lang = props.lang,
-                    .position = .superscript,
+                    .position = .subscript,
                 }), .emit_diagnostic);
             },
 
@@ -1302,7 +1339,7 @@ pub const SemanticAnalyzer = struct {
 
                 try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
                     .lang = props.lang,
-                    .position = .subscript,
+                    .position = .superscript,
                 }), .emit_diagnostic);
             },
 
@@ -1327,6 +1364,7 @@ pub const SemanticAnalyzer = struct {
                 };
 
                 try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
+                    .lang = props.lang,
                     .link = link,
                 }), .emit_diagnostic);
             },
@@ -1799,9 +1837,18 @@ pub const SemanticAnalyzer = struct {
                                 break :blk "???";
                             }
 
-                            if (escape_part.len == 4) {
+                            const min_len = "\\u{}".len;
+                            const max_len = "\\u{123456}".len;
+
+                            if (escape_part.len == min_len) {
                                 // Empty escape: \u{}
                                 std.debug.assert(std.mem.eql(u8, escape_part, "\\u{}"));
+                                try sema.emit_diagnostic(.invalid_unicode_string_escape, location);
+                                break :blk "???";
+                            }
+
+                            if (escape_part.len > max_len) {
+                                // Escape sequence is more than 6 chars long
                                 try sema.emit_diagnostic(.invalid_unicode_string_escape, location);
                                 break :blk "???";
                             }
@@ -1956,6 +2003,8 @@ pub const Parser = struct {
                 // so we know that the next token must be the attribute name.
 
                 while (true) {
+                    if (parser.try_accept_char(')'))
+                        break;
                     const attr_name = try parser.accept_identifier();
                     _ = try parser.accept_char('=');
                     const attr_value = try parser.accept_string();
@@ -1966,10 +2015,10 @@ pub const Parser = struct {
                     });
 
                     if (!parser.try_accept_char(',')) {
+                        try parser.accept_char(')');
                         break;
                     }
                 }
-                try parser.accept_char(')');
             }
         }
 
@@ -2285,6 +2334,8 @@ pub const Parser = struct {
             parser.offset += 1;
 
             switch (c) {
+                '\n' => return error.UnterminatedStringLiteral,
+
                 '"' => return parser.slice(start, parser.offset),
 
                 '\\' => {
@@ -2412,7 +2463,13 @@ pub const Parser = struct {
 
     pub fn is_ident_char(c: u8) bool {
         return switch (c) {
-            'a'...'z', 'A'...'Z', '0'...'9', '_', '\\' => true,
+            'a'...'z',
+            'A'...'Z',
+            '0'...'9',
+            '_',
+            '-',
+            '\\',
+            => true,
             else => false,
         };
     }

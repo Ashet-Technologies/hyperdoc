@@ -1,6 +1,17 @@
 const std = @import("std");
 const hdoc = @import("./hyperdoc.zig");
 
+// TODO: Write unit test for trailing comma in attribute lists
+// TODO: Write unit test for invalid escape sequence detection when more than 6 (hex) chars are used
+// TODO: Write unit test for invalid version detection (must be 2.0)
+// TODO: Write unit test for duplicate header recognition
+// TODO: Write unit test for clean_utf8_input() passthrough
+// TODO: Write unit test for clean_utf8_input() BOM detection
+// TODO: Write unit test for clean_utf8_input() invalid UTF-8 detection
+// TODO: Write unit test for clean_utf8_input() illegal codepoint detection (bare CR -> error)
+// TODO: Write unit test for clean_utf8_input() illegal codepoint detection (TAB -> warning)
+// TODO: Write unit test for clean_utf8_input() illegal codepoint detection (any other control character -> error)
+
 test "validate examples directory" {
     try parseDirectoryTree("examples");
 }
@@ -66,7 +77,7 @@ test "parser rejects identifiers with invalid start characters" {
     defer arena.deinit();
 
     var parser: hdoc.Parser = .{
-        .code = "-abc",
+        .code = "*abc",
         .arena = arena.allocator(),
         .diagnostics = null,
     };
@@ -463,7 +474,7 @@ test "diagnostic codes are emitted for expected samples" {
     try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); h1(", &.{.{ .unexpected_eof = .{ .context = "identifier", .expected_char = null } }});
     try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); h1 123", &.{.{ .unexpected_character = .{ .expected = '{', .found = '1' } }});
     try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); h1 \"unterminated", &.{.unterminated_string});
-    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); -abc", &.{.{ .invalid_identifier_start = .{ .char = '-' } }});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); *abc", &.{.{ .invalid_identifier_start = .{ .char = '*' } }});
     try validateDiagnostics(.{}, "hdoc{h1 \"x\"", &.{.unterminated_block_list});
     try validateDiagnostics(.{}, "hdoc(version=\"2.0\"); p {hello", &.{.unterminated_inline_list});
     try validateDiagnostics(
