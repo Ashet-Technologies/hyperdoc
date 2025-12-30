@@ -259,6 +259,19 @@ fn dumpBlockListField(writer: *Writer, indent: usize, key: []const u8, blocks: [
     }
 }
 
+fn dumpNumberListField(writer: *Writer, indent: usize, key: []const u8, values: []const usize) Writer.Error!void {
+    try writeIndent(writer, indent);
+    if (values.len == 0) {
+        try writer.print("{s}: []\n", .{key});
+        return;
+    }
+    try writer.print("{s}:\n", .{key});
+    for (values) |value| {
+        try writeIndent(writer, indent + indent_step);
+        try writer.print("- {}\n", .{value});
+    }
+}
+
 fn dumpOptionalStringListField(writer: *Writer, indent: usize, key: []const u8, values: []?hdoc.Reference) Writer.Error!void {
     try writeIndent(writer, indent);
     if (values.len == 0) {
@@ -360,6 +373,32 @@ fn dumpTableRowsField(writer: *Writer, indent: usize, key: []const u8, rows: []c
     }
 }
 
+fn dumpTableOfContentsChildren(writer: *Writer, indent: usize, children: []const hdoc.Document.TableOfContents) Writer.Error!void {
+    try writeIndent(writer, indent);
+    if (children.len == 0) {
+        try writer.writeAll("children: []\n");
+        return;
+    }
+    try writer.writeAll("children:\n");
+    for (children) |child| {
+        try writeIndent(writer, indent + indent_step);
+        try writer.writeAll("-\n");
+        try dumpTableOfContentsNode(writer, indent + 2 * indent_step, child);
+    }
+}
+
+fn dumpTableOfContentsNode(writer: *Writer, indent: usize, toc: hdoc.Document.TableOfContents) Writer.Error!void {
+    try dumpEnumField(writer, indent, "level", toc.level);
+    try dumpNumberListField(writer, indent, "headings", toc.headings);
+    try dumpTableOfContentsChildren(writer, indent, toc.children);
+}
+
+fn dumpTableOfContents(writer: *Writer, indent: usize, toc: hdoc.Document.TableOfContents) Writer.Error!void {
+    try writeIndent(writer, indent);
+    try writer.writeAll("toc:\n");
+    try dumpTableOfContentsNode(writer, indent + indent_step, toc);
+}
+
 fn dumpBlockInline(writer: *Writer, indent: usize, block: hdoc.Block) Writer.Error!void {
     switch (block) {
         .heading => |heading| {
@@ -423,6 +462,7 @@ fn dumpDocument(writer: *Writer, doc: *const hdoc.Document) Writer.Error!void {
     try dumpOptionalStringField(writer, indent_step, "title", doc.title);
     try dumpOptionalStringField(writer, indent_step, "author", doc.author);
     try dumpOptionalDateTimeField(writer, indent_step, "date", doc.date);
+    try dumpTableOfContents(writer, indent_step, doc.toc);
     try dumpBlockListField(writer, indent_step, "contents", doc.contents);
     try dumpOptionalStringListField(writer, indent_step, "ids", doc.content_ids);
     // TODO: Dump ID map
@@ -442,8 +482,10 @@ test "render escapes string values" {
         .arena = std.heap.ArenaAllocator.init(std.testing.allocator),
         .version = .{ .major = 1, .minor = 2 },
         .contents = &.{},
-        .ids = &.{},
-        .lang = null,
+        .content_ids = &.{},
+        .id_map = .{},
+        .toc = undefined,
+        .lang = .inherit,
         .title = title,
         .author = null,
         .date = null,
@@ -452,6 +494,13 @@ test "render escapes string values" {
     defer doc.deinit();
 
     const arena_alloc = doc.arena.allocator();
+    doc.contents = try arena_alloc.alloc(hdoc.Block, 0);
+    doc.content_ids = try arena_alloc.alloc(?hdoc.Reference, 0);
+    doc.toc = .{
+        .level = .h1,
+        .headings = try arena_alloc.alloc(usize, 0),
+        .children = try arena_alloc.alloc(hdoc.Document.TableOfContents, 0),
+    };
 
     const spans = try arena_alloc.alloc(hdoc.Span, 1);
     spans[0] = .{
@@ -463,7 +512,7 @@ test "render escapes string values" {
     blocks[0] = .{
         .heading = .{
             .level = .h1,
-            .lang = null,
+            .lang = .inherit,
             .content = spans,
         },
     };
@@ -471,7 +520,19 @@ test "render escapes string values" {
 
     const ids = try arena_alloc.alloc(?hdoc.Reference, 1);
     ids[0] = id_value;
-    doc.ids = ids;
+    doc.content_ids = ids;
+
+    const headings = try arena_alloc.alloc(usize, 1);
+    headings[0] = 0;
+
+    const children = try arena_alloc.alloc(hdoc.Document.TableOfContents, 1);
+    children[0] = .{ .level = .h2, .headings = &.{}, .children = &.{} };
+
+    doc.toc = .{
+        .level = .h1,
+        .headings = headings,
+        .children = children,
+    };
 
     var buffer = Writer.Allocating.init(std.testing.allocator);
     defer buffer.deinit();

@@ -16,6 +16,7 @@ pub const Document = struct {
     contents: []Block,
     content_ids: []?Reference,
     id_map: std.StringArrayHashMapUnmanaged(usize), // id -> index
+    toc: TableOfContents,
 
     // header information
     lang: LanguageTag = .inherit, // inherit here means "unset"
@@ -23,6 +24,12 @@ pub const Document = struct {
     author: ?[]const u8,
     date: ?DateTime,
     timezone: ?TimeZoneOffset,
+
+    pub const TableOfContents = struct {
+        level: Block.HeadingLevel,
+        headings: []usize,
+        children: []TableOfContents,
+    };
 
     pub fn deinit(doc: *Document) void {
         doc.arena.deinit();
@@ -553,12 +560,16 @@ pub fn parse(
     try sema.validate_references(&id_map);
 
     const doc_lang = header.lang orelse LanguageTag.inherit;
+    const contents = try sema.blocks.toOwnedSlice(arena.allocator());
+    const block_locations = try sema.block_locations.toOwnedSlice(arena.allocator());
+    const toc = try sema.build_toc(contents, block_locations);
 
     return .{
         .arena = arena,
-        .contents = try sema.blocks.toOwnedSlice(arena.allocator()),
+        .contents = contents,
         .content_ids = content_ids,
         .id_map = id_map,
+        .toc = toc,
 
         .lang = doc_lang,
         .title = header.title,
@@ -674,12 +685,27 @@ pub const SemanticAnalyzer = struct {
         location: Parser.Location,
     };
 
+    const TocBuilder = struct {
+        level: Block.HeadingLevel,
+        headings: std.ArrayList(usize),
+        children: std.ArrayList(*TocBuilder),
+
+        fn init(level: Block.HeadingLevel) @This() {
+            return .{
+                .level = level,
+                .headings = .empty,
+                .children = .empty,
+            };
+        }
+    };
+
     arena: std.mem.Allocator,
     diagnostics: ?*Diagnostics,
     code: []const u8,
 
     header: ?Header = null,
     blocks: std.ArrayList(Block) = .empty,
+    block_locations: std.ArrayList(Parser.Location) = .empty,
     ids: std.ArrayList(?Reference) = .empty,
     id_locations: std.ArrayList(?Parser.Location) = .empty,
     pending_refs: std.ArrayList(RefUse) = .empty,
@@ -734,6 +760,7 @@ pub const SemanticAnalyzer = struct {
                     null;
 
                 try sema.blocks.append(sema.arena, block);
+                try sema.block_locations.append(sema.arena, node.location);
                 try sema.ids.append(sema.arena, id);
                 try sema.id_locations.append(sema.arena, id_location);
             },
@@ -1871,6 +1898,102 @@ pub const SemanticAnalyzer = struct {
         }
     }
 
+    fn build_toc(sema: *SemanticAnalyzer, contents: []const Block, block_locations: []const Parser.Location) !Document.TableOfContents {
+        std.debug.assert(contents.len == block_locations.len);
+
+        var root_builder = TocBuilder.init(.h1);
+        defer root_builder.headings.deinit(sema.arena);
+        defer root_builder.children.deinit(sema.arena);
+
+        var stack: std.ArrayList(*TocBuilder) = .empty;
+        defer stack.deinit(sema.arena);
+
+        try stack.append(sema.arena, &root_builder);
+
+        for (contents, 0..) |block, block_index| {
+            const heading = switch (block) {
+                .heading => |value| value,
+                else => continue,
+            };
+
+            const target_depth = heading_level_index(heading.level);
+
+            while (stack.items.len > target_depth) {
+                _ = stack.pop();
+            }
+
+            while (stack.items.len < target_depth) {
+                const parent = stack.items[stack.items.len - 1];
+                try sema.append_toc_entry(&stack, parent, block_index, block_locations, .automatic);
+            }
+
+            const parent = stack.items[stack.items.len - 1];
+            try sema.append_toc_entry(&stack, parent, block_index, block_locations, .real);
+        }
+
+        return sema.materialize_toc(&root_builder);
+    }
+
+    fn append_toc_entry(
+        sema: *SemanticAnalyzer,
+        stack: *std.ArrayList(*TocBuilder),
+        parent: *TocBuilder,
+        heading_index: usize,
+        block_locations: []const Parser.Location,
+        kind: enum { automatic, real },
+    ) !void {
+        if (kind == .automatic) {
+            const heading_location = block_locations[heading_index];
+            try sema.emit_diagnostic(
+                .{ .automatic_heading_insertion = .{ .level = parent.level } },
+                heading_location,
+            );
+        }
+
+        try parent.headings.append(sema.arena, heading_index);
+
+        const child_level = next_heading_level(parent.level);
+        if (child_level == parent.level) {
+            return;
+        }
+
+        const child = try sema.arena.create(TocBuilder);
+        child.* = TocBuilder.init(child_level);
+
+        try parent.children.append(sema.arena, child);
+        try stack.append(sema.arena, child);
+    }
+
+    fn materialize_toc(sema: *SemanticAnalyzer, builder: *TocBuilder) !Document.TableOfContents {
+        var node: Document.TableOfContents = .{
+            .level = builder.level,
+            .headings = try builder.headings.toOwnedSlice(sema.arena),
+            .children = try sema.arena.alloc(Document.TableOfContents, builder.children.items.len),
+        };
+
+        for (builder.children.items, 0..) |child_builder, index| {
+            node.children[index] = try sema.materialize_toc(child_builder);
+        }
+
+        return node;
+    }
+
+    fn heading_level_index(level: Block.HeadingLevel) usize {
+        return switch (level) {
+            .h1 => 1,
+            .h2 => 2,
+            .h3 => 3,
+        };
+    }
+
+    fn next_heading_level(level: Block.HeadingLevel) Block.HeadingLevel {
+        return switch (level) {
+            .h1 => .h2,
+            .h2 => .h3,
+            .h3 => .h3,
+        };
+    }
+
     fn emit_diagnostic(sema: *SemanticAnalyzer, code: Diagnostic.Code, location: Parser.Location) !void {
         if (sema.diagnostics) |diag| {
             try diag.add(code, sema.make_location(location.offset));
@@ -2808,6 +2931,7 @@ pub const Diagnostic = struct {
     pub const ForbiddenControlCharacter = struct { codepoint: u21 };
     pub const TableShapeError = struct { actual: usize, expected: usize };
     pub const ReferenceError = struct { ref: []const u8 };
+    pub const AutomaticHeading = struct { level: Block.HeadingLevel };
 
     pub const Code = union(enum) {
         // errors:
@@ -2856,6 +2980,7 @@ pub const Diagnostic = struct {
         redundant_inline: InlineUsageError,
         attribute_leading_trailing_whitespace,
         tab_character,
+        automatic_heading_insertion: AutomaticHeading,
 
         pub fn severity(code: Code) Severity {
             return switch (code) {
@@ -2904,6 +3029,7 @@ pub const Diagnostic = struct {
                 .attribute_leading_trailing_whitespace,
                 .tab_character,
                 .document_starts_with_bom,
+                .automatic_heading_insertion,
                 => .warning,
             };
         }
@@ -2979,6 +3105,8 @@ pub const Diagnostic = struct {
 
                 .missing_document_language => try w.writeAll("Document language is missing; set lang on the hdoc header."),
                 .tab_character => try w.writeAll("Tab character is not allowed; use spaces instead."),
+
+                .automatic_heading_insertion => |ctx| try w.print("Inserted automatic {t} to fill heading level gap.", .{ctx.level}),
             }
         }
     };
