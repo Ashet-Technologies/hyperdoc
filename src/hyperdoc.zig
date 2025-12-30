@@ -746,7 +746,7 @@ pub const SemanticAnalyzer = struct {
             version: Version,
             title: ?[]const u8 = null,
             author: ?[]const u8 = null,
-            date: ?Date = null,
+            date: ?DateTime = null, // TODO: Allow skipping TZ value!
             lang: LanguageTag = .inherit,
             tz: ?TimeZoneOffset = null,
         });

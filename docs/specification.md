@@ -472,7 +472,7 @@ Notes:
 | `lang`    | Language Tag    | No       | [BCP 47 Language Tag](https://datatracker.ietf.org/doc/html/rfc5646)                         | Defines the language of the elements contents.                                  |
 | `title`   | String          | No       | *Any*                                                                                        | Sets the title of the document or the table row.                                |
 | `author`  | String          | No       | *Any*                                                                                        | Sets the author of the document.                                                |
-| `date`    | Date            | No       | A date-time value using the format specified below                                           | Sets the authoring date of the document.                                        |
+| `date`    | DateTime        | No       | A date-time value using the format specified below                                           | Sets the authoring date of the document.                                        |
 | `id`      | Reference       | No       | Non-empty                                                                                    | Sets a reference which can be linked to with `\link(ref="...")`.                |
 | `first`   | Integer         | No       | Decimal integer numbers ≥ 0                                                                  | Sets the number of the first list item.                                         |
 | `alt`     | String          | No       | Non-empty                                                                                    | Sets the alternative text shown when an image cannot be loaded.                 |
@@ -491,7 +491,7 @@ NOTE: All attribute values allow leading and trailing whitespace, but it's heavi
 
 | Type              | Example                             | Syntax                                                          | Notes                                                                                                 |
 | ----------------- | ----------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `Date`            | `2025-12-31`                        | `\d+-{00..12}-{00..31}`                                         | A date value as specified below.                                                                      |
+| `Date`            | `2025-12-31T13:37:42`               | *See below*                                                     | A date value as specified below.                                                                      |
 | `Enum`            | `auto`                              | `\w+`                                                           |                                                                                                       |
 | `Integer`         | `10`                                | `\d+`                                                           | Leading zeroes are allowed, but discouraged.                                                          |
 | `Language Tag`    | `de-DE`                             | *See [RFC 5646](https://datatracker.ietf.org/doc/html/rfc5646)* |                                                                                                       |
