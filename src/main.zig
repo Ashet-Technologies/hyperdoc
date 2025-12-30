@@ -70,5 +70,7 @@ fn parse_and_process(allocator: std.mem.Allocator, diagnostics: *hdoc.Diagnostic
         return error.InvalidFile;
     }
 
-    try hdoc.render.yaml(parsed, output_stream);
+    // TODO: Make render format selectable via CLI:
+    // try hdoc.render.yaml(parsed, output_stream);
+    try hdoc.render.html5(parsed, output_stream);
 }

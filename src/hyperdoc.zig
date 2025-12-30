@@ -2,6 +2,7 @@ const std = @import("std");
 
 pub const render = struct {
     pub const yaml = @import("render/dump.zig").render;
+    pub const html5 = @import("render/html5.zig").render;
 };
 
 /// A HyperDoc document. Contains both memory and
