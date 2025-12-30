@@ -430,7 +430,20 @@ pub const Reference = struct {
     text: []const u8,
 
     pub fn parse(text: []const u8) !Reference {
-        // TODO: Add correctness validation here (non-empty, allowed characters).
+        if (text.len == 0)
+            return error.InvalidValue;
+
+        var view: std.unicode.Utf8View = try .init(text);
+        var iter = view.iterator();
+        while (iter.nextCodepoint()) |codepoint| {
+            if (SemanticAnalyzer.is_illegal_character(codepoint))
+                return error.InvalidValue;
+            switch (codepoint) {
+                '\t', '\r', '\n', ' ' => return error.InvalidValue,
+                else => {},
+            }
+        }
+
         return .{ .text = text };
     }
 
@@ -733,7 +746,7 @@ pub const SemanticAnalyzer = struct {
             version: Version,
             title: ?[]const u8 = null,
             author: ?[]const u8 = null,
-            date: ?DateTime = null,
+            date: ?Date = null,
             lang: LanguageTag = .inherit,
             tz: ?TimeZoneOffset = null,
         });
@@ -1321,7 +1334,10 @@ pub const SemanticAnalyzer = struct {
             const raw_string = try merger.current_span.toOwnedSlice(merger.arena);
 
             const string = switch (mode) {
-                .strip => std.mem.trimRight(u8, raw_string, whitespace_chars),
+                .strip => switch (merger.whitespace) {
+                    .one_space => std.mem.trimRight(u8, raw_string, whitespace_chars),
+                    .keep_space => raw_string,
+                },
                 .keep => raw_string,
             };
 

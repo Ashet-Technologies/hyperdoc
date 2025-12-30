@@ -34,7 +34,7 @@ This section defines the required byte-level encoding and line structure of Hype
 
 **Byte Order Mark (BOM):**
 
-- A UTF-8 BOM (the byte sequence `EF BB BF`) **SHOULD NOT** be used. Tooling **MAY** accept it and treat it as U+FEFF at the beginning of the document.
+- A UTF-8 BOM (the byte sequence `EF BB BF`) **SHOULD NOT** be used. Tooling **MAY** accept it and treat it as whitespace at the beginning of the document.
 
 ### Line endings
 
@@ -466,24 +466,40 @@ Notes:
 
 ## Attribute Overview
 
-| Attribute | Required | Allowed Values                                                                               | Description                                                                     |
-| --------- | -------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `version` | Yes      | `2.0`                                                                                        | Describes the version of this HyperDoc document.                                |
-| `lang`    | No       | [BCP 47 Language Tag](https://datatracker.ietf.org/doc/html/rfc5646)                         | Defines the language of the elements contents.                                  |
-| `title`   | No       | *Any*                                                                                        | Sets the title of the document or the table row.                                |
-| `author`  | No       | *Any*                                                                                        | Sets the author of the document.                                                |
-| `date`    | No       | A date-time value using the format specified below                                           | Sets the authoring date of the document.                                        |
-| `id`      | No       | Non-empty                                                                                    | Sets a reference which can be linked to with `\link(ref="...")`.                |
-| `first`   | No       | Decimal integer numbers ≥ 0                                                                  | Sets the number of the first list item.                                         |
-| `alt`     | No       | Non-empty                                                                                    | Sets the alternative text shown when an image cannot be loaded.                 |
-| `path`    | Yes      | Non-empty file path to an image file                                                         | Defines the file path where the image file can be found.                        |
-| `syntax`  | No       | *See element documentation*                                                                  | Hints the syntax highlighter how how the elements context shall be highlighted. |
-| `depth`   | No       | `1`, `2` or `3`                                                                              | Defines how many levels of headings shall be included.                          |
-| `colspan` | No       | Decimal integer numbers ≥ 1                                                                  | Sets how many columns the table cell spans.                                     |
-| `ref`     | No       | Any value present in an `id` attribute.                                                      | References any `id` inside this document.                                       |
-| `uri`     | No       | [Internationalized Resource Identifier (IRI)](https://datatracker.ietf.org/doc/html/rfc3987) | Links to a foreign document with a URI.                                         |
-| `fmt`     | No       | *See element documentation*                                                                  | Defines how the date/time value shall be displayed.                             |
-| `tz`      | No       | `Z` for UTC or a `±HH:MM` timezone offset.                                                   | Defines the default timezone for time/datetime values.                          |
+| Attribute | Type            | Required | Allowed Values                                                                               | Description                                                                     |
+| --------- | --------------- | -------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `version` | Version         | Yes      | `2.0`                                                                                        | Describes the version of this HyperDoc document.                                |
+| `lang`    | Language Tag    | No       | [BCP 47 Language Tag](https://datatracker.ietf.org/doc/html/rfc5646)                         | Defines the language of the elements contents.                                  |
+| `title`   | String          | No       | *Any*                                                                                        | Sets the title of the document or the table row.                                |
+| `author`  | String          | No       | *Any*                                                                                        | Sets the author of the document.                                                |
+| `date`    | Date            | No       | A date-time value using the format specified below                                           | Sets the authoring date of the document.                                        |
+| `id`      | Reference       | No       | Non-empty                                                                                    | Sets a reference which can be linked to with `\link(ref="...")`.                |
+| `first`   | Integer         | No       | Decimal integer numbers ≥ 0                                                                  | Sets the number of the first list item.                                         |
+| `alt`     | String          | No       | Non-empty                                                                                    | Sets the alternative text shown when an image cannot be loaded.                 |
+| `path`    | String          | Yes      | Non-empty file path to an image file                                                         | Defines the file path where the image file can be found.                        |
+| `syntax`  | String          | No       | *See element documentation*                                                                  | Hints the syntax highlighter how how the elements context shall be highlighted. |
+| `depth`   | Integer         | No       | `1`, `2` or `3`                                                                              | Defines how many levels of headings shall be included.                          |
+| `colspan` | Integer         | No       | Decimal integer numbers ≥ 1                                                                  | Sets how many columns the table cell spans.                                     |
+| `ref`     | Reference       | No       | Any value present in an `id` attribute.                                                      | References any `id` inside this document.                                       |
+| `uri`     | URI             | No       | [Internationalized Resource Identifier (IRI)](https://datatracker.ietf.org/doc/html/rfc3987) | Links to a foreign document with a URI.                                         |
+| `fmt`     | Enum            | No       | *See element documentation*                                                                  | Defines how the date/time value shall be displayed.                             |
+| `tz`      | Timezone Offset | No       | `Z` for UTC or a `±HH:MM` timezone offset.                                                   | Defines the default timezone for time/datetime values.                          |
+
+NOTE: All attribute values allow leading and trailing whitespace, but it's heavily discouraged and should yield a non-fatal diagnostic or hint in implementations.
+
+## Attribute Types
+
+| Type              | Example                             | Syntax                                                          | Notes                                                                                                 |
+| ----------------- | ----------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `Date`            | `2025-12-31`                        | `\d+-{00..12}-{00..31}`                                         | A date value as specified below.                                                                      |
+| `Enum`            | `auto`                              | `\w+`                                                           |                                                                                                       |
+| `Integer`         | `10`                                | `\d+`                                                           | Leading zeroes are allowed, but discouraged.                                                          |
+| `Language Tag`    | `de-DE`                             | *See [RFC 5646](https://datatracker.ietf.org/doc/html/rfc5646)* |                                                                                                       |
+| `Reference`       | `attribute-types`                   | *No control characters or whitespace*                           |                                                                                                       |
+| `String`          | `This image shows a cat and a dog.` | *Any Value*                                                     | Any textual value.                                                                                    |
+| `Timezone Offset` | `+13:30`                            | `Z\|[+-]{00..23}:{00..59}`                                      | Expresses the UTC timezone with `Z` or a relative offset in hours + minutes                           |
+| `URI`             | `www://example.com`                 | *See [RFC 3987](https://datatracker.ietf.org/doc/html/rfc3987)  | The type actually allows IRIs (unicode-enabled URIs), but is called URI to use the core common term.  |
+| `Version`         | `2.0`                               | `\d+\.\d+`                                                      | Has no semantic meaning yet, and is forced to be `2.0`. All other values are reserved for future use. |
 
 ## Semantic Structure
 
@@ -589,7 +605,7 @@ These elements wrap a sequence of blocks that will be rendered for this list ite
 
 It also allows a string to be used as it's content directly, this will be equivalent to having a nested paragraph with that strings content:
 
-```
+```hdoc
 ul {
   li { p { This is a normal item. } }
   li "This is a normal item."
@@ -688,7 +704,7 @@ Renders the text a bit smaller and moved upwards (`sup`) or downwards (`sub`) to
 
 ### Linking: `link`
 
-**Nesting:** Yes
+**Nesting:** No
 
 | Attribute | Function                                                                                                 |
 | --------- | -------------------------------------------------------------------------------------------------------- |
