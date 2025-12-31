@@ -1,0 +1,21 @@
+hdoc(version="2.0", title="Nesting and Inlines", lang="en");
+
+h1(id="top") "Nesting and Inline Styling"
+
+p "This document exercises inline formatting and nested lists."
+
+p { We can mix \em{emphasis}, \strike{strike}, \mono{monospace} text. Superscript x\sup{2} and subscript x\sub{2} also appear. }
+
+p { Links point to \link(ref="top"){local anchors} or \link(uri="https://example.com"){external sites}. }
+
+ul {
+  li { p "Top-level item one" }
+  li {
+    p "Top-level item two with nested list"
+    ol(first="1") {
+      li "Nested ordered item A"
+      li "Nested ordered item B"
+    }
+  }
+  li { p "Top-level item three" }
+}
