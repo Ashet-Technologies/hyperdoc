@@ -348,6 +348,26 @@ Tooling that aims to preserve author intent **SHOULD** preserve whether braces w
 - The `hdoc` node **MUST NOT** appear anywhere else.
 - The `hdoc` node **MUST** have an empty body (`;`).
 
+#### Document title
+
+- A document **MAY** contain one `title` node (document-level title).
+- If present, `title` **MUST** be the second node in the document (i.e., the first node after `hdoc`).
+- `title` **MUST** be a top-level block element (direct child of the document).
+- `title` **MUST NOT** have an `id` attribute.
+
+`hdoc(title="...")` and `title { ... }` interact as follows:
+
+- If exactly one of `hdoc(title="...")` or `title { ... }` is present, implementations **SHOULD** treat the single value as both:
+  - the document metadata title, and
+  - the document display title.
+  If the single value is `title { ... }`, tooling **SHOULD** derive a plaintext title (via inline-text construction) for use as metadata where needed.
+
+- If both are present, tooling **SHOULD** compare their plaintext forms:
+  - If they match, tooling **SHOULD** emit a diagnostic hint that `hdoc(title)` is redundant.
+
+- If neither is present, tooling **MAY** emit a diagnostic hint that the document has no title.
+
+
 ### 7.2 Inline text construction and normalization
 
 Many elements (e.g. `p`, headings, and inline elements) produce **inline text** for rendering. Inline text is constructed from one of:
@@ -390,7 +410,20 @@ The renderer **MUST** see the post-normalization result.
 
 - `id` is allowed only on **top-level block elements** (direct children of the document; not inside another node).
 - `id` values **MUST** be non-empty and **MUST** be unique (case-sensitive) across the document.
-- `\link(ref="...")` **MUST** reference an existing `id`.
+
+#### Interior references (`ref`)
+
+- A `ref` attribute value **MUST** be a valid Reference value (§9.1).
+- `\ref(ref="...")` **MUST** reference an existing top-level `id`.
+
+#### Footnote references (`key` / `ref`)
+
+Footnotes define a separate reference namespace from top-level `id`:
+
+- `\footnote(key="..."){...}` defines a footnote key in the **footnote namespace**.
+- Footnote keys **MUST** be unique (case-sensitive) within the footnote namespace.
+- `\footnote(ref="...");` **MUST** reference an existing footnote key.
+
 
 ### 7.6 Built-in element recognition
 
@@ -413,11 +446,11 @@ The renderer **MUST** see the post-normalization result.
 
 When a built-in element uses a `{ ... }` list body, it is parsed in the mode below:
 
-- **Inline-list mode:** `h1`, `h2`, `h3`, `p`, `note`, `warning`, `danger`, `tip`, `quote`, `spoiler`, `img`, `pre`, `group`, and all inline elements (`\em`, `\mono`, `\link`, `\date`, `\time`, `\datetime`, ...).
+- **Inline-list mode:** `title`, `h1`, `h2`, `h3`, `p`, `note`, `warning`, `danger`, `tip`, `quote`, `spoiler`, `img`, `pre`, `group`, and all inline elements (`\em`, `\mono`, `\link`, `\ref`, `\footnote`, `\date`, `\time`, `\datetime`, ...).
 - **Block-list mode:** `ul`, `ol`, `li`, `table`, `columns`, `row`, `td`.
 
 - Containers (`ul`, `ol`, `table`, `row`, `columns`) naturally contain nested nodes.
-- Text blocks (`p`, headings, etc.) contain inline text streams.
+- Text blocks (`title`, `p`, headings, etc.) contain inline text streams.
 - `li` and `td` contain either blocks or a single string/verbatim; representing blocks implies block-list mode.
 
 ### 8.2 Element catalog (normative)
@@ -548,6 +581,37 @@ Table layout rules:
   - a verbatim body
 - **Attributes:** `colspan` (optional Integer ≥ 1; default 1), `lang` (optional)
 
+#### 8.2.X `title` (document title)
+
+- **Role:** document-level display title
+- **Body:** inline text (string body or inline-list body)
+- **Attributes:** `lang` (optional)
+
+Semantic constraints:
+
+- `title` **MUST** be a top-level block element.
+- `title` **MUST** appear at most once.
+- If present, `title` **MUST** be the second node in the document (after `hdoc`).
+- `title` **MUST NOT** have an `id` attribute.
+
+#### 8.2.X Footnote dump: `footnotes`
+
+- **Role:** collect and render accumulated footnotes
+- **Body:** `;` (empty)
+- **Attributes:**
+  - `kind` (optional; one of `footnote`, `citation`)
+  - `lang` (optional)
+
+Semantics:
+
+- `footnotes;` collects and renders all footnotes of all kinds accumulated since the previous `footnotes(...)` node (or since start of document if none appeared yet).
+- `footnotes(kind="footnote");` collects and renders only `kind="footnote"` entries accumulated since the previous `footnotes(...)` node.
+- `footnotes(kind="citation");` collects and renders only `kind="citation"` entries accumulated since the previous `footnotes(...)` node.
+- Each invocation of `footnotes(...)` **MUST** advance the “collection cursor” for subsequent `footnotes(...)` nodes (i.e., each dump emits only the accumulated entries since the last dump, not the whole-document set).
+- `footnotes` **MUST NOT** emit a heading; headings are authored via `h1`/`h2`/`h3`.
+- Tooling **SHOULD** emit a warning if any `\footnote(...)` is present in the document but no `footnotes(...)` node appears.
+
+
 ### 8.3 Inline elements
 
 Inline elements appear only in inline-list bodies (or inside string/verbatim, depending on renderer).
@@ -570,19 +634,85 @@ Inline elements appear only in inline-list bodies (or inside string/verbatim, de
 - **Body:** inline text
 - **Attributes:** `lang` (optional)
 
-#### 8.3.4 `\\link`
+#### 8.3.4 `\link`
 
-- **Role:** hyperlink
+- **Role:** foreign hyperlink (external or non-validated target)
 - **Body:** inline text
 - **Attributes:**
-  - `ref` or `uri` (**exactly one required**)
+  - `uri` (**required**)
   - `lang` (optional)
+
+Notes:
+
+- `\link` is used for hyperlinks that are not validated as interior document references.
+- Interior references use `\ref(ref="...")`.
+
 
 #### 8.3.5 `\\date`, `\\time`, `\\datetime`
 
 - **Role:** localized date/time rendering
 - **Body:** must be plain text, a single string, or verbatim (no nested inline elements)
 - **Attributes:** `fmt` (optional; per element), `lang` (optional)
+
+#### 8.3.X `\ref`
+
+- **Role:** validated interior reference (to a top-level `id`)
+- **Body:** inline text (optional; may be empty)
+- **Attributes:**
+  - `ref` (**required**; must reference an existing `id`)
+  - `fmt` (optional; one of `full`, `name`, `index`; default `full`)
+  - `lang` (optional)
+
+Semantics:
+
+- `\ref(ref="X")` **MUST** resolve to a top-level element with `id="X"`, otherwise it is semantically invalid.
+- If `\ref` has a non-empty body, the body **MUST** be used as the rendered link text.
+- If `\ref` has an empty body (`;`), the renderer **MUST** synthesize link text from the referenced target and `fmt`:
+
+  - `fmt="full"`: renders `"<index> <name>"` (default)
+  - `fmt="name"`: renders `"<name>"`
+  - `fmt="index"`: renders `"<index>"`
+
+Target-derived values:
+
+- For heading targets (`h1`, `h2`, `h3`), `<name>` is the heading’s constructed plaintext inline text.
+- For heading targets, `<index>` is the heading’s hierarchical number within the document (e.g. `3.` / `3.2.` / `3.2.1.`).
+
+If the referenced target is not a heading:
+
+- `\ref(ref="X");` (implicit body) is semantically invalid and **MUST** be rejected.
+- `\ref(ref="X"){...}` remains valid.
+
+When computing `<name>` for headings, inline footnote/citation markers **SHOULD NOT** contribute to the plaintext (i.e., their marker text is ignored).
+
+#### 8.3.X `\footnote`
+
+- **Role:** footnote/citation marker and definition
+- **Body:** inline text (required for defining form; empty for reference form)
+- **Attributes:**
+  - `key` (optional; defines a named footnote)
+  - `ref` (optional; references a previously defined named footnote)
+  - `kind` (optional; one of `footnote`, `citation`; default `footnote`)
+  - `lang` (optional)
+
+Attribute rules:
+
+- `key` and `ref` are mutually exclusive.
+- `kind` is only valid on the defining form (a `\footnote` with a non-empty body). A `\footnote(ref="...");` **MUST NOT** specify `kind`.
+
+Semantics:
+
+- `\footnote{...}` defines an anonymous footnote entry at the marker position.
+- `\footnote(key="X"){...}` defines a named footnote entry in the footnote namespace and emits its marker at the marker position.
+- `\footnote(ref="X");` emits a marker for the previously defined named footnote `X`.
+- Each `kind` has an independent numeric namespace: footnotes and citations are numbered separately.
+- A renderer **MAY** hyperlink markers and dumped entries back-and-forth.
+
+Marker rendering (normative):
+
+- A renderer **SHALL** render a regular footnote marker as `\sup{\link{\d+}}`.
+- A renderer **SHALL** render a citation marker as `\sup{\link{[\d+]}}`.
+
 
 ## 9. Attribute types and date/time formats
 
@@ -646,21 +776,26 @@ If `hdoc(tz="...")` is present, a datetime value **MAY** omit the zone. This is 
 > - `fmt` for `\time`
 > - `fmt` for `\datetime`
 
-- `\\date(fmt=...)`: `year`, `month`, `day`, `weekday`, `short`, `long`, `relative`, `iso`
-- `\\time(fmt=...)`: `short`, `long`, `rough`, `relative`, `iso`
-- `\\datetime(fmt=...)`: `short`, `long`, `relative`, `iso`
+- `\date(fmt=...)`: `year`, `month`, `day`, `weekday`, `short`, `long`, `relative`, `iso`
+- `\time(fmt=...)`: `short`, `long`, `rough`, `relative`, `iso`
+- `\datetime(fmt=...)`: `short`, `long`, `relative`, `iso`
+- `\ref(fmt=...)`: `full`, `name`, `index`
 
 Defaults when omitted:
 
 - `\date(fmt=...)`: default `short`
 - `\time(fmt=...)`: default `short`
 - `\datetime(fmt=...)`: default `short`
+- `\ref(fmt=...)`: default `full`
 
 ## 10. Non-normative guidance for tooling
 
 - Formatters should normalize line endings to LF.
 - Provide diagnostics for discouraged patterns (leading/trailing whitespace in attribute values, leading zeros, mixed directionality, etc.).
 - For typo recovery, treat unknown nodes as inline-list mode (§5.2).
+- Emit a warning when `\footnote(...)` occurs in a document but no `footnotes(...)` node appears.
+- Emit a diagnostic hint when neither `hdoc(title="...")` nor `title { ... }` is present.
+- Emit a diagnostic when both `hdoc(title="...")` and `title { ... }` are present but their plaintext forms differ.
 
 ---
 
