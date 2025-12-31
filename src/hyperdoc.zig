@@ -97,6 +97,8 @@ pub const Block = union(enum) {
     };
 
     pub const Table = struct {
+        // TODO: column_count: usize,
+        // TODO: has_row_titles: bool, // not counted inside `Table.column_count`!
         lang: LanguageTag,
         rows: []TableRow,
     };
