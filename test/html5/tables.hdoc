@@ -1,0 +1,28 @@
+hdoc(version="2.0", title="Tables", lang="en");
+
+h1 "Table Coverage"
+
+p "This file covers header rows, data rows with titles, groups, and colspans."
+
+table {
+  columns {
+    td { p "Column A" }
+    td { p "Column B" }
+    td { p "Column C" }
+  }
+  group { "Section One" }
+  row(title="Row 1") {
+    td { p "A1" }
+    td(colspan="2") { p "B1-C1" }
+  }
+  row(title="Row 2") {
+    td(colspan="2") { p "A2-B2" }
+    td { p "C2" }
+  }
+  group { "Section Two" }
+  row(title="Row 3") {
+    td { p "A3" }
+    td { p "B3" }
+    td { p "C3" }
+  }
+}
