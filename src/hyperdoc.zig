@@ -1344,8 +1344,8 @@ pub const SemanticAnalyzer = struct {
                     else
                         .{ text_content, false };
 
-                    // check if we already have text, and if not, if we should keep the whitespace
-                    if (merger.current_span.items.len > 0 or !skip_head) {
+                    // check if we already have any text collected, and if not, if we should keep the whitespace
+                    if (merger.output.items.len > 0 or merger.current_span.items.len > 0 or !skip_head) {
                         try merger.current_span.appendSlice(merger.arena, append_text);
                     }
                 },

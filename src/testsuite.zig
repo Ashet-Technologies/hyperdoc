@@ -189,6 +189,41 @@ test "semantic analyzer forbids raw control characters" {
     try std.testing.expect(diagnosticCodesEqual(diagnostics.items.items[0].code, .{ .illegal_character = .{ .codepoint = 0x9 } }));
 }
 
+test "span merger preserves whitespace after inline mono" {
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source =
+        \\hdoc(version="2.0",lang="en");
+        \\p{ \mono{monospace} text. }
+    ;
+
+    var doc = try hdoc.parse(std.testing.allocator, source, &diagnostics);
+    defer doc.deinit();
+
+    try std.testing.expect(!diagnostics.has_error());
+    try std.testing.expectEqual(@as(usize, 1), doc.contents.len);
+
+    switch (doc.contents[0]) {
+        .paragraph => |para| {
+            try std.testing.expectEqual(@as(usize, 2), para.content.len);
+            try std.testing.expect(para.content[0].attribs.mono);
+            try std.testing.expect(!para.content[1].attribs.mono);
+
+            switch (para.content[0].content) {
+                .text => |text| try std.testing.expectEqualStrings("monospace", text),
+                else => return error.TestExpectedEqual,
+            }
+
+            switch (para.content[1].content) {
+                .text => |text| try std.testing.expectEqualStrings(" text.", text),
+                else => return error.TestExpectedEqual,
+            }
+        },
+        else => return error.TestExpectedEqual,
+    }
+}
+
 test "parser reports unterminated string literals" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
