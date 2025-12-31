@@ -490,6 +490,7 @@ When a built-in element uses a `{ ... }` list body, it is parsed in the mode bel
 - Containers (`ul`, `ol`, `table`, `row`, `columns`) naturally contain nested nodes.
 - Text blocks (`title`, `p`, headings, etc.) contain inline text streams.
 - `li` and `td` contain either blocks or a single string/verbatim; representing blocks implies block-list mode.
+- Built-in elements with empty bodies are also parsed in Inline-list mode so accidental `{ ... }` usage stays balanced and formatters can recover consistently (e.g., `toc;`, `footnotes;`).
 
 ### 8.2 Element catalog (normative)
 
@@ -591,8 +592,8 @@ Table layout rules:
 - Each `row` defines a data row.
 - Each `group` acts as a section heading for subsequent rows.
 - After applying `td.colspan`, all `row` and `columns` entries **MUST** resolve to the same effective column count.
-- If any `row` has a `title` attribute **or** any `group` is present, renderers **MUST** reserve a leading title column.
-  - In that case, `columns` **SHOULD** include an empty leading header cell.
+- If any `row` has a `title` attribute, renderers **MUST** reserve a leading title column.
+  - The leading column’s header cell is implicit (empty/invisible) and **MUST NOT** be authored inside `columns`.
 
 #### 8.2.10 `columns` (table header row)
 
