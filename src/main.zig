@@ -22,13 +22,7 @@ pub fn main() !u8 {
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
 
-    if (args.len < 2) {
-        try stderr.interface.print("usage: {s} <file>\n", .{args[0]});
-        try stderr.interface.flush();
-        return 1;
-    }
-
-    const path = args[1];
+    const options = try parse_options(&stderr.interface, args);
 
     var diagnostics: hdoc.Diagnostics = .init(allocator);
     defer diagnostics.deinit();
@@ -37,12 +31,12 @@ pub fn main() !u8 {
         allocator,
         &diagnostics,
         &stdout.interface,
-        path,
+        options,
     );
 
     for (diagnostics.items.items) |diag| {
         try stderr.interface.print("{s}:{f}: {f}\n", .{
-            path,
+            options.file_path,
             diag.location,
             diag.code,
         });
@@ -50,7 +44,7 @@ pub fn main() !u8 {
     try stderr.interface.flush();
 
     parse_result catch |err| {
-        std.log.err("failed to parse \"{s}\": {t}", .{ path, err });
+        std.log.err("failed to parse \"{s}\": {t}", .{ options.file_path, err });
         return 1;
     };
 
@@ -59,8 +53,8 @@ pub fn main() !u8 {
     return 0;
 }
 
-fn parse_and_process(allocator: std.mem.Allocator, diagnostics: *hdoc.Diagnostics, output_stream: *std.Io.Writer, path: []const u8) !void {
-    const document = try std.fs.cwd().readFileAlloc(allocator, path, 1024 * 1024 * 10);
+fn parse_and_process(allocator: std.mem.Allocator, diagnostics: *hdoc.Diagnostics, output_stream: *std.Io.Writer, options: CliOptions) !void {
+    const document = try std.fs.cwd().readFileAlloc(allocator, options.file_path, 1024 * 1024 * 10);
     defer allocator.free(document);
 
     var parsed = try hdoc.parse(allocator, document, diagnostics);
@@ -70,7 +64,57 @@ fn parse_and_process(allocator: std.mem.Allocator, diagnostics: *hdoc.Diagnostic
         return error.InvalidFile;
     }
 
-    // TODO: Make render format selectable via CLI:
-    // try hdoc.render.yaml(parsed, output_stream);
-    try hdoc.render.html5(parsed, output_stream);
+    switch (options.format) {
+        .dump => try hdoc.render.yaml(parsed, output_stream),
+        .html => try hdoc.render.html5(parsed, output_stream),
+    }
+}
+
+const CliOptions = struct {
+    format: RenderFormat = .html,
+    file_path: []const u8,
+};
+
+const RenderFormat = enum {
+    dump,
+    html,
+};
+
+fn parse_options(stderr: *std.Io.Writer, argv: []const []const u8) !CliOptions {
+    var options: CliOptions = .{
+        .file_path = "",
+    };
+
+    const app_name = argv[0];
+
+    {
+        var i: usize = 1;
+        while (i < argv.len) {
+            const value = argv[i];
+            if (std.mem.startsWith(u8, value, "--")) {
+                if (std.mem.eql(u8, value, "--format")) {
+                    i += 1;
+                    options.format = std.meta.stringToEnum(RenderFormat, argv[i]) orelse return error.InvalidCli;
+                    i += 1;
+                    continue;
+                }
+                return error.InvalidCli;
+            }
+
+            if (options.file_path.len > 0) {
+                return error.InvalidCli;
+            }
+            options.file_path = value;
+
+            i += 1;
+        }
+    }
+
+    if (options.file_path.len == 0) {
+        try stderr.print("usage: {s} <file>\n", .{app_name});
+        try stderr.flush();
+        return error.InvalidCli;
+    }
+
+    return options;
 }
