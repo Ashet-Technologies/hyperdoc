@@ -11,13 +11,15 @@ DONE:    Semantics are correct, language might need improvement.
 DRAFT:   Current semantics are not finalized yet.
 MISSING: Chapter needs to be added still.
 
+If a chapter is marked DONE or FROZEN, the status applies to all of its sub-chapters unless a sub-chapter is explicitly listed with a different status.
+
 - "1. Introduction": DONE
 - "2. Conformance and terminology": FROZEN
 - "3. Document encoding (byte- and line-level)": DONE
 - "4. Syntactic model": DONE
 - "5. Grammar and additional syntax rules"
   - "5.1 Grammar (EBNF)": DRAFT
-  - "5.2 Deterministic list-mode disambiguation: DONE
+  - "5.2 Deterministic list-mode disambiguation": DONE
   - "5.3 Maximal munch": FROZEN
   - "5.4 Inline-list brace balancing and backslash dispatch": DONE
   - "5.5 String literals (syntax)": DRAFT
@@ -38,7 +40,7 @@ MISSING: Chapter needs to be added still.
 - "8. Elements and attributes"
   - "8.1 Built-in elements and list mode"
     - "8.1.1 Inline vs block": DONE
-    - "8.1.2 List-body mode per built-in element": TODO
+    - "8.1.2 List-body mode per built-in element": DRAFT
   - "8.2 Element catalog (normative)": DRAFT
     - "8.2.1 `hdoc` (header)": DONE
     - "8.2.2 Headings: `h1`, `h2`, `h3`": DRAFT
@@ -53,12 +55,16 @@ MISSING: Chapter needs to be added still.
     - "8.2.11 `row` (table data row)": DRAFT
     - "8.2.12 `group` (table row group)": DRAFT
     - "8.2.13 `td` (table cell)": DRAFT
+    - "8.2.14 `title` (document title)": DRAFT
+    - "8.2.15 Footnote dump: `footnotes`": DRAFT
   - "8.3 Inline elements"
     - "8.3.1 `\\em`": DRAFT
     - "8.3.2 `\\mono`": DRAFT
     - "8.3.3 `\\strike`, `\\sub`, `\\sup`": DRAFT
-    - "8.3.4 `\\link`": DRAFT
+    - "8.3.4 `\link`": DRAFT
     - "8.3.5 `\\date`, `\\time`, `\\datetime`": DRAFT
+    - "8.3.6 `\ref`": DRAFT
+    - "8.3.7 `\footnote`": DRAFT
 - "9. Attribute types and date/time formats": DRAFT
   - "9.1 Common attribute types": DRAFT
   - "9.2 Date / time lexical formats (normative)": DRAFT
@@ -153,7 +159,7 @@ A body is one of:
 
 - `;` - empty body
 - `"..."` - string literal body
-- `:` - verbatim body (one or more `|` lines)
+- `:` - verbatim body (zero or more `|` lines; empty verbatim bodies **MUST** emit a diagnostic)
 - `{ ... }` - list body
 
 ### 4.2 List bodies and modes
@@ -212,7 +218,33 @@ key_seg         ::= ident_char , { ident_char } ;
 
 string_literal  ::= '"' , { string_unit } , '"' ;
 
-(* verbatim_body and ws productions match the source spec. *)
+(* Words *)
+word            ::= word_char , { word_char } ;
+
+(* word_char matches any Unicode scalar value except:
+    - whitespace
+    - '{' or '}'
+    - '\\' (because '\\' begins escape_text or inline_node)
+*)
+word_char       ::= ? any scalar value except WS, "{", "}", "\\" ? ;
+
+(* String literals (syntax only; no escape validation here) *)
+string_unit     ::= string_char | "\\" , escaped_char ;
+string_char     ::= ? any scalar value except '"', "\\", control characters (Unicode category Cc) ? ;
+escaped_char    ::= ? any scalar value except control characters (Unicode category Cc) ? ;
+
+(* Verbatim lines *)
+verbatim_body   ::= ":" , { ws , piped_line } ;
+(* An empty verbatim body (no piped_line) is syntactically valid, but tooling MUST emit a diagnostic. *)
+piped_line      ::= "|" , { not_line_end } , line_terminator ;
+not_line_end    ::= ? any scalar value except CR and LF ? ;
+line_terminator ::= LF | ( CR , LF ) | EOF ;
+
+(* Whitespace *)
+ws              ::= { WS } ;
+WS              ::= " " | "\t" | LF | ( CR , LF ) ;
+CR              ::= "\r" ;
+LF              ::= "\n" ;
 ```
 
 ### 5.2 Deterministic list-mode disambiguation
@@ -243,27 +275,33 @@ In Inline-list mode:
 
 ### 5.5 String literals (syntax)
 
-> TODO: This chapter requires improved wording. String literals are basically parsed by:
->
-> ```pseudo
-> assert next() == '"'
-> while(not eof()):
->   char = next()
->   if char == '\\':
->     _ = next() # skip character
->   elif char == '"':
->     break # end of string literal
->   elif is_control(char): # includes CR, LF, TAB and all other control characters
->     abort() # invalid character
-> ```
+String literals are delimited by `"` and are parsed without interpreting escape *meaning*.
 
-String literals are delimiter-based and do **not** validate escape *meaning*.
+Syntactic rules:
 
-Syntactically invalid inside `"..."`:
+- The literal starts with `"` and ends at the next `"` that is not consumed as the escaped character after a backslash.
+- A string literal **MUST NOT** contain any Unicode control characters (General Category `Cc`), including TAB, LF, and CR.
+- A backslash (`\`) **MUST NOT** be the last character before the closing `"` (unterminated escape).
+- The closing `"` **MUST** appear before end-of-file.
 
-- raw LF or CR
-- a backslash in the last position of the string (`\"` never terminates the string literal)
-- a control character (Unicode `Cc`) - **note:** this includes TAB.
+The following reference algorithm is authoritative:
+
+```pseudo
+assert next() == '"'
+while(not eof()):
+  char = next()
+  if char == '\\':
+    if eof(): abort() # backslash in last position
+    esc = next() # escaped character (meaning is not interpreted here)
+    if is_control(esc): abort() # includes CR, LF, TAB and all other control characters
+  elif char == '"':
+    return # end of string literal
+  elif is_control(char): # includes CR, LF, TAB and all other control characters
+    abort() # invalid character
+abort() # eof before closing '"'
+```
+
+Semantic escape decoding and validation is specified in §6.
 
 ## 6. Escape processing (semantic)
 
@@ -455,13 +493,13 @@ When a built-in element uses a `{ ... }` list body, it is parsed in the mode bel
 
 ### 8.2 Element catalog (normative)
 
-> TODO: "inline text" bodies are:
->
-> - inline list body
-> - string body
-> - verbatim body
->
-> So only an empty body is not "inline text"
+In this chapter, an "inline text" body is one of:
+
+- a string body (`"..."`)
+- a verbatim body (`:`)
+- an inline-list body (`{ ... }` parsed in Inline-list mode)
+
+Only an empty body (`;`) is not "inline text".
 
 #### 8.2.1 `hdoc` (header)
 
@@ -478,13 +516,13 @@ When a built-in element uses a `{ ... }` list body, it is parsed in the mode bel
 #### 8.2.2 Headings: `h1`, `h2`, `h3`
 
 - **Role:** block heading levels 1-3
-- **Body:** inline text (string body or inline-list body)
+- **Body:** inline text
 - **Attributes:** `lang` (optional), `id` (optional; top-level only)
 
 #### 8.2.3 Paragraph blocks: `p`, `note`, `warning`, `danger`, `tip`, `quote`, `spoiler`
 
 - **Role:** paragraph-like block with semantic hint
-- **Body:** inline text (string body or inline-list body)
+- **Body:** inline text
 - **Attributes:** `lang` (optional), `id` (optional; top-level only)
 
 #### 8.2.4 Lists: `ul`, `ol`
@@ -512,7 +550,7 @@ When a built-in element uses a `{ ... }` list body, it is parsed in the mode bel
 
 - **Body:** inline text caption/description (may be empty)
 - **Attributes:**
-  - `path` (required, non-empty)
+  - `path` (required, non-empty; relative to the current file location)
   - `alt` (optional, non-empty)
   - `lang` (optional)
   - `id` (optional; top-level only)
@@ -581,10 +619,10 @@ Table layout rules:
   - a verbatim body
 - **Attributes:** `colspan` (optional Integer ≥ 1; default 1), `lang` (optional)
 
-#### 8.2.X `title` (document title)
+#### 8.2.14 `title` (document title)
 
 - **Role:** document-level display title
-- **Body:** inline text (string body or inline-list body)
+- **Body:** inline text
 - **Attributes:** `lang` (optional)
 
 Semantic constraints:
@@ -594,7 +632,7 @@ Semantic constraints:
 - If present, `title` **MUST** be the second node in the document (after `hdoc`).
 - `title` **MUST NOT** have an `id` attribute.
 
-#### 8.2.X Footnote dump: `footnotes`
+#### 8.2.15 Footnote dump: `footnotes`
 
 - **Role:** collect and render accumulated footnotes
 - **Body:** `;` (empty)
@@ -654,7 +692,7 @@ Notes:
 - **Body:** must be plain text, a single string, or verbatim (no nested inline elements)
 - **Attributes:** `fmt` (optional; per element), `lang` (optional)
 
-#### 8.3.X `\ref`
+#### 8.3.6 `\ref`
 
 - **Role:** validated interior reference (to a top-level `id`)
 - **Body:** inline text (optional; may be empty)
@@ -685,7 +723,7 @@ If the referenced target is not a heading:
 
 When computing `<name>` for headings, inline footnote/citation markers **SHOULD NOT** contribute to the plaintext (i.e., their marker text is ignored).
 
-#### 8.3.X `\footnote`
+#### 8.3.7 `\footnote`
 
 - **Role:** footnote/citation marker and definition
 - **Body:** inline text (required for defining form; empty for reference form)
