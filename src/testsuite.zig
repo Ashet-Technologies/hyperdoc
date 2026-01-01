@@ -837,3 +837,12 @@ test "hdoc header date uses timezone hint for missing zone" {
     try std.testing.expectEqual(@as(u20, 0), parsed.time.microsecond);
     try std.testing.expectEqual(try hdoc.TimeZoneOffset.parse("-01:30"), parsed.time.timezone);
 }
+
+test "\\date rejects bad body" {
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); p { \\date; }", &.{
+        .invalid_date_time_body,
+    });
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); p { \\date{start \\em{inner}} }", &.{
+        .invalid_date_time_body,
+    });
+}

@@ -1571,21 +1571,22 @@ pub const SemanticAnalyzer = struct {
                     fmt: []const u8 = "",
                 });
 
-                const content_spans = try sema.translate_inline(node, .emit_diagnostic, .one_space);
-
-                // Enforce that date/time bodies only contain plain text/string/verbatim.
-                // HyperDoc cannot format date/time values on it's own so we can't render
-                // \date, \time and \datetime into a string. It also doesn't make any sense
-                // to nest them.
-                for (content_spans) |span| {
-                    switch (span.content) {
-                        .text => {},
-                        .date, .time, .datetime => {
-                            try sema.emit_diagnostic(.nested_date_time, span.location);
-                            break :blk;
-                        },
-                    }
+                // Enforce the body is only plain text.
+                const ok = switch (node.body) {
+                    .empty => false,
+                    .string, .verbatim, .text_span => true, // always ok
+                    .list => |list| for (list) |item| {
+                        if (item.type != .text) {
+                            break false;
+                        }
+                    } else true,
+                };
+                if (!ok) {
+                    try sema.emit_diagnostic(.invalid_date_time_body, node.location);
+                    break :blk;
                 }
+
+                const content_spans = try sema.translate_inline(node, .emit_diagnostic, .one_space);
 
                 //  Convert the content_spans into a "rendered string".
                 const content_text = sema.render_spans_to_plaintext(content_spans) catch |err| switch (err) {
@@ -2961,7 +2962,7 @@ pub const Diagnostic = struct {
         link_not_nestable,
         invalid_link,
         invalid_date_time,
-        nested_date_time,
+        invalid_date_time_body,
         invalid_date_time_fmt: DateTimeFormatError,
         missing_timezone,
         invalid_unicode_string_escape,
@@ -3019,7 +3020,7 @@ pub const Diagnostic = struct {
                 .illegal_child_item,
                 .list_body_required,
                 .illegal_id_attribute,
-                .nested_date_time,
+                .invalid_date_time_body,
                 .column_count_mismatch,
                 .duplicate_id,
                 .unknown_id,
@@ -3104,7 +3105,7 @@ pub const Diagnostic = struct {
 
                 .illegal_id_attribute => try w.writeAll("Attribute 'id' not allowed here."),
 
-                .nested_date_time => try w.writeAll("Nesting \\date, \\time and \\datetime is not allowed."),
+                .invalid_date_time_body => try w.writeAll("\\date, \\time and \\datetime do not allow any inlines inside their body."),
 
                 .column_count_mismatch => |ctx| try w.print("Expected {} columns, but found {}", .{ ctx.expected, ctx.actual }),
 
