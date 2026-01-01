@@ -637,21 +637,11 @@ Only an empty body (`;`) is not "inline text".
 
 Table layout rules:
 
-> TODO: `group` is not a "row with implicit title and no cells", but basically
->       `group { <text> }` is equivalent to `columns { td(colspan="<all>") { <text> } }`,
->       so a regular row with a single cell spanning all columns.
->       `group` never implies the existence of the "leading title column"
+- **Column Count:** The number of columns in a table is determined by the `columns` element. It is the sum of the `colspan` values of the `td` cells within the `columns` row. If `columns` is absent, the column count is determined by the first `row` element in the same way. All `columns` and `row` elements in a table **MUST** resolve to the same effective column count.
 
-> TODO: The `row(title="…")` does never affect the effective column count.
->       It implies an additional untitled first column, which is blank in `columns` and `group` rows.
->       The `title` row is designed to form matrices with an empty top-left field.
+- **Row Headers (`row(title)`):** A `row` element may have a `title` attribute, which creates a *row header*. This header is rendered as an implicit, additional first column for that row. This "row header column" does **not** contribute to the table's main column count. If any `row` in the table has a `title`, renderers **MUST** reserve space for a leading row header column throughout the table. This leading column will be blank for `columns`, `group`, and any `row` without a `title`.
 
-- `columns` defines header labels and the column count.
-- Each `row` defines a data row.
-- Each `group` acts as a section heading for subsequent rows.
-- After applying `td.colspan`, all `row` and `columns` entries **MUST** resolve to the same effective column count.
-- If any `row` has a `title` attribute, renderers **MUST** reserve a leading title column.
-  - The leading column’s header cell is implicit (empty/invisible) and **MUST NOT** be authored inside `columns`.
+- **Group Headers (`group`):** A `group` element acts as a heading that spans all columns of the table. Semantically, `group { ... }` is equivalent to a `row` containing a single `td` with a `colspan` attribute equal to the table's column count. A `group` does not have a `title` and does not render a cell in the row header column.
 
 ### 8.4 Structural Elements
 
@@ -665,21 +655,27 @@ Table layout rules:
 
 #### 8.4.2 `columns` (table header row)
 
+- **Role:** Defines the labels for the columns of a table. The number of cells in this element (taking `colspan` into account) defines the table's column count.
 - **Body:** block-list containing `td` (at least one)
 - **Attributes:** `lang` (optional)
 
 #### 8.4.3 `row` (table data row)
 
+- **Role:** Defines a row of data in a table.
 - **Body:** block-list containing `td` (at least one)
-- **Attributes:** `title` (optional string), `lang` (optional)
+- **Attributes:**
+  - `title` (optional string): If present, creates a header cell for the row in an implicit leading column.
+  - `lang` (optional)
 
 #### 8.4.4 `group` (table row group)
 
+- **Role:** A heading row that spans all table columns.
 - **Body:** inline text
 - **Attributes:** `lang` (optional)
 
 #### 8.4.5 `td` (table cell)
 
+- **Role:** A single cell within a table row.
 - **Body:** either
   - a block-list of block elements, or
   - a single string body, or
