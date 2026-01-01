@@ -601,18 +601,20 @@ Only an empty body (`;`) is not "inline text".
 - **Body:** A block-list containing zero or more General Text Block Elements. Per the Shorthand Body Promotion rule (§ 8.1.3), a string or verbatim body may be provided, which will be treated as a single contained paragraph.
 - **Attributes:** `lang` (optional), `id` (optional; top-level only)
 
-#### 8.3.4 Lists: `ul`, `ol`
-
-> TODO: Split into two separate parts "Unordered Lists" and "Ordered Lists"
+#### 8.3.4 Unordered List: `ul`
 
 - **Body:** block-list containing `li` (at least one)
 - **Attributes:** `lang` (optional), `id` (optional; top-level only)
 
-`ol` additional attribute:
+#### 8.3.5 Ordered List: `ol`
 
-- `first` (optional Integer ≥ 0; default 1): number of the first list item
+- **Body:** block-list containing `li` (at least one)
+- **Attributes:**
+  - `lang` (optional)
+  - `id` (optional; top-level only)
+  - `first` (optional Integer ≥ 0; default 1): number of the first list item
 
-#### 8.3.5 Figure: `img`
+#### 8.3.6 Figure: `img`
 
 - **Body:** inline text caption/description (may be empty)
 - **Attributes:**
@@ -621,14 +623,12 @@ Only an empty body (`;`) is not "inline text".
   - `lang` (optional)
   - `id` (optional; top-level only)
 
-#### 8.3.6 Preformatted: `pre`
-
-> TODO: Body is always just "inline text", as verbatim bodies are also always inline text.
+#### 8.3.7 Preformatted: `pre`
 
 - **Body:** inline text
 - **Attributes:** `syntax` (optional), `lang` (optional), `id` (optional; top-level only)
 
-#### 8.3.7 Tables: `table`
+#### 8.3.8 Tables: `table`
 
 - **Body:** block-list containing:
   - optional `columns`, then
