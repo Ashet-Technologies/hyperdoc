@@ -776,7 +776,7 @@ pub const SemanticAnalyzer = struct {
             version: Version,
             title: ?[]const u8 = null,
             author: ?[]const u8 = null,
-            date: ?DateTime = null, // TODO: Allow skipping TZ value!
+            date: ?[]const u8 = null,
             lang: LanguageTag = .inherit,
             tz: ?TimeZoneOffset = null,
         });
@@ -791,12 +791,20 @@ pub const SemanticAnalyzer = struct {
         if (attrs.version.minor != 0)
             return error.UnsupportedVersion;
 
+        const date = if (attrs.date) |date_str|
+            DateTime.parse(date_str, attrs.tz) catch blk: {
+                try sema.emit_diagnostic(.{ .invalid_attribute = .{ .type = node.type, .name = "date" } }, get_attribute_location(node, "date", .value).?);
+                break :blk null;
+            }
+        else
+            null;
+
         return .{
             .version = attrs.version,
             .lang = if (lang_location != null) attrs.lang else null,
             .title = attrs.title,
             .author = attrs.author,
-            .date = attrs.date,
+            .date = date,
             .timezone = attrs.tz,
         };
     }

@@ -817,3 +817,23 @@ test "diagnostics for bare carriage return" {
 
     try std.testing.expect(saw_bare_cr);
 }
+
+test "hdoc header date uses timezone hint for missing zone" {
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source = "hdoc(version=\"2.0\",lang=\"en\",tz=\"-01:30\",date=\"2026-01-01T12:00:00\");";
+    var doc = try hdoc.parse(std.testing.allocator, source, &diagnostics);
+    defer doc.deinit();
+
+    try std.testing.expect(!diagnostics.has_error());
+    const parsed = doc.date orelse return error.TestExpectedEqual;
+    try std.testing.expectEqual(@as(i32, 2026), parsed.date.year);
+    try std.testing.expectEqual(@as(u4, 1), parsed.date.month);
+    try std.testing.expectEqual(@as(u5, 1), parsed.date.day);
+    try std.testing.expectEqual(@as(u5, 12), parsed.time.hour);
+    try std.testing.expectEqual(@as(u6, 0), parsed.time.minute);
+    try std.testing.expectEqual(@as(u6, 0), parsed.time.second);
+    try std.testing.expectEqual(@as(u20, 0), parsed.time.microsecond);
+    try std.testing.expectEqual(try hdoc.TimeZoneOffset.parse("-01:30"), parsed.time.timezone);
+}
