@@ -442,26 +442,33 @@ The renderer **MUST** see the post-normalization result.
 - Required attributes **MUST** be present.
 - Attributes not defined for an element **MUST** be rejected.
 
-### 7.5 IDs and references
+### 7.5 Identifiers and References
 
-> TODO: References must not contain control characters or whitespace. They can be any sequence of characters that are not spaces or control characters.
+HyperDoc defines two separate namespaces for identifiers to allow cross-referencing within a document: the **Block Namespace** and the **Footnote Namespace**.
 
-- `id` is allowed only on **top-level block elements** (direct children of the document; not inside another node).
-- `id` values **MUST** be non-empty and **MUST** be unique (case-sensitive) across the document.
+Identifiers in both namespaces are case-sensitive and share the same syntax: they **MUST** be a non-empty sequence of one or more characters, and **MUST NOT** contain any whitespace or Unicode control characters (General Category `Cc`).
 
-#### Interior references (`ref`)
+#### 7.5.1 Block Namespace (`id` and `\ref(ref)`)
 
-- A `ref` attribute value **MUST** be a valid Reference value (§9.1).
-- `\ref(ref="...")` **MUST** reference an existing top-level `id`.
+The Block Namespace is used for referencing top-level block elements like headings, figures, or tables.
 
-#### Footnote references (`key` / `ref`)
+- **Definition**: An identifier is added to the Block Namespace using the `id` attribute.
+  - The `id` attribute is only allowed on **top-level block elements** (direct children of the document, not nested inside another node).
+  - `id` values **MUST** be unique across the document's Block Namespace.
 
-Footnotes define a separate reference namespace from top-level `id`:
+- **Reference**: An identifier in the Block Namespace is referenced using the `\ref` inline element.
+  - `\ref(ref="...")` **MUST** reference an `id` that exists in the Block Namespace.
 
-- `\footnote(key="..."){...}` defines a footnote key in the **footnote namespace**.
-- Footnote keys **MUST** be unique (case-sensitive) within the footnote namespace.
-- `\footnote(ref="...");` **MUST** reference an existing footnote key.
+#### 7.5.2 Footnote Namespace (`\footnote(key)` and `\footnote(ref)`)
 
+The Footnote Namespace is used for defining and referencing reusable footnotes.
+
+- **Definition**: An identifier is added to the Footnote Namespace using the `key` attribute on a `\footnote` element that has a body.
+  - `\footnote(key="..."){...}` defines a footnote and associates it with an identifier.
+  - `key` values **MUST** be unique across the document's Footnote Namespace.
+
+- **Reference**: An identifier in the Footnote Namespace is referenced using a `\footnote` element that has no body.
+  - `\footnote(ref="...");` **MUST** reference a `key` that has been defined in the Footnote Namespace.
 
 ### 7.6 Built-in element recognition
 
@@ -560,9 +567,7 @@ Only an empty body (`;`) is not "inline text".
 
 > TODO: Body is always just "inline text", as verbatim bodies are also always inline text.
 
-- **Body:** either
-  - verbatim body (`:`) for literal lines (**recommended**), or
-  - inline text body (string or inline-list); whitespace is preserved (no trimming/collapse)
+- **Body:** inline text
 - **Attributes:** `syntax` (optional), `lang` (optional), `id` (optional; top-level only)
 
 #### 8.2.8 Table of contents: `toc`
