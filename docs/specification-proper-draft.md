@@ -35,7 +35,7 @@ If a chapter is marked DONE or FROZEN, the status applies to all of its sub-chap
   - "7.2 Inline text construction and normalization": DONE
   - "7.3 Attribute uniqueness": DONE
   - "7.4 Attribute validity": DONE
-  - "7.5 IDs and references": DRAFT
+  - "7.5 Identifiers and References": DONE
   - "7.6 Built-in element recognition": DONE
 - "8. Elements and attributes"
   - "8.1 Built-in elements and list mode"
@@ -486,9 +486,6 @@ The Footnote Namespace is used for defining and referencing reusable footnotes.
 
 #### 8.1.2 List-body mode per built-in element
 
-> TODO: `li` and `td` have an auto-upgrade rule, which performs a conversion of string/verbatim body to `{ p { <content of body> } }`.
->       This means they auto-upgrade their body from literal to "paragraph with literal content"
-
 When a built-in element uses a `{ ... }` list body, it is parsed in the mode below:
 
 - **Inline-list mode:** `title`, `h1`, `h2`, `h3`, `p`, `note`, `warning`, `danger`, `tip`, `quote`, `spoiler`, `img`, `pre`, `group`, and all inline elements (`\em`, `\mono`, `\link`, `\ref`, `\footnote`, `\date`, `\time`, `\datetime`, ...).
@@ -499,15 +496,25 @@ When a built-in element uses a `{ ... }` list body, it is parsed in the mode bel
 - `li` and `td` contain either blocks or a single string/verbatim; representing blocks implies block-list mode.
 - Built-in elements with empty bodies are also parsed in Inline-list mode so accidental `{ ... }` usage stays balanced and formatters can recover consistently (e.g., `toc;`, `footnotes;`).
 
-### 8.2 Element catalog (normative)
+#### 8.1.3 Shorthand Body Promotion
 
-In this chapter, an "inline text" body is one of:
+If a block element's list body can contain general text block elements (such as `p`, `pre`, `ol`, `ul`, etc.), its body **MAY** instead be written as a shorthand string or verbatim literal.
 
-- a string body (`"..."`)
-- a verbatim body (`:`)
-- an inline-list body (`{ ... }` parsed in Inline-list mode)
+When a shorthand body is used, it is semantically equivalent to a block-list body containing a single `p` (paragraph) node whose own body is the original string or verbatim content.
 
-Only an empty body (`;`) is not "inline text".
+For example, `li "some text"` is semantically identical to:
+
+```hdoc
+li {
+  p "some text"
+}
+```
+
+This promotion is a feature for convenience and applies only to the following elements:
+- `li`
+- `td`
+
+### 8.2 Top-Level Block Elements
 
 #### 8.2.1 `hdoc` (header)
 
@@ -521,19 +528,68 @@ Only an empty body (`;`) is not "inline text".
   - `date` (optional): datetime lexical format (§9.2.3)
   - `tz` (optional): default timezone for time/datetime values (§9.2)
 
-#### 8.2.2 Headings: `h1`, `h2`, `h3`
+#### 8.2.2 `title` (document title)
+
+- **Role:** document-level display title
+- **Body:** inline text
+- **Attributes:** `lang` (optional)
+
+Semantic constraints:
+
+- `title` **MUST** be a top-level block element.
+- `title` **MUST** appear at most once.
+- If present, `title` **MUST** be the second node in the document (after `hdoc`).
+- `title` **MUST NOT** have an `id` attribute.
+
+#### 8.2.3 Table of contents: `toc`
+
+- **Role:** Generates a table of contents.
+- **Body:** `;` (empty)
+- **Attributes:** `depth` (optional Integer in {1,2,3}; default 3), `lang` (optional), `id` (optional)
+
+Semantic constraints:
+- `toc` **MUST** be a top-level block element (a direct child of the document).
+
+#### 8.2.4 Footnote dump: `footnotes`
+
+- **Role:** collect and render accumulated footnotes
+- **Body:** `;` (empty)
+- **Attributes:**
+  - `kind` (optional; one of `footnote`, `citation`)
+  - `lang` (optional)
+
+Semantics:
+
+- `footnotes;` collects and renders all footnotes of all kinds accumulated since the previous `footnotes(...)` node (or since start of document if none appeared yet).
+- `footnotes(kind="footnote");` collects and renders only `kind="footnote"` entries accumulated since the previous `footnotes(...)` node.
+- `footnotes(kind="citation");` collects and renders only `kind="citation"` entries accumulated since the previous `footnotes(...)` node.
+- Each invocation of `footnotes(...)` **MUST** advance the “collection cursor” for subsequent `footnotes(...)` nodes (i.e., each dump emits only the accumulated entries since the last dump, not the whole-document set).
+- `footnotes` **MUST NOT** emit a heading; headings are authored via `h1`/`h2`/`h3`.
+- Tooling **SHOULD** emit a warning if any `\footnote(...)` is present in the document but no `footnotes(...)` node appears.
+
+### 8.3 General Text Block Elements
+
+In this chapter, an "inline text" body is one of:
+
+- a string body (`"..."`)
+- a verbatim body (`:`)
+- an inline-list body (`{ ... }` parsed in Inline-list mode)
+
+Only an empty body (`;`) is not "inline text".
+
+#### 8.3.1 Headings: `h1`, `h2`, `h3`
 
 - **Role:** block heading levels 1-3
 - **Body:** inline text
 - **Attributes:** `lang` (optional), `id` (optional; top-level only)
 
-#### 8.2.3 Paragraph blocks: `p`, `note`, `warning`, `danger`, `tip`, `quote`, `spoiler`
+#### 8.3.2 Paragraph blocks: `p`, `note`, `warning`, `danger`, `tip`, `quote`, `spoiler`
 
 - **Role:** paragraph-like block with semantic hint
 - **Body:** inline text
 - **Attributes:** `lang` (optional), `id` (optional; top-level only)
 
-#### 8.2.4 Lists: `ul`, `ol`
+#### 8.3.3 Lists: `ul`, `ol`
 
 > TODO: Split into two separate parts "Unordered Lists" and "Ordered Lists"
 
@@ -544,17 +600,7 @@ Only an empty body (`;`) is not "inline text".
 
 - `first` (optional Integer ≥ 0; default 1): number of the first list item
 
-#### 8.2.5 List item: `li`
-
-> TODO: Include correct body upgrade rules
-
-- **Body:** either
-  - a block-list of block elements, or
-  - a single string body, or
-  - a verbatim body
-- **Attributes:** `lang` (optional)
-
-#### 8.2.6 Figure: `img`
+#### 8.3.4 Figure: `img`
 
 - **Body:** inline text caption/description (may be empty)
 - **Attributes:**
@@ -563,19 +609,14 @@ Only an empty body (`;`) is not "inline text".
   - `lang` (optional)
   - `id` (optional; top-level only)
 
-#### 8.2.7 Preformatted: `pre`
+#### 8.3.5 Preformatted: `pre`
 
 > TODO: Body is always just "inline text", as verbatim bodies are also always inline text.
 
 - **Body:** inline text
 - **Attributes:** `syntax` (optional), `lang` (optional), `id` (optional; top-level only)
 
-#### 8.2.8 Table of contents: `toc`
-
-- **Body:** `;` (empty)
-- **Attributes:** `depth` (optional Integer in {1,2,3}; default 3), `lang` (optional), `id` (optional; top-level only)
-
-#### 8.2.9 Tables: `table`
+#### 8.3.6 Tables: `table`
 
 - **Body:** block-list containing:
   - optional `columns`, then
@@ -600,24 +641,32 @@ Table layout rules:
 - If any `row` has a `title` attribute, renderers **MUST** reserve a leading title column.
   - The leading column’s header cell is implicit (empty/invisible) and **MUST NOT** be authored inside `columns`.
 
-#### 8.2.10 `columns` (table header row)
+### 8.4 Structural Elements
+
+#### 8.4.1 List item: `li`
+
+- **Body:** either
+  - a block-list of block elements, or
+  - a single string body, or
+  - a verbatim body
+- **Attributes:** `lang` (optional)
+
+#### 8.4.2 `columns` (table header row)
 
 - **Body:** block-list containing `td` (at least one)
 - **Attributes:** `lang` (optional)
 
-#### 8.2.11 `row` (table data row)
+#### 8.4.3 `row` (table data row)
 
 - **Body:** block-list containing `td` (at least one)
 - **Attributes:** `title` (optional string), `lang` (optional)
 
-#### 8.2.12 `group` (table row group)
+#### 8.4.4 `group` (table row group)
 
 - **Body:** inline text
 - **Attributes:** `lang` (optional)
 
-#### 8.2.13 `td` (table cell)
-
-> TODO: Include correct body upgrade rules
+#### 8.4.5 `td` (table cell)
 
 - **Body:** either
   - a block-list of block elements, or
@@ -625,60 +674,29 @@ Table layout rules:
   - a verbatim body
 - **Attributes:** `colspan` (optional Integer ≥ 1; default 1), `lang` (optional)
 
-#### 8.2.14 `title` (document title)
-
-- **Role:** document-level display title
-- **Body:** inline text
-- **Attributes:** `lang` (optional)
-
-Semantic constraints:
-
-- `title` **MUST** be a top-level block element.
-- `title` **MUST** appear at most once.
-- If present, `title` **MUST** be the second node in the document (after `hdoc`).
-- `title` **MUST NOT** have an `id` attribute.
-
-#### 8.2.15 Footnote dump: `footnotes`
-
-- **Role:** collect and render accumulated footnotes
-- **Body:** `;` (empty)
-- **Attributes:**
-  - `kind` (optional; one of `footnote`, `citation`)
-  - `lang` (optional)
-
-Semantics:
-
-- `footnotes;` collects and renders all footnotes of all kinds accumulated since the previous `footnotes(...)` node (or since start of document if none appeared yet).
-- `footnotes(kind="footnote");` collects and renders only `kind="footnote"` entries accumulated since the previous `footnotes(...)` node.
-- `footnotes(kind="citation");` collects and renders only `kind="citation"` entries accumulated since the previous `footnotes(...)` node.
-- Each invocation of `footnotes(...)` **MUST** advance the “collection cursor” for subsequent `footnotes(...)` nodes (i.e., each dump emits only the accumulated entries since the last dump, not the whole-document set).
-- `footnotes` **MUST NOT** emit a heading; headings are authored via `h1`/`h2`/`h3`.
-- Tooling **SHOULD** emit a warning if any `\footnote(...)` is present in the document but no `footnotes(...)` node appears.
-
-
-### 8.3 Inline elements
+### 8.5 Inline elements
 
 Inline elements appear only in inline-list bodies (or inside string/verbatim, depending on renderer).
 
-#### 8.3.1 `\\em`
+#### 8.5.1 `\\em`
 
 - **Role:** emphasis
 - **Body:** inline text
 - **Attributes:** `lang` (optional)
 
-#### 8.3.2 `\\mono`
+#### 8.5.2 `\\mono`
 
 - **Role:** monospaced span
 - **Body:** inline text
 - **Attributes:** `syntax` (optional), `lang` (optional)
 
-#### 8.3.3 `\\strike`, `\\sub`, `\\sup`
+#### 8.5.3 `\\strike`, `\\sub`, `\\sup`
 
 - **Role:** strike-through / subscript / superscript
 - **Body:** inline text
 - **Attributes:** `lang` (optional)
 
-#### 8.3.4 `\link`
+#### 8.5.4 `\link`
 
 - **Role:** foreign hyperlink (external or non-validated target)
 - **Body:** inline text
@@ -692,13 +710,13 @@ Notes:
 - Interior references use `\ref(ref="...")`.
 
 
-#### 8.3.5 `\\date`, `\\time`, `\\datetime`
+#### 8.5.5 `\\date`, `\\time`, `\\datetime`
 
 - **Role:** localized date/time rendering
 - **Body:** must be plain text, a single string, or verbatim (no nested inline elements)
 - **Attributes:** `fmt` (optional; per element), `lang` (optional)
 
-#### 8.3.6 `\ref`
+#### 8.5.6 `\ref`
 
 - **Role:** validated interior reference (to a top-level `id`)
 - **Body:** inline text (optional; may be empty)
@@ -729,7 +747,7 @@ If the referenced target is not a heading:
 
 When computing `<name>` for headings, inline footnote/citation markers **SHOULD NOT** contribute to the plaintext (i.e., their marker text is ignored).
 
-#### 8.3.7 `\footnote`
+#### 8.5.7 `\footnote`
 
 - **Role:** footnote/citation marker and definition
 - **Body:** inline text (required for defining form; empty for reference form)
