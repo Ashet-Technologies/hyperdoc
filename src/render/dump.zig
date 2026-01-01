@@ -435,7 +435,7 @@ fn dumpBlockInline(writer: *Writer, indent: usize, block: hdoc.Block) Writer.Err
         .toc => |toc| {
             try writeTypeTag(writer, "toc");
             try dumpOptionalStringField(writer, indent + indent_step, "lang", toc.lang.text);
-            try dumpOptionalNumberField(writer, indent + indent_step, "depth", toc.depth);
+            try dumpOptionalNumberField(writer, indent + indent_step, "depth", @as(?u8, toc.depth));
         },
         .table => |table| {
             try writeTypeTag(writer, "table");

@@ -166,7 +166,7 @@ const RenderContext = struct {
     }
 
     fn renderTableOfContents(ctx: *RenderContext, toc_block: hdoc.Block.TableOfContents, block_index: ?usize, indent: usize) RenderError!void {
-        const depth = toc_block.depth orelse 3;
+        const depth = toc_block.depth;
         const lang_attr = langAttribute(toc_block.lang);
         const id_attr = ctx.resolveBlockId(block_index);
 

@@ -93,7 +93,7 @@ pub const Block = union(enum) {
 
     pub const TableOfContents = struct {
         lang: LanguageTag,
-        depth: ?u8,
+        depth: u8,
     };
 
     pub const Table = struct {
@@ -1023,16 +1023,15 @@ pub const SemanticAnalyzer = struct {
         const attrs = try sema.get_attributes(node, struct {
             lang: LanguageTag = .inherit,
             id: ?Reference = null,
-            depth: ?u32 = null,
+            depth: ?u8 = null,
         });
 
-        var depth: ?u8 = null;
-        if (attrs.depth) |depth_value| {
-            if (depth_value < 1 or depth_value > 3) {
-                try sema.emit_diagnostic(.{ .invalid_attribute = .{ .type = node.type, .name = "depth" } }, get_attribute_location(node, "depth", .value) orelse node.location);
-            } else {
-                depth = @intCast(depth_value);
-            }
+        const max_depth: comptime_int = @typeInfo(Block.HeadingLevel).@"enum".fields.len;
+
+        var depth = attrs.depth orelse max_depth;
+        if (depth < 1 or depth > max_depth) {
+            try sema.emit_diagnostic(.{ .invalid_attribute = .{ .type = node.type, .name = "depth" } }, get_attribute_location(node, "depth", .value) orelse node.location);
+            depth = @max(1, @min(max_depth, depth));
         }
 
         switch (node.body) {
@@ -1882,6 +1881,7 @@ pub const SemanticAnalyzer = struct {
         return switch (T) {
             []const u8 => value,
 
+            u8 => std.fmt.parseInt(u8, value, 10) catch return error.InvalidValue,
             u32 => std.fmt.parseInt(u32, value, 10) catch return error.InvalidValue,
 
             Reference => Reference.parse(value) catch return error.InvalidValue,
