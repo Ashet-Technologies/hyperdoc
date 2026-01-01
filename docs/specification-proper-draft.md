@@ -488,12 +488,12 @@ The Footnote Namespace is used for defining and referencing reusable footnotes.
 
 When a built-in element uses a `{ ... }` list body, it is parsed in the mode below:
 
-- **Inline-list mode:** `title`, `h1`, `h2`, `h3`, `p`, `note`, `warning`, `danger`, `tip`, `quote`, `spoiler`, `img`, `pre`, `group`, and all inline elements (`\em`, `\mono`, `\link`, `\ref`, `\footnote`, `\date`, `\time`, `\datetime`, ...).
-- **Block-list mode:** `ul`, `ol`, `li`, `table`, `columns`, `row`, `td`.
+- **Inline-list mode:** `title`, `h1`, `h2`, `h3`, `p`, `img`, `pre`, `group`, and all inline elements (`\em`, `\mono`, `\link`, `\ref`, `\footnote`, `\date`, `\time`, `\datetime`, ...).
+- **Block-list mode:** `ul`, `ol`, `li`, `table`, `columns`, `row`, `td`, `note`, `warning`, `danger`, `tip`, `quote`, `spoiler`.
 
 - Containers (`ul`, `ol`, `table`, `row`, `columns`) naturally contain nested nodes.
 - Text blocks (`title`, `p`, headings, etc.) contain inline text streams.
-- `li` and `td` contain either blocks or a single string/verbatim; representing blocks implies block-list mode.
+- `li`, `td`, and admonition blocks contain either blocks or a single string/verbatim body; representing blocks implies block-list mode.
 - Built-in elements with empty bodies are also parsed in Inline-list mode so accidental `{ ... }` usage stays balanced and formatters can recover consistently (e.g., `toc;`, `footnotes;`).
 
 #### 8.1.3 Shorthand Body Promotion
@@ -513,6 +513,12 @@ li {
 This promotion is a feature for convenience and applies only to the following elements:
 - `li`
 - `td`
+- `note`
+- `warning`
+- `danger`
+- `tip`
+- `quote`
+- `spoiler`
 
 ### 8.2 Top-Level Block Elements
 
@@ -583,13 +589,19 @@ Only an empty body (`;`) is not "inline text".
 - **Body:** inline text
 - **Attributes:** `lang` (optional), `id` (optional; top-level only)
 
-#### 8.3.2 Paragraph blocks: `p`, `note`, `warning`, `danger`, `tip`, `quote`, `spoiler`
+#### 8.3.2 Paragraph: `p`
 
-- **Role:** paragraph-like block with semantic hint
+- **Role:** A standard paragraph of text.
 - **Body:** inline text
 - **Attributes:** `lang` (optional), `id` (optional; top-level only)
 
-#### 8.3.3 Lists: `ul`, `ol`
+#### 8.3.3 Admonition Blocks: `note`, `warning`, `danger`, `tip`, `quote`, `spoiler`
+
+- **Role:** A block that renders with a distinct style to draw the reader's attention.
+- **Body:** A block-list containing zero or more General Text Block Elements. Per the Shorthand Body Promotion rule (§ 8.1.3), a string or verbatim body may be provided, which will be treated as a single contained paragraph.
+- **Attributes:** `lang` (optional), `id` (optional; top-level only)
+
+#### 8.3.4 Lists: `ul`, `ol`
 
 > TODO: Split into two separate parts "Unordered Lists" and "Ordered Lists"
 
@@ -600,7 +612,7 @@ Only an empty body (`;`) is not "inline text".
 
 - `first` (optional Integer ≥ 0; default 1): number of the first list item
 
-#### 8.3.4 Figure: `img`
+#### 8.3.5 Figure: `img`
 
 - **Body:** inline text caption/description (may be empty)
 - **Attributes:**
@@ -609,14 +621,14 @@ Only an empty body (`;`) is not "inline text".
   - `lang` (optional)
   - `id` (optional; top-level only)
 
-#### 8.3.5 Preformatted: `pre`
+#### 8.3.6 Preformatted: `pre`
 
 > TODO: Body is always just "inline text", as verbatim bodies are also always inline text.
 
 - **Body:** inline text
 - **Attributes:** `syntax` (optional), `lang` (optional), `id` (optional; top-level only)
 
-#### 8.3.6 Tables: `table`
+#### 8.3.7 Tables: `table`
 
 - **Body:** block-list containing:
   - optional `columns`, then
