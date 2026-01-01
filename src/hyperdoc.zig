@@ -1746,9 +1746,7 @@ pub const SemanticAnalyzer = struct {
                     else
                         line.text[1..];
 
-                    const stripped = std.mem.trimRight(u8, text, whitespace_chars);
-
-                    text_buffer.appendSliceAssumeCapacity(stripped);
+                    text_buffer.appendSliceAssumeCapacity(text);
                 }
 
                 const location: Parser.Location = if (verbatim_lines.len > 0) blk: {

@@ -224,6 +224,29 @@ test "span merger preserves whitespace after inline mono" {
     }
 }
 
+test "pre verbatim preserves trailing whitespace" {
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source =
+        "hdoc(version=\"2.0\",lang=\"en\");\n" ++ "pre:\n" ++ "| line with trailing spaces   \n" ++ "|   indented line  \n";
+
+    var doc = try hdoc.parse(std.testing.allocator, source, &diagnostics);
+    defer doc.deinit();
+
+    try std.testing.expect(!diagnostics.has_error());
+    try std.testing.expectEqual(@as(usize, 1), doc.contents.len);
+
+    const preformatted = doc.contents[0].preformatted;
+    try std.testing.expectEqual(@as(usize, 1), preformatted.content.len);
+
+    const expected = "line with trailing spaces   \n  indented line  ";
+    switch (preformatted.content[0].content) {
+        .text => |text| try std.testing.expectEqualStrings(expected, text),
+        else => return error.TestExpectedEqual,
+    }
+}
+
 test "parser reports unterminated string literals" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
