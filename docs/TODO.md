@@ -4,3 +4,6 @@
 - Specify "syntax" proper
 - Add links to RFCs where possible
 - Document `lang` inheritance. No `lang` attribute means that parent language is used.
+
+
+> Okay, next task: Fix chapter 6 (escapes) by splitting into two chapters (described in 308-315), clarify how control characters are handled (L328)
