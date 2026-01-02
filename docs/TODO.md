@@ -3,7 +3,6 @@
 - Assign semantics to node types, paragraph kinds, ...
 - Specify "syntax" proper
 - Add links to RFCs where possible
-- Document `lang` inheritance. No `lang` attribute means that parent language is used.
 - Clarify that page layout is static and won't change except for context resize.
 - \abbrev and \term might be good ideas.
 - Add more text to the introduction and underlying ideas of the format:

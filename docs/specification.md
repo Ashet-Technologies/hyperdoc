@@ -837,11 +837,7 @@ The `fmt` value **MUST** be one of the values explicitly listed for the element;
 
 Formatting uses the element’s **language context**.
 
-The base language context is determined as follows:
-
-1. If the element has a `lang` attribute, that language tag **SHALL** be used.
-2. Otherwise, if the document header has `hdoc(lang="...")`, that language tag **SHALL** be used.
-3. Otherwise, there is no language context.
+The base language context is the element’s **effective language tag** (§10.4.1). This means `lang` is inherited from parent elements, and top-level elements inherit their language tag from `hdoc(lang="...")`.
 
 Tooling **MAY** allow users to override the language context and/or localized formatting preferences (e.g. force 24-hour time, force a preferred date ordering). If such an override is active, it **SHALL** replace the base language context for the purpose of all formatting in this section.
 
@@ -922,6 +918,21 @@ The `fmt` attribute on `\ref` controls how synthesized link text is produced whe
 | `full` (default) | Render `"<index> <name>"`. | `§10.3.6 fmt values for \ref` |
 | `name`           | Render `"<name>"`.         | `fmt values for \ref`         |
 | `index`          | Render `"<index>"`.        | `§10.3.6`                     |
+
+### 10.4 `lang` attribute
+
+The `lang` attribute assigns a BCP 47 language tag (§10.1) to an element.
+
+#### 10.4.1 Effective language tag
+
+Each element has an **effective language tag**, computed as follows:
+
+1. If the element has a `lang` attribute, its value **SHALL** be the effective language tag.
+2. Otherwise, if the element has a parent element, the effective language tag **SHALL** be inherited from the parent element.
+3. Otherwise (for top-level elements), if the document header has `hdoc(lang="...")`, that language tag **SHALL** be the effective language tag.
+4. Otherwise, the element has no effective language tag.
+
+This inheritance allows documents to mix language contexts across nested elements (e.g. an English document that contains a German `quote` with an Italian paragraph inside), and keeps localized date/time values in their local context.
 
 ## 11. Non-normative guidance for tooling
 
