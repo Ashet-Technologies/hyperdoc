@@ -1,25 +1,46 @@
 # Specification TODOs
 
+## Tasks
+
 - Assign semantics to node types, paragraph kinds, ...
 - Specify "syntax" proper
 - Add links to RFCs where possible
-- \abbrev and \term might be good ideas.
-- Add more text to the introduction and underlying ideas of the format:
-  - Orthogonality: Semantic structure is not dependend on syntax. Verbatim lines are not preformatted, but `pre` blocks are.
-  - Strictness for ecosystem health: Prevent HTML uncontrolled growth desaster
-  - Allow tooling to work with semanticall yinvalid documents
-  - Static layout: No surprises. Layout once, yield consistent rendering
-  - Accessiblity: Everything is semantic, nothing is presentation-only.
-- h3 after h1 is not legal
+
+## Potential Future Features
+
+### `appendix` element
+
 - Support "appendix{}" in addition to h1,h2,h3 which is a h1-level chapter that renders as "A. B. C." instead of "1. 2. 3."
 
-> Recommendation 3: Add Formal Whitespace Processing Algorithm
+### Abbreviations
 
+- \abbrev(title="Antiblockiersystem"){ABS} defines a new abbreviation
+- \abbrev{ABS} references an existing abbreviation
+- \abbrev(title) can only be set once.
+- glossary; emits a glossary/definition list of all abbreviations
+
+### Definition Lists
+
+- deflist {structural} is a definition list
+- term {inline} defines a new term, must be followed by a 
+- def { blocks } definition for the term
+
+### Glossary
+
+- \indexed{Word} adds a new entry to the index.
+- index; emits an index with refs to all `\index`ed words.
+
+### Formal Whitespace Processing Algorithm
+
+Write a formal definition of the whitespace processing algorithm so it can be easily replicated.
+
+### Formal Language Schema
 
 Recommendation 5: Add Appendix with Formal Schema
 Rationale: Current spec requires reading entire document to understand element relationships. Machine-readable schema would enable automatic validation and tooling.
 Provide RelaxNG Compact syntax schema defining:
 
+### Highlighted Lines and Line Numbering
 
 Rationale: Technical documentation needs to emphasize specific code lines (tutorials, diffs, explanations).
 pre(syntax="python", highlight="2,4-6"):

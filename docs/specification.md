@@ -87,11 +87,35 @@ If a chapter is marked DONE or FROZEN, the status applies to all of its sub-chap
 
 HyperDoc 2.0 ("HyperDoc") is a plain-text markup language for hypertext documents.
 
-Design goals:
+It was created out of frustration with the practical reality of Markdown: while its permissiveness and brevity are useful, its underspecified semantics have led to many dialects where correct authoring and correct rendering often require trial-and-error. In most ecosystems, Markdown also ends up being a convenient frontend for HTML, and HTML is the definition of unbounded growth: implementing a full HTML renderer is a large, ongoing effort, and the surface area keeps expanding.
+
+HyperDoc aims to be a middle ground between "just text" formats such as Gemini’s Gemtext and the flexibility of HTML: it has a strict, proper semantic definition and supports rich documents, but it is intentionally far more restrictive (and therefore more implementable, testable, and interoperable) than HTML.
+
+### 1.1 Design goals (non-normative)
 
 - Deterministic, unambiguous parsing.
 - Convenient authoring in plain text.
 - Round-trippable formatting (tooling can rewrite without losing information).
+
+### 1.2 Underlying ideas (non-normative)
+
+- **Orthogonality:** Syntax is an encoding of a document tree, not its meaning. In particular, verbatim (`:`) bodies are not inherently "preformatted"; only elements such as `pre` assign preformatted rendering semantics to their content.
+- **Strictness for ecosystem health:** A small, precisely specified core prevents uncontrolled growth into renderer-specific quirks and accidental "standard library" behavior, which is how many HTML-adjacent formats fragment over time.
+- **Tooling-friendly invalidity:** Tooling is allowed to operate on documents that are syntactically valid but semantically invalid, so that formatters, editors, refactoring tools, and diagnostics can work with incomplete or broken drafts.
+- **Static layout:** Documents have no runtime behavior; rendering can be decided from the semantic document tree without hidden state or incremental "best effort" heuristics.
+- **Accessibility:** Everything is semantic; the format aims to avoid presentation-only constructs so renderers can provide accessible output (screen readers, reflow, alternative presentations) without guessing author intent.
+
+### 1.3 Designated authoring area (non-normative)
+
+HyperDoc is designed for writing and publishing informational documents where structure, linking, and predictable rendering matter:
+
+- Informational content (e.g. websites)
+- Technical documentation
+- Blogs
+- News posts
+- Code documentation
+- Personal notes
+- Public wiki content
 
 ## 2. Conformance and terminology
 
@@ -577,7 +601,7 @@ Semantics:
 - `footnotes;` collects and renders all footnotes of all kinds accumulated since the previous `footnotes(...)` node (or since start of document if none appeared yet).
 - `footnotes(kind="footnote");` collects and renders only `kind="footnote"` entries accumulated since the previous `footnotes(...)` node.
 - `footnotes(kind="citation");` collects and renders only `kind="citation"` entries accumulated since the previous `footnotes(...)` node.
-- Each invocation of `footnotes(...)` **MUST** advance the “collection cursor” for subsequent `footnotes(...)` nodes (i.e., each dump emits only the accumulated entries since the last dump, not the whole-document set).
+- Each invocation of `footnotes(...)` **MUST** advance the "collection cursor" for subsequent `footnotes(...)` nodes (i.e., each dump emits only the accumulated entries since the last dump, not the whole-document set).
 - `footnotes` **MUST NOT** emit a heading; headings are authored via `h1`/`h2`/`h3`.
 - Tooling **SHOULD** emit a warning if any `\footnote(...)` is present in the document but no `footnotes(...)` node appears.
 
@@ -788,7 +812,6 @@ Semantics:
 - Each `kind` has an independent numeric namespace: footnotes and citations are numbered separately.
 - A renderer **MAY** hyperlink markers and dumped entries back-and-forth.
 
-
 ## 10. Attribute types and date/time formats
 
 > TODO: Attributes should be documented well and not only be mentioned in the element catalog.
@@ -895,13 +918,13 @@ Supported values:
 | `iso`             | Render the date in the lexical format of §10.2.1.                                        | `2026-09-13`             | `2026-09-13`             |
 | `short` (default) | Render the date in a numeric, locale-appropriate short form.                             | `9/13/2026`              | `13.09.2026`             |
 | `long`            | Render the date in a locale-appropriate long form (month name, full year).               | `September 13, 2026`     | `13. September 2026`     |
-| `relative`        | Render a relative description of the date compared to “today”.                           | `in 3 days`              | `in 3 Tagen`             |
+| `relative`        | Render a relative description of the date compared to "today".                           | `in 3 days`              | `in 3 Tagen`             |
 | `year`            | Render only the year component.                                                          | `2026`                   | `2026`                   |
 | `month`           | Render only the month component in a locale-appropriate form (typically a month name).   | `September`              | `September`              |
 | `day`             | Render only the day-of-month component in a locale-appropriate form (may be an ordinal). | `13th`                   | `13.`                    |
 | `weekday`         | Render the weekday name for that date.                                                   | `Saturday`               | `Samstag`                |
 
-The `relative` examples are non-normative and assume “today” is `2026-09-10` in the renderer’s date context.
+The `relative` examples are non-normative and assume "today" is `2026-09-10` in the renderer’s date context.
 
 #### 10.3.4 `fmt` values for `\time`
 
@@ -929,7 +952,7 @@ Supported values:
 | `long`            | Render date and time with second precision; include the fractional part if present. | `September 13, 2026, 1:36:00 PM` | `13. September 2026, 13:36:00` |
 | `relative`        | Render a relative description compared to the current datetime.                     | `20 minutes ago`                 | `vor 20 Minuten`               |
 
-The `relative` examples are non-normative and assume the effective zone is `+02:00`, the value is `2026-09-13T13:36:00+02:00`, and “now” is `2026-09-13T13:56:00+02:00`.
+The `relative` examples are non-normative and assume the effective zone is `+02:00`, the value is `2026-09-13T13:36:00+02:00`, and "now" is `2026-09-13T13:56:00+02:00`.
 
 #### 10.3.6 `fmt` values for `\ref`
 
