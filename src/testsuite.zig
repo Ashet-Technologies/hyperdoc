@@ -601,9 +601,51 @@ test "diagnostic codes are emitted for expected samples" {
     try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); pre:\n|nospace\n", &.{.verbatim_missing_space});
     try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); pre:\n| trailing \n", &.{.trailing_whitespace});
     try validateDiagnostics(.{}, "h1 \"Title\"", &.{.missing_hdoc_header});
-    try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); hdoc(version=\"2.0\",lang=\"en\");", &.{.duplicate_hdoc_header});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); hdoc(version=\"2.0\",lang=\"en\");", &.{ .misplaced_hdoc_header, .duplicate_hdoc_header });
     try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); h1 \"bad\\q\"", &.{.{ .invalid_string_escape = .{ .codepoint = 'q' } }});
     try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); h1 \"bad\\u{9}\"", &.{.{ .illegal_character = .{ .codepoint = 0x9 } }});
+}
+
+test "title block populates metadata and warns on inline date" {
+    const code = "hdoc(version=\"2.0\",lang=\"en\");\ntitle { Hello \\date{2020-01-02} }\nh1 \"Body\"";
+
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    var doc = try hdoc.parse(std.testing.allocator, code, &diagnostics);
+    defer doc.deinit();
+
+    try std.testing.expect(!diagnostics.has_error());
+    try std.testing.expectEqual(@as(usize, 1), diagnostics.items.items.len);
+    try std.testing.expect(diagnostics.items.items[0].code == .title_inline_date_time_without_header);
+
+    const title = doc.title orelse return error.TestExpectedEqual;
+    const full = title.full;
+    try std.testing.expectEqualStrings("Hello 2020-01-02", title.simple);
+    try std.testing.expectEqual(@as(usize, 3), full.content.len);
+}
+
+test "header title synthesizes full title representation" {
+    const code = "hdoc(version=\"2.0\",title=\"Metadata\",lang=\"en\");\nh1 \"Body\"";
+
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    var doc = try hdoc.parse(std.testing.allocator, code, &diagnostics);
+    defer doc.deinit();
+
+    try std.testing.expect(!diagnostics.has_error());
+    try std.testing.expectEqual(@as(usize, 0), diagnostics.items.items.len);
+
+    const title = doc.title orelse return error.TestExpectedEqual;
+    try std.testing.expectEqualStrings("Metadata", title.simple);
+
+    const full = title.full;
+    try std.testing.expectEqual(@as(usize, 1), full.content.len);
+    switch (full.content[0].content) {
+        .text => |text| try std.testing.expectEqualStrings("Metadata", text),
+        else => return error.TestExpectedEqual,
+    }
 }
 
 test "parser reports unterminated inline lists" {

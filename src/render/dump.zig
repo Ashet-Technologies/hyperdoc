@@ -455,11 +455,25 @@ fn dumpOptionalDateTimeField(writer: *Writer, indent: usize, key: []const u8, va
     }
 }
 
+fn dumpOptionalTitleField(writer: *Writer, indent: usize, key: []const u8, value: ?hdoc.Document.Title) Writer.Error!void {
+    try writeIndent(writer, indent);
+    if (value) |title| {
+        try writer.print("{s}:\n", .{key});
+        try dumpOptionalStringField(writer, indent + indent_step, "simple", title.simple);
+        try writeIndent(writer, indent + indent_step);
+        try writer.writeAll("full:\n");
+        try dumpOptionalStringField(writer, indent + 2 * indent_step, "lang", title.full.lang.text);
+        try dumpSpanListField(writer, indent + 2 * indent_step, "content", title.full.content);
+    } else {
+        try writer.print("{s}: null\n", .{key});
+    }
+}
+
 fn dumpDocument(writer: *Writer, doc: *const hdoc.Document) Writer.Error!void {
     try writer.writeAll("document:\n");
     try dumpVersion(writer, indent_step, doc.version);
     try dumpOptionalStringField(writer, indent_step, "lang", doc.lang.text);
-    try dumpOptionalStringField(writer, indent_step, "title", doc.title);
+    try dumpOptionalTitleField(writer, indent_step, "title", doc.title);
     try dumpOptionalStringField(writer, indent_step, "author", doc.author);
     try dumpOptionalDateTimeField(writer, indent_step, "date", doc.date);
     try dumpTableOfContents(writer, indent_step, doc.toc);
@@ -475,8 +489,8 @@ pub fn render(doc: hdoc.Document, writer: *Writer) Writer.Error!void {
 test "render escapes string values" {
     const title = "Doc \"Title\"\n";
     const span_text = "Hello \"world\"\n";
-    const link_ref: hdoc.Reference = .init("section \"A\"");
-    const id_value: hdoc.Reference = .init("id:1\n");
+    const link_ref: hdoc.Reference = .{ .text = "section \"A\"" };
+    const id_value: hdoc.Reference = .{ .text = "id:1\n" };
 
     var doc: hdoc.Document = .{
         .arena = std.heap.ArenaAllocator.init(std.testing.allocator),
@@ -486,7 +500,7 @@ test "render escapes string values" {
         .id_map = .{},
         .toc = undefined,
         .lang = .inherit,
-        .title = title,
+        .title = null,
         .author = null,
         .date = null,
         .timezone = null,
@@ -494,6 +508,21 @@ test "render escapes string values" {
     defer doc.deinit();
 
     const arena_alloc = doc.arena.allocator();
+
+    const title_spans = try arena_alloc.alloc(hdoc.Span, 1);
+    title_spans[0] = .{
+        .content = .{ .text = title },
+        .attribs = .{},
+        .location = .{ .offset = 0, .length = title.len },
+    };
+    doc.title = .{
+        .full = .{
+            .lang = .inherit,
+            .content = title_spans,
+        },
+        .simple = title,
+    };
+
     doc.contents = try arena_alloc.alloc(hdoc.Block, 0);
     doc.content_ids = try arena_alloc.alloc(?hdoc.Reference, 0);
     doc.toc = .{
@@ -506,6 +535,7 @@ test "render escapes string values" {
     spans[0] = .{
         .content = .{ .text = span_text },
         .attribs = .{ .link = .{ .ref = link_ref } },
+        .location = .{ .offset = 0, .length = span_text.len },
     };
 
     const blocks = try arena_alloc.alloc(hdoc.Block, 1);
@@ -541,9 +571,9 @@ test "render escapes string values" {
     try buffer.writer.flush();
     const output = buffer.writer.buffered();
 
-    const expected_title = try std.fmt.allocPrint(std.testing.allocator, "title: \"{f}\"\n", .{std.zig.fmtString(title)});
-    defer std.testing.allocator.free(expected_title);
-    try std.testing.expect(std.mem.indexOf(u8, output, expected_title) != null);
+    const expected_title_simple = try std.fmt.allocPrint(std.testing.allocator, "    simple: \"{f}\"\n", .{std.zig.fmtString(title)});
+    defer std.testing.allocator.free(expected_title_simple);
+    try std.testing.expect(std.mem.indexOf(u8, output, expected_title_simple) != null);
 
     const expected_span = try std.fmt.allocPrint(
         std.testing.allocator,
