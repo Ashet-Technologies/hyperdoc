@@ -26,7 +26,7 @@ pub const Document = struct {
     timezone: ?TimeZoneOffset,
 
     pub const TableOfContents = struct {
-        level: Block.HeadingLevel,
+        level: Block.Heading.Level, // TODO: Refactor to use `index` here as well.
         headings: []usize,
         children: []TableOfContents,
     };
@@ -52,12 +52,28 @@ pub const Block = union(enum) {
     table: Table,
 
     pub const Heading = struct {
-        level: HeadingLevel,
+        index: Index,
         lang: LanguageTag,
         content: []Span,
-    };
 
-    pub const HeadingLevel = enum { h1, h2, h3 };
+        pub const Level = enum(u2) {
+            pub const count: comptime_int = @typeInfo(@This()).@"enum".fields.len;
+
+            h1 = 0,
+            h2 = 1,
+            h3 = 2,
+        };
+
+        /// Stores both heading level and the index number of that heading.
+        /// h1 is §[0]
+        /// h2 is §[0].[1]
+        /// h3 is §[0].[1].[2]
+        pub const Index = union(Level) {
+            h1: [1]u16,
+            h2: [2]u16,
+            h3: [3]u16,
+        };
+    };
 
     pub const Paragraph = struct {
         kind: ParagraphKind,
@@ -688,11 +704,11 @@ pub const SemanticAnalyzer = struct {
     };
 
     const TocBuilder = struct {
-        level: Block.HeadingLevel,
+        level: Block.Heading.Level,
         headings: std.ArrayList(usize),
         children: std.ArrayList(*TocBuilder),
 
-        fn init(level: Block.HeadingLevel) @This() {
+        fn init(level: Block.Heading.Level) @This() {
             return .{
                 .level = level,
                 .headings = .empty,
@@ -711,6 +727,9 @@ pub const SemanticAnalyzer = struct {
     ids: std.ArrayList(?Reference) = .empty,
     id_locations: std.ArrayList(?Parser.Location) = .empty,
     pending_refs: std.ArrayList(RefUse) = .empty,
+
+    current_heading_level: usize = 0,
+    heading_counters: [Block.Heading.Level.count]u16 = @splat(0),
 
     fn append_node(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, UnsupportedVersion }!void {
         switch (node.type) {
@@ -881,12 +900,12 @@ pub const SemanticAnalyzer = struct {
         });
 
         const heading: Block.Heading = .{
-            .level = switch (node.type) {
+            .index = try sema.compute_next_heading(node, switch (node.type) {
                 .h1 => .h1,
                 .h2 => .h2,
                 .h3 => .h3,
                 else => unreachable,
-            },
+            }),
             .lang = attrs.lang,
             .content = try sema.translate_inline(node, .emit_diagnostic, .one_space),
         };
@@ -1026,7 +1045,7 @@ pub const SemanticAnalyzer = struct {
             depth: ?u8 = null,
         });
 
-        const max_depth: comptime_int = @typeInfo(Block.HeadingLevel).@"enum".fields.len;
+        const max_depth = Block.Heading.Level.count;
 
         var depth = attrs.depth orelse max_depth;
         if (depth < 1 or depth > max_depth) {
@@ -1925,7 +1944,7 @@ pub const SemanticAnalyzer = struct {
                 else => continue,
             };
 
-            const target_depth = heading_level_index(heading.level);
+            const target_depth = heading_level_index(heading.index);
 
             while (stack.items.len > target_depth) {
                 _ = stack.pop();
@@ -1987,7 +2006,7 @@ pub const SemanticAnalyzer = struct {
         return node;
     }
 
-    fn heading_level_index(level: Block.HeadingLevel) usize {
+    fn heading_level_index(level: Block.Heading.Level) usize {
         return switch (level) {
             .h1 => 1,
             .h2 => 2,
@@ -1995,11 +2014,35 @@ pub const SemanticAnalyzer = struct {
         };
     }
 
-    fn next_heading_level(level: Block.HeadingLevel) Block.HeadingLevel {
+    fn next_heading_level(level: Block.Heading.Level) Block.Heading.Level {
         return switch (level) {
             .h1 => .h2,
             .h2 => .h3,
             .h3 => .h3,
+        };
+    }
+
+    /// Computes the next index number for a heading of the given level:
+    fn compute_next_heading(sema: *SemanticAnalyzer, node: Parser.Node, level: Block.Heading.Level) !Block.Heading.Index {
+        const index = @intFromEnum(level);
+
+        sema.heading_counters[index] += 1;
+
+        if (index > sema.current_heading_level + 1) {
+            // TODO: Emit fatal diagnostic for invalid heading sequencing: "h3 after h1 is not legal"
+        }
+        sema.current_heading_level = index;
+
+        // Reset all higher levels to 1:
+        for (sema.heading_counters[index + 1 ..]) |*val| {
+            val.* = 0;
+        }
+        _ = node;
+
+        return switch (level) {
+            .h1 => .{ .h1 = sema.heading_counters[0..1].* },
+            .h2 => .{ .h2 = sema.heading_counters[0..2].* },
+            .h3 => .{ .h3 = sema.heading_counters[0..3].* },
         };
     }
 
@@ -2940,7 +2983,7 @@ pub const Diagnostic = struct {
     pub const ForbiddenControlCharacter = struct { codepoint: u21 };
     pub const TableShapeError = struct { actual: usize, expected: usize };
     pub const ReferenceError = struct { ref: []const u8 };
-    pub const AutomaticHeading = struct { level: Block.HeadingLevel };
+    pub const AutomaticHeading = struct { level: Block.Heading.Level };
 
     pub const Code = union(enum) {
         // errors:

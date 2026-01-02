@@ -48,12 +48,29 @@ const RenderContext = struct {
             null;
 
         try writeIndent(ctx.writer, indent);
-        try writeStartTag(ctx.writer, headingTag(heading.level), .regular, .{
+        try writeStartTag(ctx.writer, headingTag(heading.index), .regular, .{
             .id = id_attr,
             .lang = lang_attr,
         });
+
+        // TODO: Make stylable:
+        if (true) {
+            var buffer: [32]u8 = undefined;
+            try ctx.renderSpan(.{
+                .content = .{
+                    .text = switch (heading.index) {
+                        .h1 => |level| std.fmt.bufPrint(&buffer, "§{} ", .{level[0]}) catch unreachable,
+                        .h2 => |level| std.fmt.bufPrint(&buffer, "§{}.{} ", .{ level[0], level[1] }) catch unreachable,
+                        .h3 => |level| std.fmt.bufPrint(&buffer, "§{}.{}.{} ", .{ level[0], level[1], level[2] }) catch unreachable,
+                    },
+                },
+                .attribs = .{},
+                .location = undefined,
+            });
+        }
+
         try ctx.renderSpans(heading.content);
-        try writeEndTag(ctx.writer, headingTag(heading.level));
+        try writeEndTag(ctx.writer, headingTag(heading.index));
         try ctx.writer.writeByte('\n');
     }
 
@@ -625,7 +642,7 @@ fn takeLang(lang: *?[]const u8) ?[]const u8 {
     return null;
 }
 
-fn headingTag(level: hdoc.Block.HeadingLevel) []const u8 {
+fn headingTag(level: hdoc.Block.Heading.Level) []const u8 {
     return switch (level) {
         .h1 => "h1",
         .h2 => "h2",

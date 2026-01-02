@@ -435,26 +435,26 @@ test "table of contents inserts automatic headings when skipping levels" {
     try std.testing.expect(diagnosticCodesEqual(diagnostics.items.items[2].code, .{ .automatic_heading_insertion = .{ .level = .h2 } }));
 
     const toc = doc.toc;
-    try std.testing.expectEqual(hdoc.Block.HeadingLevel.h1, toc.level);
+    try std.testing.expectEqual(.h1, toc.level);
     try std.testing.expectEqualSlices(usize, &.{ 0, 2 }, toc.headings);
     try std.testing.expectEqual(@as(usize, 2), toc.children.len);
 
     const auto_h1 = toc.children[0];
-    try std.testing.expectEqual(hdoc.Block.HeadingLevel.h2, auto_h1.level);
+    try std.testing.expectEqual(.h2, auto_h1.level);
     try std.testing.expectEqualSlices(usize, &.{ 0, 1 }, auto_h1.headings);
     try std.testing.expectEqual(@as(usize, 2), auto_h1.children.len);
 
     const auto_h2 = auto_h1.children[0];
-    try std.testing.expectEqual(hdoc.Block.HeadingLevel.h3, auto_h2.level);
+    try std.testing.expectEqual(.h3, auto_h2.level);
     try std.testing.expectEqualSlices(usize, &.{0}, auto_h2.headings);
 
     const h2_child = auto_h1.children[1];
-    try std.testing.expectEqual(hdoc.Block.HeadingLevel.h3, h2_child.level);
+    try std.testing.expectEqual(.h3, h2_child.level);
     try std.testing.expectEqual(@as(usize, 0), h2_child.headings.len);
     try std.testing.expectEqual(@as(usize, 0), h2_child.children.len);
 
     const trailing_h1_child = toc.children[1];
-    try std.testing.expectEqual(hdoc.Block.HeadingLevel.h2, trailing_h1_child.level);
+    try std.testing.expectEqual(.h2, trailing_h1_child.level);
     try std.testing.expectEqual(@as(usize, 0), trailing_h1_child.headings.len);
     try std.testing.expectEqual(@as(usize, 0), trailing_h1_child.children.len);
 }

@@ -403,7 +403,7 @@ fn dumpBlockInline(writer: *Writer, indent: usize, block: hdoc.Block) Writer.Err
     switch (block) {
         .heading => |heading| {
             try writeTypeTag(writer, "heading");
-            try dumpEnumField(writer, indent + indent_step, "level", heading.level);
+            try dumpEnumField(writer, indent + indent_step, "level", heading.index); // TODO: Also print the indices here
             try dumpOptionalStringField(writer, indent + indent_step, "lang", heading.lang.text);
             try dumpSpanListField(writer, indent + indent_step, "content", heading.content);
         },
