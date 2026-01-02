@@ -831,27 +831,99 @@ Normative rules:
 
 ### 10.3 `fmt` values
 
-> TODO: `fmt` values need a proper description of what the expected output is.
->       The output is using the `lang` context of the \date, \time, \datetime element and
->       we provide examples in german and english for each `fmt` option.
+Some inline elements accept a `fmt` attribute that controls localized formatting of their value.
 
-> TODO: This chapter shall be split into:
->
-> - `fmt` for `\date`
-> - `fmt` for `\time`
-> - `fmt` for `\datetime`
+The `fmt` value **MUST** be one of the values explicitly listed for the element; any other value **MUST** be rejected as semantically invalid.
 
-- `\date(fmt=...)`: `year`, `month`, `day`, `weekday`, `short`, `long`, `relative`, `iso`
-- `\time(fmt=...)`: `short`, `long`, `rough`, `relative`, `iso`
-- `\datetime(fmt=...)`: `short`, `long`, `relative`, `iso`
-- `\ref(fmt=...)`: `full`, `name`, `index`
+#### 10.3.1 Language context
 
-Defaults when omitted:
+Formatting uses the element’s **language context**.
 
-- `\date(fmt=...)`: default `short`
-- `\time(fmt=...)`: default `short`
-- `\datetime(fmt=...)`: default `short`
-- `\ref(fmt=...)`: default `full`
+The base language context is determined as follows:
+
+1. If the element has a `lang` attribute, that language tag **SHALL** be used.
+2. Otherwise, if the document header has `hdoc(lang="...")`, that language tag **SHALL** be used.
+3. Otherwise, there is no language context.
+
+Tooling **MAY** allow users to override the language context and/or localized formatting preferences (e.g. force 24-hour time, force a preferred date ordering). If such an override is active, it **SHALL** replace the base language context for the purpose of all formatting in this section.
+
+If there is no language context after applying user overrides, or if the implementation has no matching localized formatting data for the selected language context, then implementations **MUST** fall back to locale-independent formatting as follows:
+
+- For `\date`:
+  - `fmt="iso"` and `fmt="year"` proceed normally.
+  - `fmt="day"` **MUST** render the day-of-month as decimal digits (`DD`), without an ordinal suffix.
+  - `fmt="month"` **MUST** render the month as decimal digits (`MM`).
+  - `fmt="weekday"` **MUST** render the ISO weekday number (`1`=Monday … `7`=Sunday).
+  - `fmt="short"`, `fmt="long"`, and `fmt="relative"` **MUST** behave as if `fmt="iso"` was specified.
+- For `\time` and `\datetime`:
+  - if `fmt="iso"`, formatting proceeds normally, and
+  - otherwise, the implementation **MUST** behave as if `fmt="iso"` was specified.
+
+The examples below use `en-US` and `de-DE` language tags, but the exact output of localized formats (punctuation, capitalization, abbreviations, and choice of words) is implementation-defined.
+
+#### 10.3.2 Time zone context
+
+For `\time` and `\datetime`, formatting uses the value’s **effective zone**:
+
+- If the value explicitly specifies a zone, that zone **MUST** be the effective zone.
+- Otherwise, the effective zone **MUST** be `hdoc.tz` (see §10.2.2 and §10.2.3).
+
+#### 10.3.3 `fmt` values for `\date`
+
+The body of `\date` **MUST** be a date in the lexical format of §10.2.1.
+
+Supported values:
+
+| Value             | Meaning (normative)                                                                      | Example output (`en-US`) | Example output (`de-DE`) |
+| ----------------- | ---------------------------------------------------------------------------------------- | ------------------------ | ------------------------ |
+| `iso`             | Render the date in the lexical format of §10.2.1.                                        | `2026-09-13`             | `2026-09-13`             |
+| `short` (default) | Render the date in a numeric, locale-appropriate short form.                             | `9/13/2026`              | `13.09.2026`             |
+| `long`            | Render the date in a locale-appropriate long form (month name, full year).               | `September 13, 2026`     | `13. September 2026`     |
+| `relative`        | Render a relative description of the date compared to “today”.                           | `in 3 days`              | `in 3 Tagen`             |
+| `year`            | Render only the year component.                                                          | `2026`                   | `2026`                   |
+| `month`           | Render only the month component in a locale-appropriate form (typically a month name).   | `September`              | `September`              |
+| `day`             | Render only the day-of-month component in a locale-appropriate form (may be an ordinal). | `13th`                   | `13.`                    |
+| `weekday`         | Render the weekday name for that date.                                                   | `Saturday`               | `Samstag`                |
+
+The `relative` examples are non-normative and assume “today” is `2026-09-10` in the renderer’s date context.
+
+#### 10.3.4 `fmt` values for `\time`
+
+The body of `\time` **MUST** be a time in the lexical format of §10.2.2.
+
+Supported values:
+
+| Value             | Meaning (normative)                                                             | Example output (`en-US`) | Example output (`de-DE`) |
+| ----------------- | ------------------------------------------------------------------------------- | ------------------------ | ------------------------ |
+| `iso`             | Render the time in the lexical format of §10.2.2, including the effective zone. | `13:36:00+02:00`         | `13:36:00+02:00`         |
+| `short` (default) | Render the time with minute precision in a locale-appropriate form.             | `1:36 PM`                | `13:36`                  |
+| `long`            | Render the time with second precision; include the fractional part if present.  | `1:36:00 PM`             | `13:36:00`               |
+| `rough`           | Render a coarse day-period description (e.g. morning/afternoon/evening).        | `afternoon`              | `Nachmittag`             |
+
+#### 10.3.5 `fmt` values for `\datetime`
+
+The body of `\datetime` **MUST** be a datetime in the lexical format of §10.2.3. The time component uses the same formatting rules as §10.3.4.
+
+Supported values:
+
+| Value             | Meaning (normative)                                                                 | Example output (`en-US`)         | Example output (`de-DE`)       |
+| ----------------- | ----------------------------------------------------------------------------------- | -------------------------------- | ------------------------------ |
+| `iso`             | Render the datetime in the lexical format of §10.2.3, including the effective zone. | `2026-09-13T13:36:00+02:00`      | `2026-09-13T13:36:00+02:00`    |
+| `short` (default) | Render date and time with minute precision in a locale-appropriate short form.      | `9/13/2026, 1:36 PM`             | `13.09.2026, 13:36`            |
+| `long`            | Render date and time with second precision; include the fractional part if present. | `September 13, 2026, 1:36:00 PM` | `13. September 2026, 13:36:00` |
+| `relative`        | Render a relative description compared to the current datetime.                     | `20 minutes ago`                 | `vor 20 Minuten`               |
+
+The `relative` examples are non-normative and assume the effective zone is `+02:00`, the value is `2026-09-13T13:36:00+02:00`, and “now” is `2026-09-13T13:56:00+02:00`.
+
+#### 10.3.6 `fmt` values for `\ref`
+
+The `fmt` attribute on `\ref` controls how synthesized link text is produced when the `\ref` body is empty (§9.5.6). It does not affect `\ref` nodes with a non-empty body.
+
+| Value            | Meaning (normative)        | Example                       |
+| ---------------- | -------------------------- | ----------------------------- |
+| `full` (default) | Render `"<index> <name>"`. | `§10.3.6 fmt values for \ref` |
+| `name`           | Render `"<name>"`.         | `fmt values for \ref`         |
+| `index`          | Render `"<index>"`.        | `§10.3.6`                     |
 
 ## 11. Non-normative guidance for tooling
 

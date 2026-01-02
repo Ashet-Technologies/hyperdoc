@@ -12,6 +12,7 @@
   - Allow tooling to work with semanticall yinvalid documents
   - Static layout: No surprises. Layout once, yield consistent rendering
   - Accessiblity: Everything is semantic, nothing is presentation-only.
+- h3 after h1 is not legal
 
 > Problem: What if neither columns nor row exists (table with only group)? Spec should require at least one row or columns.
 
