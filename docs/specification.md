@@ -445,6 +445,30 @@ The renderer **MUST** see the post-normalization result.
 
 **String and verbatim bodies:** When a string body or verbatim body is converted into spans, it is treated as a single text source (no nested inline nodes) and then processed using the same rules above, including whitespace normalization for non-`pre` elements.
 
+#### 8.2.1 Verbatim body decoding (normative)
+
+A verbatim body is converted to a Unicode string as follows.
+
+Let `LINESEP` be U+000A (LF).
+
+For each `piped_line` in source order:
+
+1. Let `raw` be the sequence of characters after the leading `|` up to (but not including) the line terminator.
+2. If `raw` begins with a single U+0020 SPACE, remove **exactly one** such leading SPACE from `raw`.
+   (This optional SPACE is a visual separator between `|` and the content and is not part of the verbatim value.)
+3. Append the resulting string to a list `lines`.
+
+The verbatim value is:
+
+- the empty string if `lines` is empty, otherwise
+- `join(LINESEP, lines)` (i.e., insert `LINESEP` between adjacent entries, but not after the last entry).
+
+Notes:
+
+- The concrete source line ending used for `piped_line` termination (LF vs CRLF vs EOF) does not affect the verbatim value.
+- The resulting verbatim value is then processed as a single text source under §8.2 (including span merging and whitespace normalization for non-`pre` elements).
+
+
 ### 8.3 Attribute uniqueness
 
 - Within a node, attribute keys **MUST** be unique (case-sensitive).
@@ -487,6 +511,19 @@ The Footnote Namespace is used for defining and referencing reusable footnotes.
 
 - Built-in element names are defined in §9.
 - Unknown elements are syntactically valid (parseable), but semantically invalid.
+
+### 8.6.1 Closed-world semantics and compatibility policy (normative)
+
+HyperDoc 2.0 defines a **closed** set of built-in element names and attributes.
+
+- A semantic validator **MUST** treat any node whose name is not a built-in element name (§9) as **semantically invalid**.
+- A semantic validator **MUST** treat any attribute key that is not defined for the given element (§9) as **semantically invalid** (see also §8.4).
+- Renderers **MUST NOT** assign renderer-specific meaning to unknown element names or unknown attributes.
+
+#### Tooling guidance (non-normative)
+
+- Tools that operate on syntactically valid documents (formatters, editors, refactoring tools) **SHOULD** preserve unknown nodes and unknown attributes when round-tripping, while emitting diagnostics, to support drafts and forward-compatibility experiments.
+- Conformance tests for “HyperDoc 2.0 renderers” should assume closed-world semantics: unknown names are errors, not extension points.
 
 ## 9. Elements and attributes
 
@@ -687,7 +724,7 @@ Table layout rules:
 #### 9.4.1 List item: `li`
 
 - **Body:** either
-  - a block-list of block elements, or
+  - a block-list of general text block elements, or
   - a single string body, or
   - a verbatim body
 - **Attributes:** `lang` (optional)
@@ -716,7 +753,7 @@ Table layout rules:
 
 - **Role:** A single cell within a table row.
 - **Body:** either
-  - a block-list of block elements, or
+  - a block-list of general text block elements, or
   - a single string body, or
   - a verbatim body
 - **Attributes:** `colspan` (optional Integer ≥ 1; default 1), `lang` (optional)
