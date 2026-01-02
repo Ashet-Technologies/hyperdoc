@@ -694,14 +694,10 @@ test "Date.parse accepts ISO dates" {
     try std.testing.expectEqual(@as(u4, 12), date.month);
     try std.testing.expectEqual(@as(u5, 25), date.day);
 
-    const short_year = try hdoc.Date.parse("1-01-01");
-    try std.testing.expectEqual(@as(i32, 1), short_year.year);
-    try std.testing.expectEqual(@as(u4, 1), short_year.month);
-    try std.testing.expectEqual(@as(u5, 1), short_year.day);
-
     try std.testing.expectError(error.InvalidValue, hdoc.Date.parse("2025-1-01"));
     try std.testing.expectError(error.InvalidValue, hdoc.Date.parse("2025-13-01"));
     try std.testing.expectError(error.InvalidValue, hdoc.Date.parse("2025-12-32"));
+    try std.testing.expectError(error.InvalidValue, hdoc.Date.parse("1-01-01"));
 }
 
 test "Time.parse accepts ISO times with zones" {

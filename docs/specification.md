@@ -28,7 +28,7 @@ If a chapter is marked DONE or FROZEN, the status applies to all of its sub-chap
 - "7. String Literal Escape Processing (semantic)": DRAFT
   - "7.1 Control character policy (semantic)": DRAFT
   - "7.2 Supported escapes in string literals": DRAFT
-    - "7.2.1 Unicode escape `\\u{H...}`": DRAFT
+    - "7.2.1 Unicode escape `\u{H...}`": DRAFT
   - "7.3 Invalid escapes": DRAFT
 - "8. Semantic document model": DRAFT
   - "8.1 Document structure": DONE
@@ -62,11 +62,11 @@ If a chapter is marked DONE or FROZEN, the status applies to all of its sub-chap
     - "9.4.4 `group` (table row group)": DRAFT
     - "9.4.5 `td` (table cell)": DRAFT
   - "9.5 Inline elements"
-    - "9.5.1 `\\em`": DRAFT
-    - "9.5.2 `\\mono`": DRAFT
-    - "9.5.3 `\\strike`, `\\sub`, `\\sup`": DRAFT
+    - "9.5.1 `\em`": DRAFT
+    - "9.5.2 `\mono`": DRAFT
+    - "9.5.3 `\strike`, `\sub`, `\sup`": DRAFT
     - "9.5.4 `\link`": DRAFT
-    - "9.5.5 `\\date`, `\\time`, `\\datetime`": DRAFT
+    - "9.5.5 `\date`, `\time`, `\datetime`": DRAFT
     - "9.5.6 `\ref`": DRAFT
     - "9.5.7 `\footnote`": DRAFT
 - "10. Attribute types and date/time formats": DRAFT
@@ -384,7 +384,7 @@ A semantic validator/decoder **MUST** accept exactly:
 
 A semantic validator/decoder **MUST** reject a string literal that contains:
 
-- any other escape (`\t`, `\\xHH`, `\0`, etc.)
+- any other escape (`\t`, `\xHH`, `\0`, etc.)
 - an unterminated escape (string ends after `\`)
 - malformed `\u{...}` (missing braces, empty, non-hex, >6 digits)
 - out-of-range or surrogate code points
@@ -723,21 +723,21 @@ Table layout rules:
 
 ### 9.5 Inline elements
 
-Inline elements appear only in inline-list bodies (or inside string/verbatim, depending on renderer).
+Inline elements appear only in inline-list bodies.
 
-#### 9.5.1 `\\em`
+#### 9.5.1 `\em`
 
 - **Role:** emphasis
 - **Body:** inline text
 - **Attributes:** `lang` (optional)
 
-#### 9.5.2 `\\mono`
+#### 9.5.2 `\mono`
 
 - **Role:** monospaced span
 - **Body:** inline text
 - **Attributes:** `syntax` (optional), `lang` (optional)
 
-#### 9.5.3 `\\strike`, `\\sub`, `\\sup`
+#### 9.5.3 `\strike`, `\sub`, `\sup`
 
 - **Role:** strike-through / subscript / superscript
 - **Body:** inline text
@@ -757,7 +757,7 @@ Notes:
 - Interior references use `\ref(ref="...")`.
 
 
-#### 9.5.5 `\\date`, `\\time`, `\\datetime`
+#### 9.5.5 `\date`, `\time`, `\datetime`
 
 - **Role:** localized date/time rendering
 - **Body:** must be plain text, a single string, or verbatim (no nested inline elements)
@@ -795,7 +795,7 @@ When computing `<name>` for headings, inline footnote/citation markers **SHOULD 
 - **Body:** inline text (required for defining form; empty for reference form)
 - **Attributes:**
   - `key` (optional; defines a named footnote)
-  - `ref` (optional; references a previously defined named footnote)
+  - `ref` (optional; references a defined named footnote)
   - `kind` (optional; one of `footnote`, `citation`; default `footnote`)
   - `lang` (optional)
 
@@ -808,7 +808,7 @@ Semantics:
 
 - `\footnote{...}` defines an anonymous footnote entry at the marker position.
 - `\footnote(key="X"){...}` defines a named footnote entry in the footnote namespace and emits its marker at the marker position.
-- `\footnote(ref="X");` emits a marker for the previously defined named footnote `X`.
+- `\footnote(ref="X");` emits a marker for the defined named footnote `X`.
 - Each `kind` has an independent numeric namespace: footnotes and citations are numbered separately.
 - A renderer **MAY** hyperlink markers and dumped entries back-and-forth.
 
@@ -838,17 +838,17 @@ These formats are a conservative intersection of RFC 3339 and ISO 8601.
 
 `YYYY-MM-DD`
 
-- `YYYY`: one or more digits
-- `MM`: `01`-`12`
-- `DD`: `01`-`31`
+- `YYYY`: exactly four digits
+- `MM`: `01`-`12`: exactly two digits
+- `DD`: `01`-`31`: exactly two digits
 
 #### 10.2.2 Time
 
 `hh:mm:ss` with an optional fraction and an optional zone.
 
-- `hh`: `00`-`23`
-- `mm`: `00`-`59`
-- `ss`: `00`-`59`
+- `hh`: `00`-`23`: exactly two digits
+- `mm`: `00`-`59`: exactly two digits
+- `ss`: `00`-`59`: exactly two digits
 - optional fraction: `.` followed by 1,2,3,6, or 9 digits
 - zone:
   - `Z`, or

@@ -294,7 +294,7 @@ pub const Date = struct {
     day: u5, // 1-31
 
     pub fn parse(text: []const u8) !Date {
-        if (text.len < 7) // "Y-MM-DD"
+        if (text.len != "YYYY-MM-DD".len)
             return error.InvalidValue;
         const first_dash = std.mem.indexOfScalar(u8, text, '-') orelse return error.InvalidValue;
         const tail = text[first_dash + 1 ..];
@@ -305,7 +305,7 @@ pub const Date = struct {
         const month_text = text[first_dash + 1 .. second_dash];
         const day_text = text[second_dash + 1 ..];
 
-        if (year_text.len == 0 or month_text.len != 2 or day_text.len != 2) return error.InvalidValue;
+        if (year_text.len != 4 or month_text.len != 2 or day_text.len != 2) return error.InvalidValue;
 
         const year_value = std.fmt.parseInt(u32, year_text, 10) catch return error.InvalidValue;
         if (year_value > std.math.maxInt(i32)) return error.InvalidValue;
