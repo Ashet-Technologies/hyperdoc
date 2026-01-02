@@ -1316,6 +1316,11 @@ pub const SemanticAnalyzer = struct {
                 try blocks.ensureTotalCapacityPrecise(sema.arena, child_nodes.len);
 
                 for (child_nodes) |child_node| {
+                    if (child_node.type == .toc) {
+                        try sema.emit_diagnostic(.illegal_child_item, child_node.location);
+                        continue;
+                    }
+
                     const block, const id = try sema.translate_block_node(child_node);
                     if (id != null) {
                         try sema.emit_diagnostic(.illegal_id_attribute, get_attribute_location(child_node, "id", .name).?);

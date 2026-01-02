@@ -604,6 +604,7 @@ test "diagnostic codes are emitted for expected samples" {
     try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); hdoc(version=\"2.0\",lang=\"en\");", &.{ .misplaced_hdoc_header, .duplicate_hdoc_header });
     try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); h1 \"bad\\q\"", &.{.{ .invalid_string_escape = .{ .codepoint = 'q' } }});
     try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); h1 \"bad\\u{9}\"", &.{.{ .illegal_character = .{ .codepoint = 0x9 } }});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); ul{ li{ toc; } }", &.{.illegal_child_item});
 }
 
 test "title block populates metadata and warns on inline date" {
