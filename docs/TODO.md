@@ -6,18 +6,12 @@
 - Document `lang` inheritance. No `lang` attribute means that parent language is used.
 - Clarify that page layout is static and won't change except for context resize.
 - \abbrev and \term might be good ideas.
-
-> Okay, next task: Fix chapter 6 (escapes) by splitting into two chapters (described in 308-315), clarify how control characters are handled (L328)
-
-
-
-> §5.5 - String Literal Control Character Inconsistency
-
-§5.5 forbids "any Unicode control characters" in string literals
-§6.3 allows \n (LF) and \r (CR) escape sequences
-Problem: These decode to control characters (Cc), contradicting §6.2 which says "resolved string-literal values" must not contain control characters except line terminators. Need explicit carve-out.
-
-> Problem: How does this interact with inline \time and \datetime elements? Do they inherit it? §9.2.2 says "If hdoc(tz="...") is present, a time value MAY omit the zone," but doesn't specify how the default is applied during rendering.
+- Add more text to the introduction and underlying ideas of the format:
+  - Orthogonality: Semantic structure is not dependend on syntax. Verbatim lines are not preformatted, but `pre` blocks are.
+  - Strictness for ecosystem health: Prevent HTML uncontrolled growth desaster
+  - Allow tooling to work with semanticall yinvalid documents
+  - Static layout: No surprises. Layout once, yield consistent rendering
+  - Accessiblity: Everything is semantic, nothing is presentation-only.
 
 > Problem: What if neither columns nor row exists (table with only group)? Spec should require at least one row or columns.
 

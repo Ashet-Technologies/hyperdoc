@@ -801,7 +801,7 @@ These formats are a conservative intersection of RFC 3339 and ISO 8601.
 
 #### 10.2.2 Time
 
-`hh:mm:ss` with a required time zone unless a default `tz` is defined in `hdoc`.
+`hh:mm:ss` with an optional fraction and an optional zone.
 
 - `hh`: `00`-`23`
 - `mm`: `00`-`59`
@@ -811,13 +811,23 @@ These formats are a conservative intersection of RFC 3339 and ISO 8601.
   - `Z`, or
   - `+hh:mm` / `-hh:mm` (two-digit hour/minute)
 
-If `hdoc(tz="...")` is present, a time value **MAY** omit the zone.
+Normative rules:
+
+- If `hdoc(tz="...")` is present, a time value **MAY** omit the zone; if omitted, the effective zone **MUST** be `hdoc.tz`.
+- If `hdoc(tz="...")` is not present, a time value **MUST** specify a zone.
+- If a time value specifies a zone, that zone **MUST** be used regardless of `hdoc.tz`.
 
 #### 10.2.3 Datetime
 
-`YYYY-MM-DD` `T` `hh:mm:ss` (with optional fraction and required zone, unless `hdoc.tz` is present)
+`YYYY-MM-DD` `T` `hh:mm:ss` with an optional fraction and an optional zone.
 
-If `hdoc(tz="...")` is present, a datetime value **MAY** omit the zone. This is permitted specifically for `hdoc(date="...")` and for `\datetime` bodies.
+The time component (including fraction and zone syntax) uses the same rules as §10.2.2.
+
+Normative rules:
+
+- If `hdoc(tz="...")` is present, a datetime value **MAY** omit the zone; if omitted, the effective zone **MUST** be `hdoc.tz`.
+- If `hdoc(tz="...")` is not present, a datetime value **MUST** specify a zone.
+- If a datetime value specifies a zone, that zone **MUST** be used regardless of `hdoc.tz`.
 
 ### 10.3 `fmt` values
 
