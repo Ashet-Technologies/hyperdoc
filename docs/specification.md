@@ -23,56 +23,56 @@ If a chapter is marked DONE or FROZEN, the status applies to all of its sub-chap
   - "5.3 Maximal munch": FROZEN
   - "5.4 Inline-list brace balancing and backslash dispatch": DONE
   - "5.5 String literals (syntax)": DRAFT
-- "6. Escape processing (semantic)": DRAFT
-  - "6.1 Scope": DRAFT
-  - "6.2 Control character policy (semantic)": DRAFT
-  - "6.3 Supported escapes in string literals": DRAFT
-    - "6.3.1 Unicode escape `\\u{H...}`": DRAFT
-  - "6.4 Invalid escapes": DRAFT
-  - "6.5 Inline escape-text tokens": DRAFT
-- "7. Semantic document model": DRAFT
-  - "7.1 Document structure": DONE
-  - "7.2 Inline text construction and normalization": DONE
-  - "7.3 Attribute uniqueness": DONE
-  - "7.4 Attribute validity": DONE
-  - "7.5 Identifiers and References": DONE
-  - "7.6 Built-in element recognition": DONE
-- "8. Elements and attributes"
-  - "8.1 Built-in elements and list mode"
-    - "8.1.1 Inline vs block": DONE
-    - "8.1.2 List-body mode per built-in element": DRAFT
-  - "8.2 Element catalog (normative)": DRAFT
-    - "8.2.1 `hdoc` (header)": DONE
-    - "8.2.2 Headings: `h1`, `h2`, `h3`": DRAFT
-    - "8.2.3 Paragraph blocks: `p`, `note`, `warning`, `danger`, `tip`, `quote`, `spoiler`": DRAFT
-    - "8.2.4 Lists: `ul`, `ol`": DRAFT
-    - "8.2.5 List item: `li`": DRAFT
-    - "8.2.6 Figure: `img`": DRAFT
-    - "8.2.7 Preformatted: `pre`": DRAFT
-    - "8.2.8 Table of contents: `toc`": DRAFT
-    - "8.2.9 Tables: `table`": DRAFT
-    - "8.2.10 `columns` (table header row)": DRAFT
-    - "8.2.11 `row` (table data row)": DRAFT
-    - "8.2.12 `group` (table row group)": DRAFT
-    - "8.2.13 `td` (table cell)": DRAFT
-    - "8.2.14 `title` (document title)": DRAFT
-    - "8.2.15 Footnote dump: `footnotes`": DRAFT
-  - "8.3 Inline elements"
-    - "8.3.1 `\\em`": DRAFT
-    - "8.3.2 `\\mono`": DRAFT
-    - "8.3.3 `\\strike`, `\\sub`, `\\sup`": DRAFT
-    - "8.3.4 `\link`": DRAFT
-    - "8.3.5 `\\date`, `\\time`, `\\datetime`": DRAFT
-    - "8.3.6 `\ref`": DRAFT
-    - "8.3.7 `\footnote`": DRAFT
-- "9. Attribute types and date/time formats": DRAFT
-  - "9.1 Common attribute types": DRAFT
-  - "9.2 Date / time lexical formats (normative)": DRAFT
-    - "9.2.1 Date": DRAFT
-    - "9.2.2 Time": DRAFT
-    - "9.2.3 Datetime": DRAFT
-  - "9.3 `fmt` values": DRAFT
-- "10. Non-normative guidance for tooling": DRAFT
+- "6. Inline Text Escape Processing (semantic)": DRAFT
+  - "6.1 Inline escape-text tokens": DRAFT
+- "7. String Literal Escape Processing (semantic)": DRAFT
+  - "7.1 Control character policy (semantic)": DRAFT
+  - "7.2 Supported escapes in string literals": DRAFT
+    - "7.2.1 Unicode escape `\\u{H...}`": DRAFT
+  - "7.3 Invalid escapes": DRAFT
+- "8. Semantic document model": DRAFT
+  - "8.1 Document structure": DONE
+  - "8.2 Inline text construction and normalization": DONE
+  - "8.3 Attribute uniqueness": DONE
+  - "8.4 Attribute validity": DONE
+  - "8.5 Identifiers and References": DONE
+  - "8.6 Built-in element recognition": DONE
+- "9. Elements and attributes"
+  - "9.1 Built-in elements and list mode"
+    - "9.1.1 Inline vs block": DONE
+    - "9.1.2 List-body mode per built-in element": DRAFT
+  - "9.2 Element catalog (normative)": DRAFT
+    - "9.2.1 `hdoc` (header)": DONE
+    - "9.2.2 Headings: `h1`, `h2`, `h3`": DRAFT
+    - "9.2.3 Paragraph blocks: `p`, `note`, `warning`, `danger`, `tip`, `quote`, `spoiler`": DRAFT
+    - "9.2.4 Lists: `ul`, `ol`": DRAFT
+    - "9.2.5 List item: `li`": DRAFT
+    - "9.2.6 Figure: `img`": DRAFT
+    - "9.2.7 Preformatted: `pre`": DRAFT
+    - "9.2.8 Table of contents: `toc`": DRAFT
+    - "9.2.9 Tables: `table`": DRAFT
+    - "9.2.10 `columns` (table header row)": DRAFT
+    - "9.2.11 `row` (table data row)": DRAFT
+    - "9.2.12 `group` (table row group)": DRAFT
+    - "9.2.13 `td` (table cell)": DRAFT
+    - "9.2.14 `title` (document title)": DRAFT
+    - "9.2.15 Footnote dump: `footnotes`": DRAFT
+  - "9.3 Inline elements"
+    - "9.3.1 `\\em`": DRAFT
+    - "9.3.2 `\\mono`": DRAFT
+    - "9.3.3 `\\strike`, `\\sub`, `\\sup`": DRAFT
+    - "9.3.4 `\link`": DRAFT
+    - "9.3.5 `\\date`, `\\time`, `\\datetime`": DRAFT
+    - "9.3.6 `\ref`": DRAFT
+    - "9.3.7 `\footnote`": DRAFT
+- "10. Attribute types and date/time formats": DRAFT
+  - "10.1 Common attribute types": DRAFT
+  - "10.2 Date / time lexical formats (normative)": DRAFT
+    - "10.2.1 Date": DRAFT
+    - "10.2.2 Time": DRAFT
+    - "10.2.3 Datetime": DRAFT
+  - "10.3 `fmt` values": DRAFT
+- "11. Non-normative guidance for tooling": DRAFT
 - "Appendix A. Example": DRAFT
 - "Appendix B. Element Overview": MISSING
 - "Appendix C. Attribute Overview": MISSING
@@ -98,7 +98,7 @@ A document can be:
 - **Syntactically valid**: conforms to the grammar and additional syntax rules.
 - **Semantically valid**: syntactically valid **and** conforms to semantic rules (elements, attributes, escape decoding, IDs/refs, etc.).
 
-Unless explicitly stated, rules in chapters 3-5 are **syntax** rules; rules in chapters 6-9 are **semantic** rules.
+Unless explicitly stated, rules in chapters 3-5 are **syntax** rules; rules in chapters 6-10 are **semantic** rules.
 
 ## 3. Document encoding (byte- and line-level)
 
@@ -131,7 +131,7 @@ The canonical line ending emitted by tooling **SHOULD** be `<LF>`.
   - U+000D (CR) as part of a valid line ending.
 - Surrogate characters (Plane "unassigned", U+D800…U+DFFF) **MUST NOT** appear in the source text. A conforming parser **MUST** reject them.
 
-A semantic validator **MAY** reject TABs in source text (see §6.2).
+A semantic validator **MAY** reject TABs in source text (see §7.1).
 
 ### 3.4 Unicode text
 
@@ -176,7 +176,7 @@ The grammar is intentionally ambiguous; a deterministic external rule selects a 
 - Attribute lists are comma-separated `(key="value", ...)`.
 - Trailing commas are allowed.
 - Attribute values are **string literals** (see §5.5).
-- Attribute keys are identifiers with hyphen-separated segments (see §5.1 and §9.1).
+- Attribute keys are identifiers with hyphen-separated segments (see §5.1 and §10.1).
 
 ## 5. Grammar and additional syntax rules
 
@@ -257,7 +257,7 @@ The mode is determined solely from the **node name token**:
 2. Else, if the node name is a recognized built-in with a specified list mode, the parser **MUST** choose that mode.
 3. Otherwise (unknown node name), the parser **MUST** choose **Inline-list mode**.
 
-Built-in elements and their list modes are defined in §8.1.
+Built-in elements and their list modes are defined in §9.1.
 
 ### 5.3 Maximal munch
 
@@ -301,57 +301,58 @@ while(not eof()):
 abort() # eof before closing '"'
 ```
 
-Semantic escape decoding and validation is specified in §6.
+Semantic escape decoding and validation is specified in §7.
 
-## 6. Escape processing (semantic)
+## 6. Inline Text Escape Processing (semantic)
 
-> TODO: This chapter must be split into two chapters:
->
-> - "Inline Text Escape Processing"
-> - "String Literal Escape Processing"
->
-> This includes renumbering all chapters and their references for the markdown spec.
->
-> Chapter "6.1 Scope" will be removed then.
+Escape decoding in inline-list bodies applies only to the three escape-text tokens produced by the parser (§5.4).
 
-### 6.1 Scope
+### 6.1 Inline escape-text tokens
 
-Escape sequences are recognized only in:
+In inline-list bodies, the parser emits three special text tokens:
 
-1. String literals (node bodies of the `"..."` form and attribute values).
-2. Inline escape-text tokens emitted by the parser: `\\\\`, `\\{`, `\\}`.
+- `\\`
+- `\{`
+- `\}`
 
-No other syntax performs escape decoding.
+During semantic inline-text construction (§8.2), implementations **MUST** decode these to literal `\`, `{`, `}`.
 
-### 6.2 Control character policy (semantic)
+Tooling that aims to preserve author intent **SHOULD** preserve whether braces were written as balanced groups vs escaped brace tokens, because these spellings are not semantically equivalent in the inline parse tree.
 
-> TODO: The same rules as in §3 are applied, except that `TAB` is also additionally forbidden after escaping.
+## 7. String Literal Escape Processing (semantic)
+
+Escape sequences are recognized only in string literals (node bodies of the `"..."` form and attribute values). No other syntax performs string-literal escape decoding.
+
+### 7.1 Control character policy (semantic)
 
 - A semantic validator **MAY** reject TAB (U+0009) in source text.
-- Regardless of whether TAB is accepted in source text, TAB **MUST** be rejected in the **resolved value of any string literal** (quoted node bodies and attribute values). This includes TAB that appears literally between quotes and TAB produced via `\u{...}`.
+- After decoding escapes in any string literal, the resolved value **MUST NOT** contain any Unicode control character (General Category `Cc`) except:
+  - LF (U+000A), and
+  - CR (U+000D) only when immediately followed by LF (U+000A) (i.e. as part of a CRLF sequence U+000D U+000A).
+- TAB (U+0009) is always forbidden in resolved string-literal values, including when produced via `\u{...}`.
 
-Apart from LF/CR line terminators and TAB (U+0009) in source text, a semantically valid document **MUST NOT** contain other Unicode control characters (General Category `Cc`). Resolved string-literal values are restricted by the rules above (TAB is always forbidden there).
+String literals are syntactically forbidden from containing literal control characters (§5.5); therefore LF/CRLF can only appear in resolved values via `\n`, `\r`, or `\u{...}`.
 
-### 6.3 Supported escapes in string literals
+### 7.2 Supported escapes in string literals
 
 A semantic validator/decoder **MUST** accept exactly:
 
-| Escape      | Decodes to                  |
-| ----------- | --------------------------- |
-| `\\\\`      | U+005C (`\\`)               |
-| `\\"`       | U+0022 (`"`)                |
-| `\\n`       | U+000A (LF)                 |
-| `\\r`       | U+000D (CR)                 |
-| `\\u{H...}` | Unicode scalar value U+H... |
+| Escape     | Decodes to                  |
+| ---------- | --------------------------- |
+| `\\`       | U+005C (`\`)                |
+| `\"`       | U+0022 (`"`)                |
+| `\n`       | U+000A (LF)                 |
+| `\r`       | U+000D (CR)                 |
+| `\u{H...}` | Unicode scalar value U+H... |
 
-#### 6.3.1 Unicode escape `\\u{H...}`
+#### 7.2.1 Unicode escape `\u{H...}`
 
 - 1-6 hex digits
 - value in `0x0..0x10FFFF`
 - not in `0xD800..0xDFFF` (surrogates)
-- must not decode to a forbidden control character (§6.2)
+- must not decode to a forbidden control character (§7.1)
 
-### 6.4 Invalid escapes
+### 7.3 Invalid escapes
 
 A semantic validator/decoder **MUST** reject a string literal that contains:
 
@@ -361,25 +362,9 @@ A semantic validator/decoder **MUST** reject a string literal that contains:
 - out-of-range or surrogate code points
 - forbidden control characters produced by `\u{...}`
 
-### 6.5 Inline escape-text tokens
+## 8. Semantic document model
 
-> TODO: Move to chapter "Inline Text Escape Processing"
-
-In inline-list bodies, the parser emits three special text tokens:
-
-- `\\`
-- `\{`
-- `\}`
-
-During semantic text construction, implementations **MUST** decode these to literal `\`, `{`, `}`.
-
-> TODO: The following sentence is unclear. The intent is: "When parsing, tooling should not perform ad-hoc conversion of escape sequences, so the output can be rendered again as-is. The escape sequences must always be display their escaped variant."
-
-Tooling that aims to preserve author intent **SHOULD** preserve whether braces were written as balanced groups vs escaped brace tokens.
-
-## 7. Semantic document model
-
-### 7.1 Document structure
+### 8.1 Document structure
 
 - A semantically valid document **MUST** contain exactly one `hdoc` header node.
 - The `hdoc` node **MUST** be the first node in the document.
@@ -406,7 +391,7 @@ Tooling that aims to preserve author intent **SHOULD** preserve whether braces w
 - If neither is present, tooling **MAY** emit a diagnostic hint that the document has no title.
 
 
-### 7.2 Inline text construction and normalization
+### 8.2 Inline text construction and normalization
 
 Many elements (e.g. `p`, headings, and inline elements) produce **inline text** for rendering. Inline text is constructed from one of:
 
@@ -432,23 +417,23 @@ The renderer **MUST** see the post-normalization result.
 
 **String and verbatim bodies:** When a string body or verbatim body is converted into spans, it is treated as a single text source (no nested inline nodes) and then processed using the same rules above, including whitespace normalization for non-`pre` elements.
 
-### 7.3 Attribute uniqueness
+### 8.3 Attribute uniqueness
 
 - Within a node, attribute keys **MUST** be unique (case-sensitive).
 
-### 7.4 Attribute validity
+### 8.4 Attribute validity
 
 - Attributes **MUST** be allowed on the element they appear on.
 - Required attributes **MUST** be present.
 - Attributes not defined for an element **MUST** be rejected.
 
-### 7.5 Identifiers and References
+### 8.5 Identifiers and References
 
 HyperDoc defines two separate namespaces for identifiers to allow cross-referencing within a document: the **Block Namespace** and the **Footnote Namespace**.
 
 Identifiers in both namespaces are case-sensitive and share the same syntax: they **MUST** be a non-empty sequence of one or more characters, and **MUST NOT** contain any whitespace or Unicode control characters (General Category `Cc`).
 
-#### 7.5.1 Block Namespace (`id` and `\ref(ref)`)
+#### 8.5.1 Block Namespace (`id` and `\ref(ref)`)
 
 The Block Namespace is used for referencing top-level block elements like headings, figures, or tables.
 
@@ -459,7 +444,7 @@ The Block Namespace is used for referencing top-level block elements like headin
 - **Reference**: An identifier in the Block Namespace is referenced using the `\ref` inline element.
   - `\ref(ref="...")` **MUST** reference an `id` that exists in the Block Namespace.
 
-#### 7.5.2 Footnote Namespace (`\footnote(key)` and `\footnote(ref)`)
+#### 8.5.2 Footnote Namespace (`\footnote(key)` and `\footnote(ref)`)
 
 The Footnote Namespace is used for defining and referencing reusable footnotes.
 
@@ -470,21 +455,21 @@ The Footnote Namespace is used for defining and referencing reusable footnotes.
 - **Reference**: An identifier in the Footnote Namespace is referenced using a `\footnote` element that has no body.
   - `\footnote(ref="...");` **MUST** reference a `key` that has been defined in the Footnote Namespace.
 
-### 7.6 Built-in element recognition
+### 8.6 Built-in element recognition
 
-- Built-in element names are defined in §8.
+- Built-in element names are defined in §9.
 - Unknown elements are syntactically valid (parseable), but semantically invalid.
 
-## 8. Elements and attributes
+## 9. Elements and attributes
 
-### 8.1 Built-in elements and list mode
+### 9.1 Built-in elements and list mode
 
-#### 8.1.1 Inline vs block
+#### 9.1.1 Inline vs block
 
 - Any element name starting with `\` is an **inline element**.
 - Any element name not starting with `\` is a **block element**.
 
-#### 8.1.2 List-body mode per built-in element
+#### 9.1.2 List-body mode per built-in element
 
 When a built-in element uses a `{ ... }` list body, it is parsed in the mode below:
 
@@ -496,7 +481,7 @@ When a built-in element uses a `{ ... }` list body, it is parsed in the mode bel
 - `li`, `td`, and admonition blocks contain either blocks or a single string/verbatim body; representing blocks implies block-list mode.
 - Built-in elements with empty bodies are also parsed in Inline-list mode so accidental `{ ... }` usage stays balanced and formatters can recover consistently (e.g., `toc;`, `footnotes;`).
 
-#### 8.1.3 Shorthand Body Promotion
+#### 9.1.3 Shorthand Body Promotion
 
 If a block element's list body can contain general text block elements (such as `p`, `pre`, `ol`, `ul`, etc.), its body **MAY** instead be written as a shorthand string or verbatim literal.
 
@@ -520,9 +505,9 @@ This promotion is a feature for convenience and applies only to the following el
 - `quote`
 - `spoiler`
 
-### 8.2 Top-Level Block Elements
+### 9.2 Top-Level Block Elements
 
-#### 8.2.1 `hdoc` (header)
+#### 9.2.1 `hdoc` (header)
 
 - **Role:** document header
 - **Body:** `;` (empty)
@@ -531,10 +516,10 @@ This promotion is a feature for convenience and applies only to the following el
   - `lang` (optional)
   - `title` (optional)
   - `author` (optional)
-  - `date` (optional): datetime lexical format (§9.2.3)
-  - `tz` (optional): default timezone for time/datetime values (§9.2)
+  - `date` (optional): datetime lexical format (§10.2.3)
+  - `tz` (optional): default timezone for time/datetime values (§10.2)
 
-#### 8.2.2 `title` (document title)
+#### 9.2.2 `title` (document title)
 
 - **Role:** document-level display title
 - **Body:** inline text
@@ -547,7 +532,7 @@ Semantic constraints:
 - If present, `title` **MUST** be the second node in the document (after `hdoc`).
 - `title` **MUST NOT** have an `id` attribute.
 
-#### 8.2.3 Table of contents: `toc`
+#### 9.2.3 Table of contents: `toc`
 
 - **Role:** Generates a table of contents.
 - **Body:** `;` (empty)
@@ -556,7 +541,7 @@ Semantic constraints:
 Semantic constraints:
 - `toc` **MUST** be a top-level block element (a direct child of the document).
 
-#### 8.2.4 Footnote dump: `footnotes`
+#### 9.2.4 Footnote dump: `footnotes`
 
 - **Role:** collect and render accumulated footnotes
 - **Body:** `;` (empty)
@@ -573,7 +558,7 @@ Semantics:
 - `footnotes` **MUST NOT** emit a heading; headings are authored via `h1`/`h2`/`h3`.
 - Tooling **SHOULD** emit a warning if any `\footnote(...)` is present in the document but no `footnotes(...)` node appears.
 
-### 8.3 General Text Block Elements
+### 9.3 General Text Block Elements
 
 In this chapter, an "inline text" body is one of:
 
@@ -583,30 +568,30 @@ In this chapter, an "inline text" body is one of:
 
 Only an empty body (`;`) is not "inline text".
 
-#### 8.3.1 Headings: `h1`, `h2`, `h3`
+#### 9.3.1 Headings: `h1`, `h2`, `h3`
 
 - **Role:** block heading levels 1-3
 - **Body:** inline text
 - **Attributes:** `lang` (optional), `id` (optional; top-level only)
 
-#### 8.3.2 Paragraph: `p`
+#### 9.3.2 Paragraph: `p`
 
 - **Role:** A standard paragraph of text.
 - **Body:** inline text
 - **Attributes:** `lang` (optional), `id` (optional; top-level only)
 
-#### 8.3.3 Admonition Blocks: `note`, `warning`, `danger`, `tip`, `quote`, `spoiler`
+#### 9.3.3 Admonition Blocks: `note`, `warning`, `danger`, `tip`, `quote`, `spoiler`
 
 - **Role:** A block that renders with a distinct style to draw the reader's attention.
-- **Body:** A block-list containing zero or more General Text Block Elements. Per the Shorthand Body Promotion rule (§ 8.1.3), a string or verbatim body may be provided, which will be treated as a single contained paragraph.
+- **Body:** A block-list containing zero or more General Text Block Elements. Per the Shorthand Body Promotion rule (§9.1.3), a string or verbatim body may be provided, which will be treated as a single contained paragraph.
 - **Attributes:** `lang` (optional), `id` (optional; top-level only)
 
-#### 8.3.4 Unordered List: `ul`
+#### 9.3.4 Unordered List: `ul`
 
 - **Body:** block-list containing `li` (at least one)
 - **Attributes:** `lang` (optional), `id` (optional; top-level only)
 
-#### 8.3.5 Ordered List: `ol`
+#### 9.3.5 Ordered List: `ol`
 
 - **Body:** block-list containing `li` (at least one)
 - **Attributes:**
@@ -614,7 +599,7 @@ Only an empty body (`;`) is not "inline text".
   - `id` (optional; top-level only)
   - `first` (optional Integer ≥ 0; default 1): number of the first list item
 
-#### 8.3.6 Figure: `img`
+#### 9.3.6 Figure: `img`
 
 - **Body:** inline text caption/description (may be empty)
 - **Attributes:**
@@ -623,12 +608,12 @@ Only an empty body (`;`) is not "inline text".
   - `lang` (optional)
   - `id` (optional; top-level only)
 
-#### 8.3.7 Preformatted: `pre`
+#### 9.3.7 Preformatted: `pre`
 
 - **Body:** inline text
 - **Attributes:** `syntax` (optional), `lang` (optional), `id` (optional; top-level only)
 
-#### 8.3.8 Tables: `table`
+#### 9.3.8 Tables: `table`
 
 - **Body:** block-list containing:
   - optional `columns`, then
@@ -643,9 +628,9 @@ Table layout rules:
 
 - **Group Headers (`group`):** A `group` element acts as a heading that spans all columns of the table. Semantically, `group { ... }` is equivalent to a `row` containing a single `td` with a `colspan` attribute equal to the table's column count. A `group` does not have a `title` and does not render a cell in the row header column.
 
-### 8.4 Structural Elements
+### 9.4 Structural Elements
 
-#### 8.4.1 List item: `li`
+#### 9.4.1 List item: `li`
 
 - **Body:** either
   - a block-list of block elements, or
@@ -653,13 +638,13 @@ Table layout rules:
   - a verbatim body
 - **Attributes:** `lang` (optional)
 
-#### 8.4.2 `columns` (table header row)
+#### 9.4.2 `columns` (table header row)
 
 - **Role:** Defines the labels for the columns of a table. The number of cells in this element (taking `colspan` into account) defines the table's column count.
 - **Body:** block-list containing `td` (at least one)
 - **Attributes:** `lang` (optional)
 
-#### 8.4.3 `row` (table data row)
+#### 9.4.3 `row` (table data row)
 
 - **Role:** Defines a row of data in a table.
 - **Body:** block-list containing `td` (at least one)
@@ -667,13 +652,13 @@ Table layout rules:
   - `title` (optional string): If present, creates a header cell for the row in an implicit leading column.
   - `lang` (optional)
 
-#### 8.4.4 `group` (table row group)
+#### 9.4.4 `group` (table row group)
 
 - **Role:** A heading row that spans all table columns.
 - **Body:** inline text
 - **Attributes:** `lang` (optional)
 
-#### 8.4.5 `td` (table cell)
+#### 9.4.5 `td` (table cell)
 
 - **Role:** A single cell within a table row.
 - **Body:** either
@@ -682,29 +667,29 @@ Table layout rules:
   - a verbatim body
 - **Attributes:** `colspan` (optional Integer ≥ 1; default 1), `lang` (optional)
 
-### 8.5 Inline elements
+### 9.5 Inline elements
 
 Inline elements appear only in inline-list bodies (or inside string/verbatim, depending on renderer).
 
-#### 8.5.1 `\\em`
+#### 9.5.1 `\\em`
 
 - **Role:** emphasis
 - **Body:** inline text
 - **Attributes:** `lang` (optional)
 
-#### 8.5.2 `\\mono`
+#### 9.5.2 `\\mono`
 
 - **Role:** monospaced span
 - **Body:** inline text
 - **Attributes:** `syntax` (optional), `lang` (optional)
 
-#### 8.5.3 `\\strike`, `\\sub`, `\\sup`
+#### 9.5.3 `\\strike`, `\\sub`, `\\sup`
 
 - **Role:** strike-through / subscript / superscript
 - **Body:** inline text
 - **Attributes:** `lang` (optional)
 
-#### 8.5.4 `\link`
+#### 9.5.4 `\link`
 
 - **Role:** foreign hyperlink (external or non-validated target)
 - **Body:** inline text
@@ -718,13 +703,13 @@ Notes:
 - Interior references use `\ref(ref="...")`.
 
 
-#### 8.5.5 `\\date`, `\\time`, `\\datetime`
+#### 9.5.5 `\\date`, `\\time`, `\\datetime`
 
 - **Role:** localized date/time rendering
 - **Body:** must be plain text, a single string, or verbatim (no nested inline elements)
 - **Attributes:** `fmt` (optional; per element), `lang` (optional)
 
-#### 8.5.6 `\ref`
+#### 9.5.6 `\ref`
 
 - **Role:** validated interior reference (to a top-level `id`)
 - **Body:** inline text (optional; may be empty)
@@ -755,7 +740,7 @@ If the referenced target is not a heading:
 
 When computing `<name>` for headings, inline footnote/citation markers **SHOULD NOT** contribute to the plaintext (i.e., their marker text is ignored).
 
-#### 8.5.7 `\footnote`
+#### 9.5.7 `\footnote`
 
 - **Role:** footnote/citation marker and definition
 - **Body:** inline text (required for defining form; empty for reference form)
@@ -784,7 +769,7 @@ Marker rendering (normative):
 - A renderer **SHALL** render a citation marker as `\sup{\link{[\d+]}}`.
 
 
-## 9. Attribute types and date/time formats
+## 10. Attribute types and date/time formats
 
 > TODO: Attributes should be documented well and not only be mentioned in the element catalog.
 >       This chapter shall document attributes and their types, including detailled descriptions for both.
@@ -793,7 +778,7 @@ Marker rendering (normative):
 >       Non-fatal diagnostics **MUST** be emitted for that.
 >       Leading and trailing whitespace must be stripped.
 
-### 9.1 Common attribute types
+### 10.1 Common attribute types
 
 - **Version:** must be `2.0`.
 - **Integer:** ASCII decimal digits; leading zeros allowed but discouraged.
@@ -802,11 +787,11 @@ Marker rendering (normative):
 - **Timezone offset:** `Z` or `±HH:MM`.
 - **URI/IRI:** per RFC 3987.
 
-### 9.2 Date / time lexical formats (normative)
+### 10.2 Date / time lexical formats (normative)
 
 These formats are a conservative intersection of RFC 3339 and ISO 8601.
 
-#### 9.2.1 Date
+#### 10.2.1 Date
 
 `YYYY-MM-DD`
 
@@ -814,7 +799,7 @@ These formats are a conservative intersection of RFC 3339 and ISO 8601.
 - `MM`: `01`-`12`
 - `DD`: `01`-`31`
 
-#### 9.2.2 Time
+#### 10.2.2 Time
 
 `hh:mm:ss` with a required time zone unless a default `tz` is defined in `hdoc`.
 
@@ -828,13 +813,13 @@ These formats are a conservative intersection of RFC 3339 and ISO 8601.
 
 If `hdoc(tz="...")` is present, a time value **MAY** omit the zone.
 
-#### 9.2.3 Datetime
+#### 10.2.3 Datetime
 
 `YYYY-MM-DD` `T` `hh:mm:ss` (with optional fraction and required zone, unless `hdoc.tz` is present)
 
 If `hdoc(tz="...")` is present, a datetime value **MAY** omit the zone. This is permitted specifically for `hdoc(date="...")` and for `\datetime` bodies.
 
-### 9.3 `fmt` values
+### 10.3 `fmt` values
 
 > TODO: `fmt` values need a proper description of what the expected output is.
 >       The output is using the `lang` context of the \date, \time, \datetime element and
@@ -858,7 +843,7 @@ Defaults when omitted:
 - `\datetime(fmt=...)`: default `short`
 - `\ref(fmt=...)`: default `full`
 
-## 10. Non-normative guidance for tooling
+## 11. Non-normative guidance for tooling
 
 - Formatters should normalize line endings to LF.
 - Provide diagnostics for discouraged patterns (leading/trailing whitespace in attribute values, leading zeros, mixed directionality, etc.).
