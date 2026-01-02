@@ -41,30 +41,34 @@ If a chapter is marked DONE or FROZEN, the status applies to all of its sub-chap
   - "9.1 Built-in elements and list mode"
     - "9.1.1 Inline vs block": DONE
     - "9.1.2 List-body mode per built-in element": DRAFT
-  - "9.2 Element catalog (normative)": DRAFT
+  - "9.2 Top-Level Block Elements": DRAFT
     - "9.2.1 `hdoc` (header)": DONE
-    - "9.2.2 Headings: `h1`, `h2`, `h3`": DRAFT
-    - "9.2.3 Paragraph blocks: `p`, `note`, `warning`, `danger`, `tip`, `quote`, `spoiler`": DRAFT
-    - "9.2.4 Lists: `ul`, `ol`": DRAFT
-    - "9.2.5 List item: `li`": DRAFT
-    - "9.2.6 Figure: `img`": DRAFT
-    - "9.2.7 Preformatted: `pre`": DRAFT
-    - "9.2.8 Table of contents: `toc`": DRAFT
-    - "9.2.9 Tables: `table`": DRAFT
-    - "9.2.10 `columns` (table header row)": DRAFT
-    - "9.2.11 `row` (table data row)": DRAFT
-    - "9.2.12 `group` (table row group)": DRAFT
-    - "9.2.13 `td` (table cell)": DRAFT
-    - "9.2.14 `title` (document title)": DRAFT
-    - "9.2.15 Footnote dump: `footnotes`": DRAFT
-  - "9.3 Inline elements"
-    - "9.3.1 `\\em`": DRAFT
-    - "9.3.2 `\\mono`": DRAFT
-    - "9.3.3 `\\strike`, `\\sub`, `\\sup`": DRAFT
-    - "9.3.4 `\link`": DRAFT
-    - "9.3.5 `\\date`, `\\time`, `\\datetime`": DRAFT
-    - "9.3.6 `\ref`": DRAFT
-    - "9.3.7 `\footnote`": DRAFT
+    - "9.2.2 `title` (document title)": DRAFT
+    - "9.2.3 Headings: `h1`, `h2`, `h3`": DRAFT
+    - "9.2.4 Table of contents: `toc`": DRAFT
+    - "9.2.5 Footnote dump: `footnotes`": DRAFT
+  - "9.3 General Text Block Elements": DRAFT
+    - "9.3.1 Paragraph: `p`": DRAFT
+    - "9.3.2 Admonition Blocks: `note`, `warning`, `danger`, `tip`, `quote`, `spoiler`": DRAFT
+    - "9.3.3 Unordered List: `ul`": DRAFT
+    - "9.3.4 Ordered List: `ol`": DRAFT
+    - "9.3.5 Figure: `img`": DRAFT
+    - "9.3.6 Preformatted: `pre`": DRAFT
+    - "9.3.7 Tables: `table`": DRAFT
+  - "9.4 Structural Elements": DRAFT
+    - "9.4.1 List item: `li`": DRAFT
+    - "9.4.2 `columns` (table header row)": DRAFT
+    - "9.4.3 `row` (table data row)": DRAFT
+    - "9.4.4 `group` (table row group)": DRAFT
+    - "9.4.5 `td` (table cell)": DRAFT
+  - "9.5 Inline elements"
+    - "9.5.1 `\\em`": DRAFT
+    - "9.5.2 `\\mono`": DRAFT
+    - "9.5.3 `\\strike`, `\\sub`, `\\sup`": DRAFT
+    - "9.5.4 `\link`": DRAFT
+    - "9.5.5 `\\date`, `\\time`, `\\datetime`": DRAFT
+    - "9.5.6 `\ref`": DRAFT
+    - "9.5.7 `\footnote`": DRAFT
 - "10. Attribute types and date/time formats": DRAFT
   - "10.1 Common attribute types": DRAFT
   - "10.2 Date / time lexical formats (normative)": DRAFT
