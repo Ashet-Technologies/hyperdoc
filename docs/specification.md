@@ -41,30 +41,34 @@ If a chapter is marked DONE or FROZEN, the status applies to all of its sub-chap
   - "9.1 Built-in elements and list mode"
     - "9.1.1 Inline vs block": DONE
     - "9.1.2 List-body mode per built-in element": DRAFT
-  - "9.2 Element catalog (normative)": DRAFT
+  - "9.2 Top-Level Block Elements": DRAFT
     - "9.2.1 `hdoc` (header)": DONE
-    - "9.2.2 Headings: `h1`, `h2`, `h3`": DRAFT
-    - "9.2.3 Paragraph blocks: `p`, `note`, `warning`, `danger`, `tip`, `quote`, `spoiler`": DRAFT
-    - "9.2.4 Lists: `ul`, `ol`": DRAFT
-    - "9.2.5 List item: `li`": DRAFT
-    - "9.2.6 Figure: `img`": DRAFT
-    - "9.2.7 Preformatted: `pre`": DRAFT
-    - "9.2.8 Table of contents: `toc`": DRAFT
-    - "9.2.9 Tables: `table`": DRAFT
-    - "9.2.10 `columns` (table header row)": DRAFT
-    - "9.2.11 `row` (table data row)": DRAFT
-    - "9.2.12 `group` (table row group)": DRAFT
-    - "9.2.13 `td` (table cell)": DRAFT
-    - "9.2.14 `title` (document title)": DRAFT
-    - "9.2.15 Footnote dump: `footnotes`": DRAFT
-  - "9.3 Inline elements"
-    - "9.3.1 `\\em`": DRAFT
-    - "9.3.2 `\\mono`": DRAFT
-    - "9.3.3 `\\strike`, `\\sub`, `\\sup`": DRAFT
-    - "9.3.4 `\link`": DRAFT
-    - "9.3.5 `\\date`, `\\time`, `\\datetime`": DRAFT
-    - "9.3.6 `\ref`": DRAFT
-    - "9.3.7 `\footnote`": DRAFT
+    - "9.2.2 `title` (document title)": DRAFT
+    - "9.2.3 Headings: `h1`, `h2`, `h3`": DRAFT
+    - "9.2.4 Table of contents: `toc`": DRAFT
+    - "9.2.5 Footnote dump: `footnotes`": DRAFT
+  - "9.3 General Text Block Elements": DRAFT
+    - "9.3.1 Paragraph: `p`": DRAFT
+    - "9.3.2 Admonition Blocks: `note`, `warning`, `danger`, `tip`, `quote`, `spoiler`": DRAFT
+    - "9.3.3 Unordered List: `ul`": DRAFT
+    - "9.3.4 Ordered List: `ol`": DRAFT
+    - "9.3.5 Figure: `img`": DRAFT
+    - "9.3.6 Preformatted: `pre`": DRAFT
+    - "9.3.7 Tables: `table`": DRAFT
+  - "9.4 Structural Elements": DRAFT
+    - "9.4.1 List item: `li`": DRAFT
+    - "9.4.2 `columns` (table header row)": DRAFT
+    - "9.4.3 `row` (table data row)": DRAFT
+    - "9.4.4 `group` (table row group)": DRAFT
+    - "9.4.5 `td` (table cell)": DRAFT
+  - "9.5 Inline elements"
+    - "9.5.1 `\\em`": DRAFT
+    - "9.5.2 `\\mono`": DRAFT
+    - "9.5.3 `\\strike`, `\\sub`, `\\sup`": DRAFT
+    - "9.5.4 `\link`": DRAFT
+    - "9.5.5 `\\date`, `\\time`, `\\datetime`": DRAFT
+    - "9.5.6 `\ref`": DRAFT
+    - "9.5.7 `\footnote`": DRAFT
 - "10. Attribute types and date/time formats": DRAFT
   - "10.1 Common attribute types": DRAFT
   - "10.2 Date / time lexical formats (normative)": DRAFT
@@ -507,6 +511,8 @@ This promotion is a feature for convenience and applies only to the following el
 
 ### 9.2 Top-Level Block Elements
 
+The elements in this chapter **MUST** appear only as top-level block elements (direct children of the document). They **MUST NOT** appear inside nested structures.
+
 #### 9.2.1 `hdoc` (header)
 
 - **Role:** document header
@@ -532,7 +538,24 @@ Semantic constraints:
 - If present, `title` **MUST** be the second node in the document (after `hdoc`).
 - `title` **MUST NOT** have an `id` attribute.
 
-#### 9.2.3 Table of contents: `toc`
+#### 9.2.3 Headings: `h1`, `h2`, `h3`
+
+- **Role:** block heading levels 1-3
+- **Body:** inline text
+- **Attributes:** `lang` (optional), `id` (optional)
+
+Heading structure and numbering:
+
+- `h1`, `h2`, and `h3` **MUST** appear only as top-level block elements.
+- `h1` **MAY** appear anywhere in the document order.
+- `h2` **MUST** be preceded by an `h1`, and that `h1` is the parent section for the `h2`.
+- `h3` **MUST** be preceded by an `h2`, and there **MUST NOT** be any intervening `h1` between that `h2` and the `h3`; the most recent `h2` is the parent section for the `h3`.
+- Heading indices are assigned as follows:
+  - Each `h1` receives a one-part index `[i1]` that starts at `1` and increments by `1` after assignment.
+  - Each `h2` receives a two-part index `[i1, i2]`; `i2` resets to `1` when a new `h1` is assigned and increments by `1` after assignment.
+  - Each `h3` receives a three-part index `[i1, i2, i3]`; `i3` resets to `1` when a new `h1` or `h2` is assigned and increments by `1` after assignment.
+
+#### 9.2.4 Table of contents: `toc`
 
 - **Role:** Generates a table of contents.
 - **Body:** `;` (empty)
@@ -541,7 +564,7 @@ Semantic constraints:
 Semantic constraints:
 - `toc` **MUST** be a top-level block element (a direct child of the document).
 
-#### 9.2.4 Footnote dump: `footnotes`
+#### 9.2.5 Footnote dump: `footnotes`
 
 - **Role:** collect and render accumulated footnotes
 - **Body:** `;` (empty)
@@ -568,30 +591,24 @@ In this chapter, an "inline text" body is one of:
 
 Only an empty body (`;`) is not "inline text".
 
-#### 9.3.1 Headings: `h1`, `h2`, `h3`
-
-- **Role:** block heading levels 1-3
-- **Body:** inline text
-- **Attributes:** `lang` (optional), `id` (optional; top-level only)
-
-#### 9.3.2 Paragraph: `p`
+#### 9.3.1 Paragraph: `p`
 
 - **Role:** A standard paragraph of text.
 - **Body:** inline text
 - **Attributes:** `lang` (optional), `id` (optional; top-level only)
 
-#### 9.3.3 Admonition Blocks: `note`, `warning`, `danger`, `tip`, `quote`, `spoiler`
+#### 9.3.2 Admonition Blocks: `note`, `warning`, `danger`, `tip`, `quote`, `spoiler`
 
 - **Role:** A block that renders with a distinct style to draw the reader's attention.
 - **Body:** A block-list containing zero or more General Text Block Elements. Per the Shorthand Body Promotion rule (§9.1.3), a string or verbatim body may be provided, which will be treated as a single contained paragraph.
 - **Attributes:** `lang` (optional), `id` (optional; top-level only)
 
-#### 9.3.4 Unordered List: `ul`
+#### 9.3.3 Unordered List: `ul`
 
 - **Body:** block-list containing `li` (at least one)
 - **Attributes:** `lang` (optional), `id` (optional; top-level only)
 
-#### 9.3.5 Ordered List: `ol`
+#### 9.3.4 Ordered List: `ol`
 
 - **Body:** block-list containing `li` (at least one)
 - **Attributes:**
@@ -599,7 +616,7 @@ Only an empty body (`;`) is not "inline text".
   - `id` (optional; top-level only)
   - `first` (optional Integer ≥ 0; default 1): number of the first list item
 
-#### 9.3.6 Figure: `img`
+#### 9.3.5 Figure: `img`
 
 - **Body:** inline text caption/description (may be empty)
 - **Attributes:**
@@ -608,12 +625,12 @@ Only an empty body (`;`) is not "inline text".
   - `lang` (optional)
   - `id` (optional; top-level only)
 
-#### 9.3.7 Preformatted: `pre`
+#### 9.3.6 Preformatted: `pre`
 
 - **Body:** inline text
 - **Attributes:** `syntax` (optional), `lang` (optional), `id` (optional; top-level only)
 
-#### 9.3.8 Tables: `table`
+#### 9.3.7 Tables: `table`
 
 - **Body:** block-list containing:
   - optional `columns`, then
@@ -735,24 +752,16 @@ Semantics:
 
 - `\ref(ref="X")` **MUST** resolve to a top-level element with `id="X"`, otherwise it is semantically invalid.
 - If `\ref` has a non-empty body, the body **MUST** be used as the rendered link text.
-- If `\ref` has an empty body (`;`), the renderer **MUST** synthesize link text from the referenced target and `fmt`:
-
-  - `fmt="full"`: renders `"<index> <name>"` (default)
-  - `fmt="name"`: renders `"<name>"`
-  - `fmt="index"`: renders `"<index>"`
-
-Target-derived values:
-
-- For heading targets (`h1`, `h2`, `h3`), `<name>` is the heading’s constructed plaintext inline text.
-- For heading targets, `<index>` is the heading’s hierarchical number within the document (e.g. `3.` / `3.2.` / `3.2.1.`).
-
-If the referenced target is not a heading:
-
-> TODO: Also add semantics for `ref(ref);` with `img` (Figure X.) and `table` (Table X.).
->       This requires the introduction of counters for these tags, and allow auto-numbering.
-
-- `\ref(ref="X");` (implicit body) is semantically invalid and **MUST** be rejected.
-- `\ref(ref="X"){...}` remains valid.
+- If `\ref` has an empty body (`;`), the following rules apply:
+  - If the referenced target is a heading (`h1`, `h2`, `h3`), the renderer **MUST** synthesize link text from the target and `fmt`:
+    - `fmt="full"`: renders `"<index> <name>"` (default)
+    - `fmt="name"`: renders `"<name>"`
+    - `fmt="index"`: renders `"<index>"`
+    - `<name>` is the heading’s constructed plaintext inline text.
+    - `<index>` is the heading’s hierarchical number within the document (e.g. `3.` / `3.2.` / `3.2.1.`).
+  - > TODO: Also add semantics for `ref(ref);` with `img` (Figure X.) and `table` (Table X.).
+    >       This requires the introduction of counters for these tags, and allow auto-numbering.
+  - In all other cases, `\ref(ref="X");` (implicit body) **MUST** be rejected with a diagnostic explaining that empty-body references are only supported for headings until this TODO is resolved.
 
 When computing `<name>` for headings, inline footnote/citation markers **SHOULD NOT** contribute to the plaintext (i.e., their marker text is ignored).
 
