@@ -20,10 +20,15 @@ pub const Document = struct {
 
     // header information
     lang: LanguageTag = .inherit, // inherit here means "unset"
-    title: ?[]const u8,
+    title: ?Title = null,
     author: ?[]const u8,
     date: ?DateTime,
     timezone: ?TimeZoneOffset,
+
+    pub const Title = struct {
+        full: Block.Title,
+        simple: []const u8,
+    };
 
     pub const TableOfContents = struct {
         level: Block.Heading.Level, // TODO: Refactor to use `index` here as well.
@@ -145,6 +150,11 @@ pub const Block = union(enum) {
         lang: LanguageTag,
         colspan: u32,
         content: []Block,
+    };
+
+    pub const Title = struct {
+        lang: LanguageTag,
+        content: []Span,
     };
 };
 
@@ -578,6 +588,7 @@ pub fn parse(
     try sema.validate_references(&id_map);
 
     const doc_lang = header.lang orelse LanguageTag.inherit;
+    const title = try sema.finalize_title(header, doc_lang);
     const contents = try sema.blocks.toOwnedSlice(arena.allocator());
     const block_locations = try sema.block_locations.toOwnedSlice(arena.allocator());
     const toc = try sema.build_toc(contents, block_locations);
@@ -590,7 +601,7 @@ pub fn parse(
         .toc = toc,
 
         .lang = doc_lang,
-        .title = header.title,
+        .title = title,
         .version = header.version,
         .author = header.author,
         .date = header.date,
@@ -722,6 +733,9 @@ pub const SemanticAnalyzer = struct {
     code: []const u8,
 
     header: ?Header = null,
+    title_block: ?Block.Title = null,
+    title_location: ?Parser.Location = null,
+    top_level_index: usize = 0,
     blocks: std.ArrayList(Block) = .empty,
     block_locations: std.ArrayList(Parser.Location) = .empty,
     ids: std.ArrayList(?Reference) = .empty,
@@ -732,8 +746,18 @@ pub const SemanticAnalyzer = struct {
     heading_counters: [Block.Heading.Level.count]u16 = @splat(0),
 
     fn append_node(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, UnsupportedVersion }!void {
+        const node_index = sema.top_level_index;
+        sema.top_level_index += 1;
+
         switch (node.type) {
             .hdoc => {
+                if (node_index != 0) {
+                    try sema.emit_diagnostic(.misplaced_hdoc_header, node.location);
+                }
+                if (node.body != .empty) {
+                    try sema.emit_diagnostic(.non_empty_hdoc_body, node.location);
+                }
+
                 const header = sema.translate_header_node(node) catch |err| switch (err) {
                     error.OutOfMemory, error.UnsupportedVersion => |e| return e,
                     error.BadAttributes => null,
@@ -753,15 +777,32 @@ pub const SemanticAnalyzer = struct {
                 std.debug.assert(sema.header != null);
             },
 
+            .title => {
+                if (sema.header == null and node_index == 0) {
+                    try sema.emit_diagnostic(.missing_hdoc_header, node.location);
+                }
+                if (node_index != 1) {
+                    try sema.emit_diagnostic(.misplaced_title_block, node.location);
+                }
+                if (sema.title_block != null) {
+                    try sema.emit_diagnostic(.duplicate_title_block, node.location);
+                    return;
+                }
+
+                const title_block = sema.translate_title_node(node) catch |err| switch (err) {
+                    error.OutOfMemory => |e| return e,
+                    error.BadAttributes => {
+                        return;
+                    },
+                };
+
+                sema.title_block = title_block;
+                sema.title_location = node.location;
+            },
+
             else => {
-                if (sema.header == null) {
-                    if (sema.blocks.items.len == 0) {
-                        // Emit error for the first encountered block.
-                        // This can only happen exactly once, as we either:
-                        // - have already set a header block when the first non-header nodes arrives.
-                        // - we have processed another block already, so the previous block would've emitted the warning already.
-                        try sema.emit_diagnostic(.missing_hdoc_header, node.location);
-                    }
+                if (sema.header == null and node_index == 0) {
+                    try sema.emit_diagnostic(.missing_hdoc_header, node.location);
                 }
 
                 const block, const id = sema.translate_block_node(node) catch |err| switch (err) {
@@ -851,6 +892,10 @@ pub const SemanticAnalyzer = struct {
                 const image, const id = try sema.translate_image_node(node);
                 return .{ .{ .image = image }, id };
             },
+            .title => {
+                try sema.emit_diagnostic(.{ .invalid_block_type = .{ .name = sema.code[node.location.offset .. node.location.offset + node.location.length] } }, node.location);
+                return error.InvalidNodeType;
+            },
             .pre => {
                 const preformatted, const id = try sema.translate_preformatted_node(node);
                 return .{ .{ .preformatted = preformatted }, id };
@@ -911,6 +956,17 @@ pub const SemanticAnalyzer = struct {
         };
 
         return .{ heading, attrs.id };
+    }
+
+    fn translate_title_node(sema: *SemanticAnalyzer, node: Parser.Node) !Block.Title {
+        const attrs = try sema.get_attributes(node, struct {
+            lang: LanguageTag = .inherit,
+        });
+
+        return .{
+            .lang = attrs.lang,
+            .content = try sema.translate_inline(node, .emit_diagnostic, .one_space),
+        };
     }
 
     fn translate_paragraph_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Paragraph, ?Reference } {
@@ -1607,10 +1663,10 @@ pub const SemanticAnalyzer = struct {
                 const content_spans = try sema.translate_inline(node, .emit_diagnostic, .one_space);
 
                 //  Convert the content_spans into a "rendered string".
-                const content_text = sema.render_spans_to_plaintext(content_spans) catch |err| switch (err) {
+                const content_text = (sema.render_spans_to_plaintext(content_spans, .reject_date_time) catch |err| switch (err) {
                     error.DateTimeRenderingUnsupported => unreachable,
                     else => |e| return e,
-                };
+                }).text;
 
                 const content: Span.Content = switch (node.type) {
                     .@"\\date" => try sema.parse_date_body(node, .date, Date, content_text, props.fmt),
@@ -1632,6 +1688,7 @@ pub const SemanticAnalyzer = struct {
             .h1,
             .h2,
             .h3,
+            .title,
             .p,
             .note,
             .warning,
@@ -1706,28 +1763,156 @@ pub const SemanticAnalyzer = struct {
         });
     }
 
-    fn render_spans_to_plaintext(sema: *SemanticAnalyzer, source_spans: []const Span) error{ OutOfMemory, DateTimeRenderingUnsupported }![]const u8 {
-        var len: usize = 0;
-        for (source_spans) |span| {
-            len += switch (span.content) {
-                .text => |str| str.len,
-                .date, .time, .datetime => return error.DateTimeRenderingUnsupported,
-            };
-        }
+    const TitlePlainText = struct {
+        text: []const u8,
+        contains_date_time: bool,
+    };
 
-        var output_str: std.ArrayList(u8) = .empty;
-        defer output_str.deinit(sema.arena);
+    const PlaintextMode = enum {
+        reject_date_time,
+        iso_date_time,
+    };
 
-        try output_str.ensureTotalCapacityPrecise(sema.arena, len);
+    fn render_spans_to_plaintext(
+        sema: *SemanticAnalyzer,
+        source_spans: []const Span,
+        mode: PlaintextMode,
+    ) error{ OutOfMemory, DateTimeRenderingUnsupported }!TitlePlainText {
+        var output: std.ArrayList(u8) = .empty;
+        defer output.deinit(sema.arena);
+
+        var contains_date_time = false;
 
         for (source_spans) |span| {
             switch (span.content) {
-                .text => |str| output_str.appendSliceAssumeCapacity(str),
-                .date, .time, .datetime => unreachable,
+                .text => |str| try output.appendSlice(sema.arena, str),
+                .date => |value| switch (mode) {
+                    .reject_date_time => return error.DateTimeRenderingUnsupported,
+                    .iso_date_time => {
+                        contains_date_time = true;
+                        var buffer: [64]u8 = undefined;
+                        const text = format_iso_date(value.value, &buffer);
+                        try output.appendSlice(sema.arena, text);
+                    },
+                },
+                .time => |value| switch (mode) {
+                    .reject_date_time => return error.DateTimeRenderingUnsupported,
+                    .iso_date_time => {
+                        contains_date_time = true;
+                        var buffer: [64]u8 = undefined;
+                        const text = format_iso_time(value.value, &buffer);
+                        try output.appendSlice(sema.arena, text);
+                    },
+                },
+                .datetime => |value| switch (mode) {
+                    .reject_date_time => return error.DateTimeRenderingUnsupported,
+                    .iso_date_time => {
+                        contains_date_time = true;
+                        var buffer: [96]u8 = undefined;
+                        const text = format_iso_datetime(value.value, &buffer);
+                        try output.appendSlice(sema.arena, text);
+                    },
+                },
             }
         }
 
-        return try output_str.toOwnedSlice(sema.arena);
+        return .{
+            .text = try output.toOwnedSlice(sema.arena),
+            .contains_date_time = contains_date_time,
+        };
+    }
+
+    fn format_iso_date(value: Date, buffer: []u8) []const u8 {
+        const formatted = std.fmt.bufPrint(buffer, "{d:0>4}-{d:0>2}-{d:0>2}", .{
+            @as(u32, @intCast(value.year)),
+            value.month,
+            value.day,
+        }) catch unreachable;
+
+        return if (formatted.len > 0 and formatted[0] == '+')
+            formatted[1..]
+        else
+            formatted;
+    }
+
+    fn format_iso_time(value: Time, buffer: []u8) []const u8 {
+        var stream = std.io.fixedBufferStream(buffer);
+        const writer = stream.writer();
+
+        writer.print("{d:0>2}:{d:0>2}:{d:0>2}", .{ value.hour, value.minute, value.second }) catch unreachable;
+        if (value.microsecond > 0) {
+            writer.print(".{d:0>6}", .{value.microsecond}) catch unreachable;
+        }
+        const minutes = @intFromEnum(value.timezone);
+        if (minutes == 0) {
+            writer.writeByte('Z') catch unreachable;
+        } else {
+            const sign: u8 = if (minutes < 0) '-' else '+';
+            const abs_minutes: u32 = @intCast(@abs(minutes));
+            const hour: u32 = abs_minutes / 60;
+            const minute: u32 = abs_minutes % 60;
+            writer.print("{c}{d:0>2}:{d:0>2}", .{ sign, hour, minute }) catch unreachable;
+        }
+
+        return stream.getWritten();
+    }
+
+    fn format_iso_datetime(value: DateTime, buffer: []u8) []const u8 {
+        const date_text = format_iso_date(value.date, buffer);
+        const sep_index = date_text.len;
+        buffer[sep_index] = 'T';
+
+        const time_text = format_iso_time(value.time, buffer[sep_index + 1 ..]);
+
+        return buffer[0 .. sep_index + 1 + time_text.len];
+    }
+
+    fn synthesize_title_from_plaintext(sema: *SemanticAnalyzer, text: []const u8, doc_lang: LanguageTag) !Block.Title {
+        const spans = try sema.arena.alloc(Span, 1);
+        spans[0] = .{
+            .content = .{ .text = text },
+            .attribs = .{ .lang = .inherit },
+            .location = .{ .offset = 0, .length = text.len },
+        };
+
+        return .{
+            .lang = doc_lang,
+            .content = spans,
+        };
+    }
+
+    fn finalize_title(sema: *SemanticAnalyzer, header: Header, doc_lang: LanguageTag) !?Document.Title {
+        const header_title = header.title;
+        const block_title = sema.title_block;
+
+        if (header_title == null and block_title == null)
+            return null;
+
+        if (block_title) |title_block| {
+            const rendered = sema.render_spans_to_plaintext(title_block.content, .iso_date_time) catch |err| switch (err) {
+                error.DateTimeRenderingUnsupported => unreachable,
+                else => |e| return e,
+            };
+
+            if (header_title == null and rendered.contains_date_time) {
+                if (sema.title_location) |location| {
+                    try sema.emit_diagnostic(.title_inline_date_time_without_header, location);
+                }
+            }
+
+            return .{
+                .full = title_block,
+                .simple = rendered.text,
+            };
+        }
+
+        const simple_text = header_title.?;
+        const synthesized_full = try sema.synthesize_title_from_plaintext(simple_text, doc_lang);
+
+        return .{
+            .full = synthesized_full,
+            .simple = simple_text,
+        };
     }
 
     const EmptyHandling = enum {
@@ -2809,6 +2994,7 @@ pub const Parser = struct {
         h1,
         h2,
         h3,
+        title,
         p,
         note,
         warning,
@@ -2861,6 +3047,7 @@ pub const Parser = struct {
                 .h1,
                 .h2,
                 .h3,
+                .title,
                 .p,
                 .note,
                 .warning,
@@ -2890,6 +3077,7 @@ pub const Parser = struct {
                 .h2,
                 .h3,
 
+                .title,
                 .p,
                 .note,
                 .warning,
@@ -2995,6 +3183,8 @@ pub const Diagnostic = struct {
         unterminated_block_list,
         missing_hdoc_header: MissingHdocHeader,
         duplicate_hdoc_header: DuplicateHdocHeader,
+        misplaced_hdoc_header,
+        non_empty_hdoc_body,
         missing_attribute: NodeAttributeError,
         invalid_attribute: NodeAttributeError,
         empty_attribute: NodeAttributeError,
@@ -3015,6 +3205,8 @@ pub const Diagnostic = struct {
         illegal_child_item,
         list_body_required,
         illegal_id_attribute,
+        misplaced_title_block,
+        duplicate_title_block,
         column_count_mismatch: TableShapeError,
         duplicate_id: ReferenceError,
         unknown_id: ReferenceError,
@@ -3033,6 +3225,7 @@ pub const Diagnostic = struct {
         attribute_leading_trailing_whitespace,
         tab_character,
         automatic_heading_insertion: AutomaticHeading,
+        title_inline_date_time_without_header,
 
         pub fn severity(code: Code) Severity {
             return switch (code) {
@@ -3044,6 +3237,8 @@ pub const Diagnostic = struct {
                 .unterminated_block_list,
                 .missing_hdoc_header,
                 .duplicate_hdoc_header,
+                .misplaced_hdoc_header,
+                .non_empty_hdoc_body,
                 .invalid_attribute,
                 .missing_attribute,
                 .empty_attribute,
@@ -3064,6 +3259,8 @@ pub const Diagnostic = struct {
                 .list_body_required,
                 .illegal_id_attribute,
                 .invalid_date_time_body,
+                .misplaced_title_block,
+                .duplicate_title_block,
                 .column_count_mismatch,
                 .duplicate_id,
                 .unknown_id,
@@ -3082,6 +3279,7 @@ pub const Diagnostic = struct {
                 .tab_character,
                 .document_starts_with_bom,
                 .automatic_heading_insertion,
+                .title_inline_date_time_without_header,
                 => .warning,
             };
         }
@@ -3104,6 +3302,8 @@ pub const Diagnostic = struct {
                 .unterminated_block_list => try w.writeAll("Block list body is unterminated (missing '}' before end of file)."),
                 .missing_hdoc_header => try w.writeAll("Document must start with an 'hdoc' header."),
                 .duplicate_hdoc_header => try w.writeAll("Only one 'hdoc' header is allowed; additional header found."),
+                .misplaced_hdoc_header => try w.writeAll("The 'hdoc' header must be the first node in the document."),
+                .non_empty_hdoc_body => try w.writeAll("The 'hdoc' header must have an empty body (';')."),
                 .duplicate_attribute => |ctx| try w.print("Duplicate attribute '{s}' will overwrite the earlier value.", .{ctx.name}),
                 .empty_verbatim_block => try w.writeAll("Verbatim block has no lines."),
                 .verbatim_missing_trailing_newline => try w.writeAll("Verbatim line should end with a newline."),
@@ -3147,6 +3347,8 @@ pub const Diagnostic = struct {
                 .illegal_child_item => try w.writeAll("Node not allowed here."),
 
                 .illegal_id_attribute => try w.writeAll("Attribute 'id' not allowed here."),
+                .misplaced_title_block => try w.writeAll("Document title must be the second node (directly after 'hdoc')."),
+                .duplicate_title_block => try w.writeAll("Only one 'title' block is allowed."),
 
                 .invalid_date_time_body => try w.writeAll("\\date, \\time and \\datetime do not allow any inlines inside their body."),
 
@@ -3159,6 +3361,7 @@ pub const Diagnostic = struct {
                 .tab_character => try w.writeAll("Tab character is not allowed; use spaces instead."),
 
                 .automatic_heading_insertion => |ctx| try w.print("Inserted automatic {t} to fill heading level gap.", .{ctx.level}),
+                .title_inline_date_time_without_header => try w.writeAll("Title block contains \\date/\\time/\\datetime but hdoc(title=\"...\") is missing; metadata title cannot be derived reliably."),
             }
         }
     };

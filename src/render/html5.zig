@@ -11,6 +11,8 @@ const indent_step: usize = 2;
 pub fn render(doc: hdoc.Document, writer: *Writer) RenderError!void {
     var ctx: RenderContext = .{ .doc = &doc, .writer = writer };
 
+    try ctx.renderDocumentHeader();
+
     for (doc.contents, 0..) |block, index| {
         try ctx.renderBlock(block, index, 0);
     }
@@ -30,6 +32,53 @@ const RenderContext = struct {
             .toc => |toc| try ctx.renderTableOfContents(toc, block_index, indent),
             .table => |table| try ctx.renderTable(table, block_index, indent),
         }
+    }
+
+    fn renderDocumentHeader(ctx: *RenderContext) RenderError!void {
+        const has_title = ctx.doc.title != null;
+        const has_author = ctx.doc.author != null;
+        const has_date = ctx.doc.date != null;
+
+        if (!has_title and !has_author and !has_date) return;
+
+        try writeStartTag(ctx.writer, "header", .regular, .{ .lang = langAttribute(ctx.doc.lang) });
+        try ctx.writer.writeByte('\n');
+
+        if (has_title) {
+            const title = ctx.doc.title.?;
+            try writeIndent(ctx.writer, indent_step);
+            try writeStartTag(ctx.writer, "h1", .regular, .{ .lang = langAttribute(title.full.lang) });
+            try ctx.renderSpans(title.full.content);
+            try writeEndTag(ctx.writer, "h1");
+            try ctx.writer.writeByte('\n');
+        }
+
+        if (has_author or has_date) {
+            try writeIndent(ctx.writer, indent_step);
+            try writeStartTag(ctx.writer, "p", .regular, .{ .class = "hdoc-doc-meta" });
+
+            var wrote_any = false;
+            if (has_author) {
+                try ctx.writer.writeAll("By ");
+                try writeEscapedHtml(ctx.writer, ctx.doc.author.?);
+                wrote_any = true;
+            }
+            if (has_date) {
+                if (wrote_any) {
+                    try ctx.writer.writeAll(" - ");
+                }
+
+                var date_buffer: [128]u8 = undefined;
+                const date_text = try formatIsoDateTime(ctx.doc.date.?, &date_buffer);
+                try writeEscapedHtml(ctx.writer, date_text);
+            }
+
+            try writeEndTag(ctx.writer, "p");
+            try ctx.writer.writeByte('\n');
+        }
+
+        try writeEndTag(ctx.writer, "header");
+        try ctx.writer.writeByte('\n');
     }
 
     fn renderBlocks(ctx: *RenderContext, blocks: []const hdoc.Block, indent: usize) RenderError!void {
@@ -644,9 +693,9 @@ fn takeLang(lang: *?[]const u8) ?[]const u8 {
 
 fn headingTag(level: hdoc.Block.Heading.Level) []const u8 {
     return switch (level) {
-        .h1 => "h1",
-        .h2 => "h2",
-        .h3 => "h3",
+        .h1 => "h2",
+        .h2 => "h3",
+        .h3 => "h4",
     };
 }
 
