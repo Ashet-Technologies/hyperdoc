@@ -735,6 +735,9 @@ Target-derived values:
 
 If the referenced target is not a heading:
 
+> TODO: Also add semantics for `ref(ref);` with `img` (Figure X.) and `table` (Table X.).
+>       This requires the introduction of counters for these tags, and allow auto-numbering.
+
 - `\ref(ref="X");` (implicit body) is semantically invalid and **MUST** be rejected.
 - `\ref(ref="X"){...}` remains valid.
 
@@ -762,11 +765,6 @@ Semantics:
 - `\footnote(ref="X");` emits a marker for the previously defined named footnote `X`.
 - Each `kind` has an independent numeric namespace: footnotes and citations are numbered separately.
 - A renderer **MAY** hyperlink markers and dumped entries back-and-forth.
-
-Marker rendering (normative):
-
-- A renderer **SHALL** render a regular footnote marker as `\sup{\link{\d+}}`.
-- A renderer **SHALL** render a citation marker as `\sup{\link{[\d+]}}`.
 
 
 ## 10. Attribute types and date/time formats

@@ -13,14 +13,9 @@
   - Static layout: No surprises. Layout once, yield consistent rendering
   - Accessiblity: Everything is semantic, nothing is presentation-only.
 - h3 after h1 is not legal
+- Support "appendix{}" in addition to h1,h2,h3 which is a h1-level chapter that renders as "A. B. C." instead of "1. 2. 3."
 
 > Problem: What if neither columns nor row exists (table with only group)? Spec should require at least one row or columns.
-
-> Problem: What should synthesized text be for valid non-heading targets like table, img, pre? Spec says headings get <index> <name> but doesn't define fallback for figures ("Figure 3"), tables ("Table 2"), etc.
-
-States "A renderer SHALL render a regular footnote marker as \sup{\link{\d+}}"
-Problem: This seems like implementation guidance, not semantic requirement. Different renderers (HTML, PDF, terminal) may render markers differently. Should be in §10 (non-normative) or relaxed to "SHOULD".
-
 
 > Recommendation 3: Add Formal Whitespace Processing Algorithm
 
