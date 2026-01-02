@@ -3,7 +3,6 @@
 - Assign semantics to node types, paragraph kinds, ...
 - Specify "syntax" proper
 - Add links to RFCs where possible
-- Clarify that page layout is static and won't change except for context resize.
 - \abbrev and \term might be good ideas.
 - Add more text to the introduction and underlying ideas of the format:
   - Orthogonality: Semantic structure is not dependend on syntax. Verbatim lines are not preformatted, but `pre` blocks are.
@@ -13,8 +12,6 @@
   - Accessiblity: Everything is semantic, nothing is presentation-only.
 - h3 after h1 is not legal
 - Support "appendix{}" in addition to h1,h2,h3 which is a h1-level chapter that renders as "A. B. C." instead of "1. 2. 3."
-
-> Problem: What if neither columns nor row exists (table with only group)? Spec should require at least one row or columns.
 
 > Recommendation 3: Add Formal Whitespace Processing Algorithm
 

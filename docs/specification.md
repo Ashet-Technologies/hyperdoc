@@ -622,11 +622,24 @@ Only an empty body (`;`) is not "inline text".
 
 Table layout rules:
 
-- **Column Count:** The number of columns in a table is determined by the `columns` element. It is the sum of the `colspan` values of the `td` cells within the `columns` row. If `columns` is absent, the column count is determined by the first `row` element in the same way. All `columns` and `row` elements in a table **MUST** resolve to the same effective column count.
-
-- **Row Headers (`row(title)`):** A `row` element may have a `title` attribute, which creates a *row header*. This header is rendered as an implicit, additional first column for that row. This "row header column" does **not** contribute to the table's main column count. If any `row` in the table has a `title`, renderers **MUST** reserve space for a leading row header column throughout the table. This leading column will be blank for `columns`, `group`, and any `row` without a `title`.
-
-- **Group Headers (`group`):** A `group` element acts as a heading that spans all columns of the table. Semantically, `group { ... }` is equivalent to a `row` containing a single `td` with a `colspan` attribute equal to the table's column count. A `group` does not have a `title` and does not render a cell in the row header column.
+- **Column Count:**
+  - The **effective column count** in a table is determined by the `columns` element and is the sum of the `colspan` values of the `td` cells within the `columns` row.
+  - If `columns` is absent, the column count is determined by the first `row` element in the same way.
+  - A table with an effective column count of `0` **MUST** be rejected as semantically invalid.
+  - All `columns` and `row` elements in a table **MUST** resolve to the same effective column count.
+- **Row Headers (`row(title)`):**
+  - A `row` element may have a `title` attribute, which creates a *row header*.
+  - If any *row header* is created, an *implicit*, additional first "row header column" is created.
+  - This header is rendered in that column.
+  - This "row header column" does **not** contribute to the table's main column count.
+  - If any `row` in the table has a `title`, renderers **MUST** reserve space for a leading row header column throughout the table.
+  - This leading column is blank for `columns`, `group`, and any `row` without a `title`.
+- **Group Headers (`group`):**
+  - A `group` element starts a new group of rows with a shared semantic topic.
+  - The `group` body contains the caption for the topic of the following rows, until the next `group` element appears (or until the end of the table).
+  - Rows before the first `group` have no defined topic.
+  - A `group` element acts as a heading that spans all columns of the table.
+  - A `group` does not have a `title` and does not render a cell in the row header column.
 
 ### 9.4 Structural Elements
 
