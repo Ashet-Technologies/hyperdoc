@@ -1,0 +1,69 @@
+document:
+  version:
+    major: 2
+    minor: 0
+  lang: "en"
+  title:
+    simple: "Footnotes Demo"
+    full:
+      lang: ""
+      content:
+        - [] "Footnotes Demo"
+  author: null
+  date: null
+  toc:
+    level: h1
+    headings: []
+    children: []
+  contents:
+    - paragraph:
+      lang: ""
+      content:
+        - [] "Intro with footnote"
+        - [] "footnote:footnote:1"
+        - [] " and citation"
+        - [] "footnote:citation:1"
+        - [] "."
+    - footnotes:
+      lang: ""
+      entries:
+        -         index: 1
+        kind: footnote
+        lang: ""
+        content:
+          - [] "Footnote text"
+        -         index: 1
+        kind: citation
+        lang: ""
+        content:
+          - [] "Citation text"
+    - paragraph:
+      lang: ""
+      content:
+        - [] "Next section references "
+        - [] "footnote:citation:1"
+        - [] " and adds another"
+        - [] "footnote:footnote:2"
+        - [] "."
+    - footnotes:
+      lang: ""
+      entries:
+        -         index: 1
+        kind: citation
+        lang: ""
+        content:
+          - [] "Citation text"
+    - footnotes:
+      lang: ""
+      entries:
+        -         index: 2
+        kind: footnote
+        lang: ""
+        content:
+          - [] "Second footnote"
+  ids:
+    - null
+    - null
+    - null
+    - null
+    - null
