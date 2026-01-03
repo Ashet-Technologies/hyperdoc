@@ -21,12 +21,12 @@ p {
 
 h2{Special Paragraphs}
 
-note    { HyperDoc 2.0 also supports different types of paragraphs. }
-warning { These should affect rendering, and have well-defined semantics attached to them. }
-danger  { You shall not assume any specific formatting of these elements though. }
-tip     { They typically have a standardized style though. }
-quote   { You shall not pass! }
-spoiler { Nobody expects the Spanish Inquisition! }
+note "HyperDoc 2.0 also supports different types of paragraphs."
+warning "These should affect rendering, and have well-defined semantics attached to them."
+danger "You shall not assume any specific formatting of these elements though."
+tip "They typically have a standardized style though."
+quote "You shall not pass!"
+spoiler "Nobody expects the Spanish Inquisition!"
 
 h2{Verbatim and Preformatted Text}
 

@@ -409,9 +409,14 @@ fn dumpBlockInline(writer: *Writer, indent: usize, block: hdoc.Block) Writer.Err
         },
         .paragraph => |paragraph| {
             try writeTypeTag(writer, "paragraph");
-            try dumpEnumField(writer, indent + indent_step, "kind", paragraph.kind);
             try dumpOptionalStringField(writer, indent + indent_step, "lang", paragraph.lang.text);
             try dumpSpanListField(writer, indent + indent_step, "content", paragraph.content);
+        },
+        .admonition => |admonition| {
+            try writeTypeTag(writer, "admonition");
+            try dumpEnumField(writer, indent + indent_step, "kind", admonition.kind);
+            try dumpOptionalStringField(writer, indent + indent_step, "lang", admonition.lang.text);
+            try dumpBlockListField(writer, indent + indent_step, "content", admonition.content);
         },
         .list => |list| {
             try writeTypeTag(writer, "list");
