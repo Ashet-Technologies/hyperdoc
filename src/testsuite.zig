@@ -593,6 +593,120 @@ test "table of contents inserts automatic headings when skipping levels" {
     try std.testing.expectEqual(@as(usize, 0), trailing_h1_child.children.len);
 }
 
+test "footnotes collect entries per dump" {
+    const source =
+        \\hdoc(version="2.0",lang="en");
+        \\p{Intro \footnote{first} \footnote(kind="citation",key="cite1"){c1}}
+        \\footnotes;
+        \\p{Again \footnote(ref="cite1"); \footnote{second}}
+        \\footnotes(kind="citation");
+        \\footnotes;
+    ;
+
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    var doc = try hdoc.parse(std.testing.allocator, source, &diagnostics);
+    defer doc.deinit();
+
+    try std.testing.expect(!diagnostics.has_error());
+    try std.testing.expectEqual(@as(usize, 5), doc.contents.len);
+
+    const first_dump = switch (doc.contents[1]) {
+        .footnotes => |value| value,
+        else => return error.TestExpectedEqual,
+    };
+    try std.testing.expectEqual(@as(usize, 2), first_dump.entries.len);
+    try std.testing.expectEqual(hdoc.FootnoteKind.footnote, first_dump.entries[0].kind);
+    try std.testing.expectEqual(@as(usize, 1), first_dump.entries[0].index);
+    try std.testing.expectEqual(hdoc.FootnoteKind.citation, first_dump.entries[1].kind);
+    try std.testing.expectEqual(@as(usize, 1), first_dump.entries[1].index);
+
+    const second_dump = switch (doc.contents[3]) {
+        .footnotes => |value| value,
+        else => return error.TestExpectedEqual,
+    };
+    try std.testing.expectEqual(@as(usize, 1), second_dump.entries.len);
+    try std.testing.expectEqual(hdoc.FootnoteKind.citation, second_dump.entries[0].kind);
+    try std.testing.expectEqual(@as(usize, 1), second_dump.entries[0].index);
+
+    const final_dump = switch (doc.contents[4]) {
+        .footnotes => |value| value,
+        else => return error.TestExpectedEqual,
+    };
+    try std.testing.expectEqual(@as(usize, 1), final_dump.entries.len);
+    try std.testing.expectEqual(hdoc.FootnoteKind.footnote, final_dump.entries[0].kind);
+    try std.testing.expectEqual(@as(usize, 2), final_dump.entries[0].index);
+}
+
+test "warn when footnotes are missing dumps" {
+    const source =
+        \\hdoc(version="2.0",lang="en");
+        \\p{Body \footnote{content}}
+    ;
+
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    var doc = try hdoc.parse(std.testing.allocator, source, &diagnostics);
+    defer doc.deinit();
+
+    var saw_warning = false;
+    for (diagnostics.items.items) |item| {
+        if (diagnosticCodesEqual(item.code, .footnote_missing_dump)) {
+            saw_warning = true;
+            break;
+        }
+    }
+    try std.testing.expect(saw_warning);
+}
+
+test "warn when footnotes remain after intermediate dump" {
+    const source =
+        \\hdoc(version="2.0",lang="en");
+        \\p{First \footnote{one}}
+        \\footnotes{}
+        \\p{Second \footnote{two}}
+    ;
+
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    var doc = try hdoc.parse(std.testing.allocator, source, &diagnostics);
+    defer doc.deinit();
+
+    var saw_warning = false;
+    for (diagnostics.items.items) |item| {
+        if (diagnosticCodesEqual(item.code, .footnote_missing_dump)) {
+            saw_warning = true;
+            break;
+        }
+    }
+    try std.testing.expect(saw_warning);
+}
+
+test "no warning when footnotes are drained after later dump" {
+    const source =
+        \\hdoc(version="2.0",lang="en");
+        \\p{First \footnote{one}}
+        \\footnotes{}
+        \\p{Second \footnote{two}}
+        \\footnotes{}
+    ;
+
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    var doc = try hdoc.parse(std.testing.allocator, source, &diagnostics);
+    defer doc.deinit();
+
+    for (diagnostics.items.items) |item| {
+        if (diagnosticCodesEqual(item.code, .footnote_missing_dump)) {
+            return error.TestExpectedEqual;
+        }
+    }
+}
+
 fn diagnosticCodesEqual(lhs: hdoc.Diagnostic.Code, rhs: hdoc.Diagnostic.Code) bool {
     if (std.meta.activeTag(lhs) != std.meta.activeTag(rhs))
         return false;

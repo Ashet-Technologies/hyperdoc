@@ -32,6 +32,7 @@ const RenderContext = struct {
             .preformatted => |preformatted| try ctx.renderPreformatted(preformatted, block_index, indent),
             .toc => |toc| try ctx.renderTableOfContents(toc, block_index, indent),
             .table => |table| try ctx.renderTable(table, block_index, indent),
+            .footnotes => |footnotes| try ctx.renderFootnotes(footnotes, block_index, indent),
         }
     }
 
@@ -359,6 +360,78 @@ const RenderContext = struct {
         try ctx.writer.writeByte('\n');
     }
 
+    fn renderFootnotes(ctx: *RenderContext, footnotes: hdoc.Block.Footnotes, block_index: ?usize, indent: usize) RenderError!void {
+        const lang_attr = langAttribute(footnotes.lang);
+        const id_attr = ctx.resolveBlockId(block_index);
+
+        try writeIndent(ctx.writer, indent);
+        try writeStartTag(ctx.writer, "div", .regular, .{
+            .id = id_attr,
+            .lang = lang_attr,
+            .class = "hdoc-footnotes",
+        });
+        try ctx.writer.writeByte('\n');
+
+        const kinds = [_]hdoc.FootnoteKind{ .footnote, .citation };
+        for (kinds) |kind| {
+            var first_index: ?usize = null;
+            var count: usize = 0;
+
+            for (footnotes.entries) |entry| {
+                if (entry.kind != kind)
+                    continue;
+                if (first_index == null)
+                    first_index = entry.index;
+                count += 1;
+            }
+
+            if (count == 0)
+                continue;
+
+            try writeIndent(ctx.writer, indent + indent_step);
+            var class_buffer: [64]u8 = undefined;
+            const list_class = std.fmt.bufPrint(&class_buffer, "hdoc-footnote-list hdoc-{s}", .{footnoteSlug(kind)}) catch unreachable;
+            try writeStartTag(ctx.writer, "ol", .regular, .{
+                .class = list_class,
+                .start = first_index,
+            });
+            try ctx.writer.writeByte('\n');
+
+            for (footnotes.entries) |entry| {
+                if (entry.kind != kind)
+                    continue;
+
+                var id_buffer: [64]u8 = undefined;
+                const entry_id = ctx.footnoteId(entry.kind, entry.index, &id_buffer);
+
+                try writeIndent(ctx.writer, indent + 2 * indent_step);
+                try writeStartTag(ctx.writer, "li", .regular, .{
+                    .id = entry_id,
+                    .lang = langAttribute(entry.lang),
+                });
+                if (entry.content.len > 0) {
+                    try ctx.writer.writeByte('\n');
+                    try writeIndent(ctx.writer, indent + 3 * indent_step);
+                    try writeStartTag(ctx.writer, "p", .regular, .{ .lang = langAttribute(entry.lang) });
+                    try ctx.renderSpans(entry.content);
+                    try writeEndTag(ctx.writer, "p");
+                    try ctx.writer.writeByte('\n');
+                    try writeIndent(ctx.writer, indent + 2 * indent_step);
+                }
+                try writeEndTag(ctx.writer, "li");
+                try ctx.writer.writeByte('\n');
+            }
+
+            try writeIndent(ctx.writer, indent + indent_step);
+            try writeEndTag(ctx.writer, "ol");
+            try ctx.writer.writeByte('\n');
+        }
+
+        try writeIndent(ctx.writer, indent);
+        try writeEndTag(ctx.writer, "div");
+        try ctx.writer.writeByte('\n');
+    }
+
     fn renderHeaderRow(ctx: *RenderContext, columns: hdoc.Block.TableColumns, indent: usize, has_title_column: bool) RenderError!void {
         try writeIndent(ctx.writer, indent);
         try writeStartTag(ctx.writer, "tr", .regular, .{ .lang = langAttribute(columns.lang) });
@@ -471,6 +544,18 @@ const RenderContext = struct {
         return null;
     }
 
+    fn footnoteSlug(kind: hdoc.FootnoteKind) []const u8 {
+        return switch (kind) {
+            .footnote => "footnote",
+            .citation => "citation",
+        };
+    }
+
+    fn footnoteId(ctx: *RenderContext, kind: hdoc.FootnoteKind, index: usize, buffer: []u8) []const u8 {
+        _ = ctx;
+        return std.fmt.bufPrint(buffer, "hdoc-{s}-{d}", .{ footnoteSlug(kind), index }) catch unreachable;
+    }
+
     fn renderSpans(ctx: *RenderContext, spans: []const hdoc.Span) RenderError!void {
         for (spans) |span| {
             try ctx.renderSpan(span);
@@ -553,6 +638,21 @@ const RenderContext = struct {
             .datetime => |datetime| try ctx.renderDateTimeValue(.datetime, datetime, content_lang),
             .reference => |reference| {
                 try ctx.renderReference(reference, content_lang);
+            },
+            .footnote => |footnote| {
+                var id_buffer: [64]u8 = undefined;
+                const target_id = ctx.footnoteId(footnote.kind, footnote.index, &id_buffer);
+                var href_buffer: [64]u8 = undefined;
+                const href = std.fmt.bufPrint(&href_buffer, "#{s}", .{target_id}) catch unreachable;
+
+                var class_buffer: [64]u8 = undefined;
+                const class_attr = std.fmt.bufPrint(&class_buffer, "hdoc-footnote-ref hdoc-{s}", .{footnoteSlug(footnote.kind)}) catch unreachable;
+
+                try writeStartTag(ctx.writer, "sup", .regular, .{ .class = class_attr, .lang = content_lang });
+                try writeStartTag(ctx.writer, "a", .regular, .{ .href = href });
+                try ctx.writer.print("{d}", .{footnote.index});
+                try writeEndTag(ctx.writer, "a");
+                try writeEndTag(ctx.writer, "sup");
             },
         }
 

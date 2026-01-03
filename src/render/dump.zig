@@ -221,6 +221,9 @@ fn writeSpanContentInline(writer: *Writer, content: hdoc.Span.Content) Writer.Er
             try writeFormattedDateTimeInline(writer, datetime);
             try writer.writeByte('"');
         },
+        .footnote => |footnote| {
+            try writer.print("\"footnote:{s}:{d}\"", .{ @tagName(footnote.kind), footnote.index });
+        },
         .reference => |reference| {
             try writer.writeByte('"');
             try writer.writeAll("ref:");
@@ -318,6 +321,28 @@ fn dumpListItemsField(writer: *Writer, indent: usize, key: []const u8, items: []
         try writeIndent(writer, indent + indent_step);
         try writer.writeAll("- ");
         try dumpListItem(writer, indent + indent_step, item);
+    }
+}
+
+fn dumpFootnoteEntry(writer: *Writer, indent: usize, entry: hdoc.Block.FootnoteEntry) Writer.Error!void {
+    try writeIndent(writer, indent);
+    try writer.print("index: {}\n", .{entry.index});
+    try dumpEnumField(writer, indent, "kind", entry.kind);
+    try dumpOptionalStringField(writer, indent, "lang", entry.lang.text);
+    try dumpSpanListField(writer, indent, "content", entry.content);
+}
+
+fn dumpFootnoteEntries(writer: *Writer, indent: usize, entries: []const hdoc.Block.FootnoteEntry) Writer.Error!void {
+    try writeIndent(writer, indent);
+    if (entries.len == 0) {
+        try writer.writeAll("entries: []\n");
+        return;
+    }
+    try writer.writeAll("entries:\n");
+    for (entries) |entry| {
+        try writeIndent(writer, indent + indent_step);
+        try writer.writeAll("- ");
+        try dumpFootnoteEntry(writer, indent + indent_step, entry);
     }
 }
 
@@ -456,6 +481,11 @@ fn dumpBlockInline(writer: *Writer, indent: usize, block: hdoc.Block) Writer.Err
             try writeTypeTag(writer, "toc");
             try dumpOptionalStringField(writer, indent + indent_step, "lang", toc.lang.text);
             try dumpOptionalNumberField(writer, indent + indent_step, "depth", @as(?u8, toc.depth));
+        },
+        .footnotes => |footnotes| {
+            try writeTypeTag(writer, "footnotes");
+            try dumpOptionalStringField(writer, indent + indent_step, "lang", footnotes.lang.text);
+            try dumpFootnoteEntries(writer, indent + indent_step, footnotes.entries);
         },
         .table => |table| {
             try writeTypeTag(writer, "table");
