@@ -2253,6 +2253,11 @@ pub const SemanticAnalyzer = struct {
             .preformatted => |*preformatted| {
                 try sema.resolve_span_slice(&preformatted.content, id_map);
             },
+            .admonition => |*admonition| {
+                for (admonition.content) |*child| {
+                    try sema.resolve_block_references(child, id_map);
+                }
+            },
             .toc => {},
             .table => |*table| {
                 for (table.rows) |*row| switch (row.*) {
