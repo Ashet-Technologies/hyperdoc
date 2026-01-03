@@ -1,12 +1,12 @@
 const std = @import("std");
 
-const test_files: []const []const u8 = &.{
-    "test/html5/admonition_blocks.hdoc",
-    "test/html5/document_header.hdoc",
-    "test/html5/media_and_toc.hdoc",
-    "test/html5/nesting_and_inlines.hdoc",
-    "test/html5/paragraph_styles.hdoc",
-    "test/html5/tables.hdoc",
+const snapshot_files: []const []const u8 = &.{
+    "test/snapshot/admonition_blocks.hdoc",
+    "test/snapshot/document_header.hdoc",
+    "test/snapshot/media_and_toc.hdoc",
+    "test/snapshot/nesting_and_inlines.hdoc",
+    "test/snapshot/paragraph_styles.hdoc",
+    "test/snapshot/tables.hdoc",
 };
 
 pub fn build(b: *std.Build) void {
@@ -44,20 +44,32 @@ pub fn build(b: *std.Build) void {
 
     run_step.dependOn(&run_cmd.step);
 
+    const snapshot_diff = b.addExecutable(.{
+        .name = "diff",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("test/compare.zig"),
+            .target = b.graph.host,
+            .optimize = .Debug,
+        }),
+    });
+
     // Snapshot tests:
-    for (test_files) |path| {
+    for (snapshot_files) |path| {
         std.debug.assert(std.mem.endsWith(u8, path, ".hdoc"));
         const html_file = b.fmt("{s}.html", .{path[0 .. path.len - 5]});
         const yaml_file = b.fmt("{s}.yaml", .{path[0 .. path.len - 5]});
 
-        for (&[2][]const u8{ html_file, yaml_file }) |file| {
+        for (&[2][]const u8{ html_file, yaml_file }) |snapshot_file| {
             const test_run = b.addRunArtifact(exe);
-            test_run.addArgs(&.{ "--format", file[file.len - 4 ..] });
+            test_run.addArgs(&.{ "--format", snapshot_file[snapshot_file.len - 4 ..] });
             test_run.addFileArg(b.path(path));
-            test_run.expectStdOutEqual(
-                b.build_root.handle.readFileAlloc(b.allocator, file, 10 * 1024 * 1024) catch @panic("oom"),
-            );
-            test_step.dependOn(&test_run.step);
+            const generated_file = test_run.captureStdOut();
+
+            const compare_run = b.addRunArtifact(snapshot_diff);
+            compare_run.addFileArg(b.path(snapshot_file));
+            compare_run.addFileArg(generated_file);
+
+            test_step.dependOn(&compare_run.step);
         }
     }
 

@@ -19,3 +19,10 @@
 
 - Do not use "inline functions" like `const func = struct { fn func(…) {} }.func;`
 - Zig has no methods. Functions used by "method like" functions can still be placed next to them, no need to put them into global scope nor into local scope.
+
+## Snapshot Files
+
+- If you add a `hdoc` file to `test/snapshot`, also:
+  - Generate the corresponding html and yaml file
+  - Add the file inside build.zig to the snapshot_files global
+- If you change behaviour, the snapshot tests will fail. Validate the failure against your expectations and see if you broke something unexpected.
