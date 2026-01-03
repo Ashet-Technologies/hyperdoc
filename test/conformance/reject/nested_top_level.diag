@@ -1,0 +1,2 @@
+/workspace/hyperdoc/test/conformance/reject/nested_top_level.hdoc:4:3: Node not allowed here.
+error: failed to parse "/workspace/hyperdoc/test/conformance/reject/nested_top_level.hdoc": InvalidFile

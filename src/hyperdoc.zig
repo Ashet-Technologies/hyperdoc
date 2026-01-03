@@ -379,7 +379,6 @@ pub const Time = struct {
         long,
         short,
         rough,
-        relative,
         iso,
     };
 
@@ -584,13 +583,6 @@ pub fn parse(
     };
 
     while (true) {
-        errdefer |err| {
-            std.log.debug("error at examples/demo.hdoc:{f}: {t}", .{
-                parser.make_diagnostic_location(parser.offset),
-                err,
-            });
-        }
-
         const node = parser.accept_node(.top_level) catch |err| switch (err) {
             error.OutOfMemory => |e| return @as(error{OutOfMemory}!Document, e), // TODO: What the fuck? Bug report!
 
@@ -1028,7 +1020,7 @@ pub const SemanticAnalyzer = struct {
                 else => unreachable,
             }),
             .lang = attrs.lang,
-            .content = try sema.translate_inline(node, .emit_diagnostic, .one_space),
+            .content = try sema.translate_inline(node, .emit_diagnostic, .one_space, .heading),
         };
 
         return .{ heading, attrs.id };
@@ -1041,7 +1033,7 @@ pub const SemanticAnalyzer = struct {
 
         return .{
             .lang = attrs.lang,
-            .content = try sema.translate_inline(node, .emit_diagnostic, .one_space),
+            .content = try sema.translate_inline(node, .emit_diagnostic, .one_space, .title),
         };
     }
 
@@ -1053,7 +1045,7 @@ pub const SemanticAnalyzer = struct {
 
         const heading: Block.Paragraph = .{
             .lang = attrs.lang,
-            .content = try sema.translate_inline(node, .emit_diagnostic, .one_space),
+            .content = try sema.translate_inline(node, .emit_diagnostic, .one_space, .normal),
         };
 
         return .{ heading, attrs.id };
@@ -1076,7 +1068,11 @@ pub const SemanticAnalyzer = struct {
                 else => unreachable,
             },
             .lang = attrs.lang,
-            .content = try sema.translate_block_list(node, .text_to_p),
+            .content = try sema.translate_block_list(node, .{
+                .upgrade = .text_to_p,
+                .allow_empty = true,
+                .general_text_only = true,
+            }),
         };
 
         return .{ admonition, attrs.id };
@@ -1161,7 +1157,7 @@ pub const SemanticAnalyzer = struct {
             .lang = attrs.lang,
             .alt = alt,
             .path = path,
-            .content = try sema.translate_inline(node, .allow_empty, .one_space),
+            .content = try sema.translate_inline(node, .allow_empty, .one_space, .normal),
         };
 
         return .{ image, attrs.id };
@@ -1177,7 +1173,7 @@ pub const SemanticAnalyzer = struct {
         const preformatted: Block.Preformatted = .{
             .lang = attrs.lang,
             .syntax = attrs.syntax,
-            .content = try sema.translate_inline(node, .emit_diagnostic, .keep_space),
+            .content = try sema.translate_inline(node, .emit_diagnostic, .keep_space, .normal),
         };
 
         return .{ preformatted, attrs.id };
@@ -1342,7 +1338,7 @@ pub const SemanticAnalyzer = struct {
                             rows.appendAssumeCapacity(.{
                                 .group = .{
                                     .lang = row_attrs.lang,
-                                    .content = try sema.translate_inline(child_node, .emit_diagnostic, .one_space),
+                                    .content = try sema.translate_inline(child_node, .emit_diagnostic, .one_space, .normal),
                                 },
                             });
                         },
@@ -1457,7 +1453,10 @@ pub const SemanticAnalyzer = struct {
         return .{
             .lang = attrs.lang,
             .colspan = colspan,
-            .content = try sema.translate_block_list(node, .text_to_p),
+            .content = try sema.translate_block_list(node, .{
+                .upgrade = .text_to_p,
+                .general_text_only = true,
+            }),
         };
     }
 
@@ -1473,13 +1472,48 @@ pub const SemanticAnalyzer = struct {
 
         return .{
             .lang = attrs.lang,
-            .content = try sema.translate_block_list(node, .text_to_p),
+            .content = try sema.translate_block_list(node, .{
+                .upgrade = .text_to_p,
+                .general_text_only = true,
+            }),
         };
     }
 
     const BlockTextUpgrade = enum { no_upgrade, text_to_p };
+    const BlockListOptions = struct {
+        upgrade: BlockTextUpgrade,
+        allow_empty: bool = false,
+        general_text_only: bool = false,
+    };
 
-    fn translate_block_list(sema: *SemanticAnalyzer, node: Parser.Node, upgrade: BlockTextUpgrade) error{ Unimplemented, InvalidNodeType, OutOfMemory, BadAttributes }![]Block {
+    fn is_top_level_only_block(node_type: Parser.NodeType) bool {
+        return switch (node_type) {
+            .h1, .h2, .h3, .toc, .footnotes => true,
+            else => false,
+        };
+    }
+
+    fn is_general_text_block(node_type: Parser.NodeType) bool {
+        return switch (node_type) {
+            .p,
+            .note,
+            .warning,
+            .danger,
+            .tip,
+            .quote,
+            .spoiler,
+            .ul,
+            .ol,
+            .img,
+            .pre,
+            .table,
+            => true,
+
+            else => false,
+        };
+    }
+
+    fn translate_block_list(sema: *SemanticAnalyzer, node: Parser.Node, options: BlockListOptions) error{ Unimplemented, InvalidNodeType, OutOfMemory, BadAttributes }![]Block {
         switch (node.body) {
             .list => |child_nodes| {
                 var blocks: std.ArrayList(Block) = .empty;
@@ -1488,7 +1522,12 @@ pub const SemanticAnalyzer = struct {
                 try blocks.ensureTotalCapacityPrecise(sema.arena, child_nodes.len);
 
                 for (child_nodes) |child_node| {
-                    if (child_node.type == .toc) {
+                    if (is_top_level_only_block(child_node.type)) {
+                        try sema.emit_diagnostic(.illegal_child_item, child_node.location);
+                        continue;
+                    }
+
+                    if (options.general_text_only and !is_general_text_block(child_node.type)) {
                         try sema.emit_diagnostic(.illegal_child_item, child_node.location);
                         continue;
                     }
@@ -1500,16 +1539,26 @@ pub const SemanticAnalyzer = struct {
                     blocks.appendAssumeCapacity(block);
                 }
 
+                if (blocks.items.len == 0 and !options.allow_empty) {
+                    try sema.emit_diagnostic(.list_body_required, node.location);
+                }
+
                 return try blocks.toOwnedSlice(sema.arena);
             },
 
-            .empty, .string, .verbatim, .text_span => switch (upgrade) {
+            .empty, .string, .verbatim, .text_span => switch (options.upgrade) {
                 .no_upgrade => {
+                    if (options.allow_empty and node.body == .empty)
+                        return &.{};
+
                     try sema.emit_diagnostic(.{ .block_list_required = .{ .type = node.type } }, node.location);
                     return &.{};
                 },
                 .text_to_p => {
-                    const spans = try sema.translate_inline(node, .emit_diagnostic, .one_space);
+                    if (options.allow_empty and node.body == .empty)
+                        return &.{};
+
+                    const spans = try sema.translate_inline(node, .emit_diagnostic, .one_space, .normal);
 
                     const blocks = try sema.arena.alloc(Block, 1);
                     blocks[0] = .{
@@ -1526,11 +1575,13 @@ pub const SemanticAnalyzer = struct {
     }
 
     /// Translates a node into a sequence of inline spans.
-    fn translate_inline(sema: *SemanticAnalyzer, node: Parser.Node, empty_handling: EmptyHandling, whitespace_handling: Whitespace) error{ OutOfMemory, BadAttributes }![]Span {
+    const InlineContext = enum { normal, heading, title };
+
+    fn translate_inline(sema: *SemanticAnalyzer, node: Parser.Node, empty_handling: EmptyHandling, whitespace_handling: Whitespace, context: InlineContext) error{ OutOfMemory, BadAttributes }![]Span {
         var spans: std.ArrayList(Span) = .empty;
         defer spans.deinit(sema.arena);
 
-        try sema.translate_inline_body(&spans, node.body, .{}, empty_handling);
+        try sema.translate_inline_body(&spans, node.body, .{}, empty_handling, context);
 
         return try sema.compact_spans(spans.items, whitespace_handling);
     }
@@ -1723,11 +1774,11 @@ pub const SemanticAnalyzer = struct {
         return new;
     }
 
-    fn translate_inline_node(sema: *SemanticAnalyzer, spans: *std.ArrayList(Span), node: Parser.Node, attribs: Span.Attributes) !void {
+    fn translate_inline_node(sema: *SemanticAnalyzer, spans: *std.ArrayList(Span), node: Parser.Node, attribs: Span.Attributes, context: InlineContext) !void {
         switch (node.type) {
             .unknown_inline,
             .text,
-            => try sema.translate_inline_body(spans, node.body, attribs, .emit_diagnostic),
+            => try sema.translate_inline_body(spans, node.body, attribs, .emit_diagnostic, context),
 
             .@"\\em" => {
                 const props = try sema.get_attributes(node, struct {
@@ -1737,7 +1788,7 @@ pub const SemanticAnalyzer = struct {
                 try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
                     .lang = props.lang,
                     .em = true,
-                }), .emit_diagnostic);
+                }), .emit_diagnostic, context);
             },
 
             .@"\\strike" => {
@@ -1748,7 +1799,7 @@ pub const SemanticAnalyzer = struct {
                 try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
                     .lang = props.lang,
                     .strike = true,
-                }), .emit_diagnostic);
+                }), .emit_diagnostic, context);
             },
 
             .@"\\sub" => {
@@ -1759,7 +1810,7 @@ pub const SemanticAnalyzer = struct {
                 try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
                     .lang = props.lang,
                     .position = .subscript,
-                }), .emit_diagnostic);
+                }), .emit_diagnostic, context);
             },
 
             .@"\\sup" => {
@@ -1770,7 +1821,7 @@ pub const SemanticAnalyzer = struct {
                 try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
                     .lang = props.lang,
                     .position = .superscript,
-                }), .emit_diagnostic);
+                }), .emit_diagnostic, context);
             },
 
             .@"\\link" => {
@@ -1782,10 +1833,15 @@ pub const SemanticAnalyzer = struct {
                 try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
                     .lang = props.lang,
                     .link = .{ .uri = props.uri },
-                }), .emit_diagnostic);
+                }), .emit_diagnostic, context);
             },
 
             .@"\\ref" => {
+                if (context == .heading or context == .title) {
+                    try sema.emit_diagnostic(.{ .inline_not_allowed = .{ .node_type = node.type } }, node.location);
+                    return;
+                }
+
                 const props = try sema.get_attributes(node, struct {
                     lang: LanguageTag = .inherit,
                     ref: Reference,
@@ -1812,7 +1868,7 @@ pub const SemanticAnalyzer = struct {
                             .location = node.location,
                         });
                     },
-                    else => try sema.translate_inline_body(spans, node.body, link_attribs, .emit_diagnostic),
+                    else => try sema.translate_inline_body(spans, node.body, link_attribs, .emit_diagnostic, context),
                 }
             },
 
@@ -1825,7 +1881,7 @@ pub const SemanticAnalyzer = struct {
                     .mono = true,
                     .lang = props.lang,
                     .syntax = props.syntax,
-                }), .emit_diagnostic);
+                }), .emit_diagnostic, context);
             },
 
             .@"\\date",
@@ -1852,7 +1908,7 @@ pub const SemanticAnalyzer = struct {
                     break :blk;
                 }
 
-                const content_spans = try sema.translate_inline(node, .emit_diagnostic, .one_space);
+                const content_spans = try sema.translate_inline(node, .emit_diagnostic, .one_space, context);
 
                 //  Convert the content_spans into a "rendered string".
                 const content_text = (sema.render_spans_to_plaintext(content_spans, .reject_date_time) catch |err| switch (err) {
@@ -1933,7 +1989,7 @@ pub const SemanticAnalyzer = struct {
                 defer content_spans.deinit(sema.arena);
 
                 const content_attribs = try sema.derive_attribute(node.location, attribs, .{ .lang = props.lang });
-                try sema.translate_inline_body(&content_spans, node.body, content_attribs, .emit_diagnostic);
+                try sema.translate_inline_body(&content_spans, node.body, content_attribs, .emit_diagnostic, context);
 
                 const compacted = try sema.compact_spans(content_spans.items, .one_space);
                 if (compacted.len == 0) {
@@ -2026,7 +2082,7 @@ pub const SemanticAnalyzer = struct {
         else if (std.meta.stringToEnum(Format, format_str)) |format|
             format
         else blk: {
-            try sema.emit_diagnostic(.{ .invalid_date_time_fmt = .{ .fmt = format_str } }, get_attribute_location(node, "fmt", .value) orelse node.location);
+            try sema.emit_diagnostic(.invalid_date_time_fmt, get_attribute_location(node, "fmt", .value) orelse node.location);
             break :blk .default;
         };
 
@@ -2195,7 +2251,14 @@ pub const SemanticAnalyzer = struct {
         allow_empty,
         emit_diagnostic,
     };
-    fn translate_inline_body(sema: *SemanticAnalyzer, spans: *std.ArrayList(Span), body: Parser.Node.Body, attribs: Span.Attributes, empty_handling: EmptyHandling) error{ OutOfMemory, BadAttributes }!void {
+    fn translate_inline_body(
+        sema: *SemanticAnalyzer,
+        spans: *std.ArrayList(Span),
+        body: Parser.Node.Body,
+        attribs: Span.Attributes,
+        empty_handling: EmptyHandling,
+        context: InlineContext,
+    ) error{ OutOfMemory, BadAttributes }!void {
         switch (body) {
             .empty => |location| switch (empty_handling) {
                 .allow_empty => {},
@@ -2255,13 +2318,22 @@ pub const SemanticAnalyzer = struct {
 
             .list => |list| {
                 for (list) |child_node| {
-                    try sema.translate_inline_node(spans, child_node, attribs);
+                    try sema.translate_inline_node(spans, child_node, attribs, context);
                 }
             },
 
             .text_span => |text_span| {
+                const decoded_text = if (text_span.text.len == 2 and text_span.text[0] == '\\') blk: {
+                    switch (text_span.text[1]) {
+                        '{' => break :blk "{",
+                        '}' => break :blk "}",
+                        '\\' => break :blk "\\",
+                        else => break :blk text_span.text,
+                    }
+                } else text_span.text;
+
                 try spans.append(sema.arena, .{
-                    .content = .{ .text = text_span.text },
+                    .content = .{ .text = decoded_text },
                     .attribs = attribs,
                     .location = text_span.location,
                 });
@@ -2683,6 +2755,15 @@ pub const SemanticAnalyzer = struct {
     fn compute_next_heading(sema: *SemanticAnalyzer, node: Parser.Node, level: Block.Heading.Level) !Block.Heading.Index {
         const index = @intFromEnum(level);
 
+        const missing_parent: ?Block.Heading.Level = switch (level) {
+            .h1 => null,
+            .h2 => if (sema.heading_counters[0] == 0) .h1 else null,
+            .h3 => if (sema.heading_counters[1] == 0) .h2 else null,
+        };
+        if (missing_parent) |missing| {
+            try sema.emit_diagnostic(.{ .invalid_heading_sequence = .{ .level = level, .missing = missing } }, node.location);
+        }
+
         sema.heading_counters[index] += 1;
 
         if (index > sema.current_heading_level + 1) {
@@ -2694,7 +2775,6 @@ pub const SemanticAnalyzer = struct {
         for (sema.heading_counters[index + 1 ..]) |*val| {
             val.* = 0;
         }
-        _ = node;
 
         return switch (level) {
             .h1 => .{ .h1 = sema.heading_counters[0..1].* },
@@ -2882,6 +2962,19 @@ pub const SemanticAnalyzer = struct {
         var output = output_buffer.toOwnedSlice();
         errdefer output.deinit(sema.arena);
 
+        const chars = output.items(.char);
+        for (chars, 0..) |ch, idx| {
+            if (ch == std.ascii.control_code.cr) {
+                const next_is_lf = idx + 1 < chars.len and chars[idx + 1] == std.ascii.control_code.lf;
+                if (!next_is_lf) {
+                    try sema.emit_diagnostic(
+                        .{ .illegal_character = .{ .codepoint = std.ascii.control_code.cr } },
+                        output.get(idx).location,
+                    );
+                }
+            }
+        }
+
         const view = std.unicode.Utf8View.init(output.items(.char)) catch {
             std.log.err("invalid utf-8 input: \"{f}\"", .{std.zig.fmtString(output.items(.char))});
             @panic("String unescape produced invalid UTF-8 sequence. This should not be possible.");
@@ -2953,7 +3046,7 @@ pub const Parser = struct {
             return error.EndOfFile;
         }
 
-        const type_ident = parser.accept_identifier() catch |err| switch (err) {
+        const type_ident = parser.accept_identifier(.node) catch |err| switch (err) {
             error.UnexpectedEndOfFile => |e| switch (scope_type) {
                 .nested => return e,
                 .top_level => return error.EndOfFile,
@@ -2978,7 +3071,7 @@ pub const Parser = struct {
                 while (true) {
                     if (parser.try_accept_char(')'))
                         break;
-                    const attr_name = try parser.accept_identifier();
+                    const attr_name = try parser.accept_identifier(.attribute);
                     _ = try parser.accept_char('=');
                     const attr_value = try parser.accept_string();
 
@@ -3333,7 +3426,56 @@ pub const Parser = struct {
         return error.UnterminatedStringLiteral;
     }
 
-    pub fn accept_identifier(parser: *Parser) error{ UnexpectedEndOfFile, InvalidCharacter }!Token {
+    pub const IdentifierKind = enum {
+        node,
+        attribute,
+    };
+
+    fn is_identifier_char(c: u8) bool {
+        return switch (c) {
+            'a'...'z',
+            'A'...'Z',
+            '0'...'9',
+            '_',
+            => true,
+            else => false,
+        };
+    }
+
+    fn is_node_identifier_terminator(c: u8) bool {
+        return switch (c) {
+            ' ',
+            '\t',
+            '\n',
+            '\r',
+            '(',
+            ')',
+            '{',
+            '}',
+            ';',
+            ':',
+            '"',
+            ',',
+            => true,
+            else => false,
+        };
+    }
+
+    fn is_attribute_identifier_terminator(c: u8) bool {
+        return switch (c) {
+            ' ',
+            '\t',
+            '\n',
+            '\r',
+            ')',
+            '=',
+            ',',
+            => true,
+            else => false,
+        };
+    }
+
+    pub fn accept_identifier(parser: *Parser, kind: IdentifierKind) error{ UnexpectedEndOfFile, InvalidCharacter }!Token {
         parser.skip_whitespace();
 
         if (parser.at_end()) {
@@ -3342,17 +3484,76 @@ pub const Parser = struct {
         }
 
         const start = parser.offset;
-        const first = parser.code[start];
-        if (!is_ident_char(first)) {
-            emitDiagnostic(parser, .{ .invalid_identifier_start = .{ .char = first } }, parser.make_diagnostic_location(start));
-            return error.InvalidCharacter;
-        }
+        switch (kind) {
+            .node => {
+                const first = parser.code[start];
+                if (first == '\\') {
+                    parser.offset += 1;
+                    if (parser.offset >= parser.code.len or !is_identifier_char(parser.code[parser.offset])) {
+                        emitDiagnostic(parser, .{ .invalid_identifier_start = .{ .char = first } }, parser.make_diagnostic_location(start));
+                        return error.InvalidCharacter;
+                    }
+                } else if (!is_identifier_char(first)) {
+                    emitDiagnostic(parser, .{ .invalid_identifier_start = .{ .char = first } }, parser.make_diagnostic_location(start));
+                    return error.InvalidCharacter;
+                } else {
+                    parser.offset += 1;
+                }
 
-        while (parser.offset < parser.code.len) {
-            const c = parser.code[parser.offset];
-            if (!is_ident_char(c))
-                break;
-            parser.offset += 1;
+                while (parser.offset < parser.code.len) {
+                    const c = parser.code[parser.offset];
+                    if (is_identifier_char(c)) {
+                        parser.offset += 1;
+                        continue;
+                    }
+
+                    if (is_node_identifier_terminator(c))
+                        break;
+
+                    emitDiagnostic(parser, .{ .invalid_identifier_character = .{ .char = c } }, parser.make_diagnostic_location(parser.offset));
+                    return error.InvalidCharacter;
+                }
+            },
+            .attribute => {
+                const first = parser.code[start];
+                if (!is_identifier_char(first)) {
+                    emitDiagnostic(parser, .{ .invalid_identifier_start = .{ .char = first } }, parser.make_diagnostic_location(start));
+                    return error.InvalidCharacter;
+                }
+
+                parser.offset += 1;
+                var prev_was_hyphen = false;
+
+                while (parser.offset < parser.code.len) {
+                    const c = parser.code[parser.offset];
+                    if (is_identifier_char(c)) {
+                        prev_was_hyphen = false;
+                        parser.offset += 1;
+                        continue;
+                    }
+
+                    if (c == '-') {
+                        if (prev_was_hyphen) {
+                            emitDiagnostic(parser, .{ .invalid_identifier_character = .{ .char = c } }, parser.make_diagnostic_location(parser.offset));
+                            return error.InvalidCharacter;
+                        }
+                        prev_was_hyphen = true;
+                        parser.offset += 1;
+                        continue;
+                    }
+
+                    if (is_attribute_identifier_terminator(c))
+                        break;
+
+                    emitDiagnostic(parser, .{ .invalid_identifier_character = .{ .char = c } }, parser.make_diagnostic_location(parser.offset));
+                    return error.InvalidCharacter;
+                }
+
+                if (prev_was_hyphen) {
+                    emitDiagnostic(parser, .{ .invalid_identifier_character = .{ .char = '-' } }, parser.make_diagnostic_location(parser.offset - 1));
+                    return error.InvalidCharacter;
+                }
+            },
         }
 
         return parser.slice(start, parser.offset);
@@ -3430,19 +3631,6 @@ pub const Parser = struct {
     pub fn is_space(c: u8) bool {
         return switch (c) {
             ' ', '\t', '\n', '\r' => true,
-            else => false,
-        };
-    }
-
-    pub fn is_ident_char(c: u8) bool {
-        return switch (c) {
-            'a'...'z',
-            'A'...'Z',
-            '0'...'9',
-            '_',
-            '-',
-            '\\',
-            => true,
             else => false,
         };
     }
@@ -3639,6 +3827,7 @@ pub const Diagnostic = struct {
     pub const UnexpectedEof = struct { context: []const u8, expected_char: ?u8 = null };
     pub const UnexpectedCharacter = struct { expected: u8, found: u8 };
     pub const InvalidIdentifierStart = struct { char: u8 };
+    pub const InvalidIdentifierCharacter = struct { char: u8 };
     pub const DuplicateAttribute = struct { name: []const u8 };
     pub const NodeAttributeError = struct { type: Parser.NodeType, name: []const u8 };
     pub const NodeBodyError = struct { type: Parser.NodeType };
@@ -3647,12 +3836,13 @@ pub const Diagnostic = struct {
     pub const InvalidBlockError = struct { name: []const u8 };
     pub const InlineUsageError = struct { attribute: InlineAttribute };
     pub const InlineCombinationError = struct { first: InlineAttribute, second: InlineAttribute };
-    pub const DateTimeFormatError = struct { fmt: []const u8 };
     pub const InvalidStringEscape = struct { codepoint: u21 };
     pub const ForbiddenControlCharacter = struct { codepoint: u21 };
     pub const TableShapeError = struct { actual: usize, expected: usize };
     pub const ReferenceError = struct { ref: []const u8 };
     pub const AutomaticHeading = struct { level: Block.Heading.Level };
+    pub const HeadingSequenceError = struct { level: Block.Heading.Level, missing: Block.Heading.Level };
+    pub const InlineContextError = struct { node_type: Parser.NodeType };
 
     pub const Code = union(enum) {
         // errors:
@@ -3661,6 +3851,7 @@ pub const Diagnostic = struct {
         unexpected_character: UnexpectedCharacter,
         unterminated_string,
         invalid_identifier_start: InvalidIdentifierStart,
+        invalid_identifier_character: InvalidIdentifierCharacter,
         unterminated_block_list,
         missing_hdoc_header: MissingHdocHeader,
         duplicate_hdoc_header: DuplicateHdocHeader,
@@ -3673,10 +3864,11 @@ pub const Diagnostic = struct {
         invalid_block_type: InvalidBlockError,
         block_list_required: NodeBodyError,
         invalid_inline_combination: InlineCombinationError,
+        inline_not_allowed: InlineContextError,
         link_not_nestable,
         invalid_date_time,
         invalid_date_time_body,
-        invalid_date_time_fmt: DateTimeFormatError,
+        invalid_date_time_fmt,
         missing_timezone,
         invalid_unicode_string_escape,
         invalid_string_escape: InvalidStringEscape,
@@ -3700,6 +3892,7 @@ pub const Diagnostic = struct {
         footnote_missing_ref,
         footnote_missing_body,
         footnote_kind_on_reference,
+        invalid_heading_sequence: HeadingSequenceError,
 
         // warnings:
         document_starts_with_bom,
@@ -3725,6 +3918,7 @@ pub const Diagnostic = struct {
                 .unexpected_character,
                 .unterminated_string,
                 .invalid_identifier_start,
+                .invalid_identifier_character,
                 .unterminated_block_list,
                 .missing_hdoc_header,
                 .duplicate_hdoc_header,
@@ -3737,6 +3931,7 @@ pub const Diagnostic = struct {
                 .invalid_block_type,
                 .block_list_required,
                 .invalid_inline_combination,
+                .inline_not_allowed,
                 .link_not_nestable,
                 .invalid_date_time,
                 .invalid_date_time_fmt,
@@ -3764,6 +3959,7 @@ pub const Diagnostic = struct {
                 .footnote_missing_ref,
                 .footnote_missing_body,
                 .footnote_kind_on_reference,
+                .invalid_heading_sequence,
                 => .@"error",
 
                 .missing_document_language,
@@ -3800,6 +3996,7 @@ pub const Diagnostic = struct {
                 .unexpected_character => |ctx| try w.print("Expected '{c}' but found '{c}'.", .{ ctx.expected, ctx.found }),
                 .unterminated_string => try w.writeAll("Unterminated string literal (missing closing \")."),
                 .invalid_identifier_start => |ctx| try w.print("Invalid identifier start character: '{c}'.", .{ctx.char}),
+                .invalid_identifier_character => |ctx| try w.print("Invalid identifier character: '{c}'.", .{ctx.char}),
                 .unterminated_block_list => try w.writeAll("Block list body is unterminated (missing '}' before end of file)."),
                 .missing_hdoc_header => try w.writeAll("Document must start with an 'hdoc' header."),
                 .duplicate_hdoc_header => try w.writeAll("Only one 'hdoc' header is allowed; additional header found."),
@@ -3823,6 +4020,7 @@ pub const Diagnostic = struct {
 
                 .redundant_inline => |ctx| try w.print("The inline \\{t} has no effect.", .{ctx.attribute}),
                 .invalid_inline_combination => |ctx| try w.print("Cannot combine \\{t} with \\{t}.", .{ ctx.first, ctx.second }),
+                .inline_not_allowed => |ctx| try w.print("\\{t} is not allowed in this context.", .{ctx.node_type}),
                 .link_not_nestable => try w.writeAll("Links are not nestable"),
 
                 .attribute_leading_trailing_whitespace => try w.writeAll("Attribute value has invalid leading or trailing whitespace."),
@@ -3831,7 +4029,7 @@ pub const Diagnostic = struct {
 
                 .missing_timezone => try w.writeAll("Missing timezone offset; add a 'tz' header attribute or include a timezone in the value."),
 
-                .invalid_date_time_fmt => |ctx| try w.print("Invalid 'fmt' value '{s}' for date/time.", .{ctx.fmt}),
+                .invalid_date_time_fmt => try w.writeAll("Invalid 'fmt' value for date/time."),
 
                 .invalid_string_escape => |ctx| if (ctx.codepoint > 0x20 and ctx.codepoint <= 0x7F)
                     try w.print("\\{u} is not a valid escape sequence.", .{ctx.codepoint})
@@ -3866,6 +4064,7 @@ pub const Diagnostic = struct {
                 .footnote_missing_ref => try w.writeAll("\\footnote without a body requires a ref=\"...\" attribute."),
                 .footnote_missing_body => try w.writeAll("\\footnote definitions require a non-empty body."),
                 .footnote_kind_on_reference => try w.writeAll("Attribute 'kind' is only valid on defining \\footnote entries."),
+                .invalid_heading_sequence => |ctx| try w.print("{t} requires a preceding {t}.", .{ ctx.level, ctx.missing }),
 
                 .missing_document_language => try w.writeAll("Document language is missing; set lang on the hdoc header."),
                 .tab_character => try w.writeAll("Tab character is not allowed; use spaces instead."),

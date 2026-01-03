@@ -1,0 +1,24 @@
+document:
+  version:
+    major: 2
+    minor: 0
+  lang: "en"
+  title:
+    simple: "Header Title"
+    full:
+      lang: ""
+      content:
+        - [] "Header Title"
+  author: null
+  date: null
+  toc:
+    level: h1
+    headings: []
+    children: []
+  contents:
+    - paragraph:
+      lang: ""
+      content:
+        - [] "body"
+  ids:
+    - null

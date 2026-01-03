@@ -1,0 +1,2 @@
+/workspace/hyperdoc/test/conformance/reject/string_cr_escape.hdoc:3:8: Forbidden control character U+000D.
+error: failed to parse "/workspace/hyperdoc/test/conformance/reject/string_cr_escape.hdoc": InvalidFile

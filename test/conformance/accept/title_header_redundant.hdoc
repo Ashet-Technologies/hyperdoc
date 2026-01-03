@@ -1,0 +1,5 @@
+hdoc(version="2.0", lang="en", title="Header Title");
+
+title { Header Title }
+
+p "body"

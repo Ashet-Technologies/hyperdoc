@@ -14,6 +14,8 @@
 - Treat `docs/specification.md` as the authoritative source of behavior; examples may be outdated or incorrect.
 - If the spec is unclear or conflicts with code/tests, ask before changing behavior.
 - Do not implement "just make it work" fallbacks that alter semantics to satisfy examples.
+- Diagnostics must not store dynamic strings (e.g., slices to parsed source). Keep diagnostic payloads POD/small and avoid holding arena-backed text.
+- Do not hide crashes by removing safety checks or switching off DebugAllocator; fix the root cause instead. A signal 6 from DebugAllocator indicates memory corruption or a similar misuse.
 
 ## Zig Programming Style
 
