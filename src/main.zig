@@ -65,7 +65,7 @@ fn parse_and_process(allocator: std.mem.Allocator, diagnostics: *hdoc.Diagnostic
     }
 
     switch (options.format) {
-        .dump => try hdoc.render.yaml(parsed, output_stream),
+        .yaml => try hdoc.render.yaml(parsed, output_stream),
         .html => try hdoc.render.html5(parsed, output_stream),
     }
 }
@@ -76,7 +76,7 @@ const CliOptions = struct {
 };
 
 const RenderFormat = enum {
-    dump,
+    yaml,
     html,
 };
 

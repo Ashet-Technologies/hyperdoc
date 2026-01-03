@@ -1,0 +1,101 @@
+document:
+  version:
+    major: 2
+    minor: 0
+  lang: "en"
+  title:
+    simple: "Media and TOC"
+    full:
+      lang: "en"
+      content:
+        - [] "Media and TOC"
+  author: null
+  date: null
+  toc:
+    level: h1
+    headings:
+      - 0
+    children:
+      -
+        level: h2
+        headings:
+          - 2
+          - 4
+          - 6
+        children:
+          -
+            level: h3
+            headings: []
+            children: []
+          -
+            level: h3
+            headings: []
+            children: []
+          -
+            level: h3
+            headings: []
+            children: []
+  contents:
+    - heading:
+      level: h1
+      lang: ""
+      content:
+        - [] "Media and TOC"
+    - toc:
+      lang: ""
+      depth: 3
+    - heading:
+      level: h2
+      lang: ""
+      content:
+        - [] "Preformatted"
+    - preformatted:
+      lang: ""
+      syntax: "python"
+      content:
+        - [] " print(\"hello world\") "
+    - heading:
+      level: h2
+      lang: ""
+      content:
+        - [] "Figure"
+    - image:
+      lang: ""
+      alt: "Example figure"
+      path: "./example.png"
+      content:
+        - [] "Figure caption text."
+    - heading:
+      level: h2
+      lang: ""
+      content:
+        - [] "Dates and Times"
+    - paragraph:
+      lang: ""
+      content:
+        - [] "Today is "
+        - [] "date:+2024-03-01@iso"
+        - [] "."
+    - paragraph:
+      lang: ""
+      content:
+        - [] "The meeting is at "
+        - [] "time:14:30:45@long"
+        - [] "."
+    - paragraph:
+      lang: ""
+      content:
+        - [] "Release happens on "
+        - [] "datetime:+2024-04-15T08:00:00"
+        - [] "."
+  ids:
+    - "intro"
+    - null
+    - "code"
+    - null
+    - "figure"
+    - "fig-code"
+    - "dates"
+    - null
+    - null
+    - null

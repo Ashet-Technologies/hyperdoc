@@ -1,0 +1,33 @@
+document:
+  version:
+    major: 2
+    minor: 0
+  lang: "en"
+  title:
+    simple: "Metadata Title From Block"
+    full:
+      lang: ""
+      content:
+        - [] "Metadata Title From Block"
+  author: null
+  date:
+    date:
+      year: 2024
+      month: 8
+      day: 16
+    time:
+      hour: 9
+      minute: 30
+      second: 0
+      microsecond: 0
+  toc:
+    level: h1
+    headings: []
+    children: []
+  contents:
+    - paragraph:
+      lang: ""
+      content:
+        - [] "This document uses header metadata and a title block without any explicit headings."
+  ids:
+    - null

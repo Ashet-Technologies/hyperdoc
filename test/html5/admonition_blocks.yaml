@@ -1,0 +1,73 @@
+document:
+  version:
+    major: 2
+    minor: 0
+  lang: "en"
+  title:
+    simple: "Admonition Blocks"
+    full:
+      lang: "en"
+      content:
+        - [] "Admonition Blocks"
+  author: null
+  date: null
+  toc:
+    level: h1
+    headings:
+      - 0
+    children:
+      -
+        level: h2
+        headings: []
+        children: []
+  contents:
+    - heading:
+      level: h1
+      lang: ""
+      content:
+        - [] "Admonitions as Containers"
+    - admonition:
+      kind: note
+      lang: ""
+      content:
+        - paragraph:
+          lang: ""
+          content:
+            - [] "A note can span multiple blocks."
+        - list:
+          lang: ""
+          first: null
+          items:
+            - lang: ""
+              content:
+                - paragraph:
+                  lang: ""
+                  content:
+                    - [] "Lists are allowed."
+            - lang: ""
+              content:
+                - paragraph:
+                  lang: ""
+                  content:
+                    - [] "They render inside the note container."
+    - admonition:
+      kind: danger
+      lang: ""
+      content:
+        - paragraph:
+          lang: ""
+          content:
+            - [] "String bodies become paragraphs inside the container."
+    - admonition:
+      kind: spoiler
+      lang: ""
+      content:
+        - paragraph:
+          lang: ""
+          content:
+            - [] "Hidden detail\nspans multiple lines."
+  ids:
+    - null
+    - null
+    - null
+    - null
