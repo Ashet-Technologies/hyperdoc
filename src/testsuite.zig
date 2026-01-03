@@ -685,6 +685,33 @@ test "warn when footnotes remain after intermediate dump" {
     try std.testing.expect(saw_warning);
 }
 
+test "footnote missing dump warning points to earliest remaining kind" {
+    const source =
+        \\hdoc(version="2.0",lang="en");
+        \\p{First \footnote{one}}
+        \\p{C \footnote(kind="citation",key="cite"){two}}
+        \\footnotes(kind="footnote");
+    ;
+
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    var doc = try hdoc.parse(std.testing.allocator, source, &diagnostics);
+    defer doc.deinit();
+
+    var warning: ?hdoc.Diagnostic = null;
+    for (diagnostics.items.items) |item| {
+        if (diagnosticCodesEqual(item.code, .footnote_missing_dump)) {
+            warning = item;
+            break;
+        }
+    }
+
+    try std.testing.expect(warning != null);
+    try std.testing.expectEqual(@as(u32, 3), warning.?.location.line);
+    try std.testing.expectEqual(@as(u32, 5), warning.?.location.column);
+}
+
 test "no warning when footnotes are drained after later dump" {
     const source =
         \\hdoc(version="2.0",lang="en");

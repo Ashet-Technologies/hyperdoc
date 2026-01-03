@@ -643,7 +643,7 @@ pub fn parse(
     const toc = try sema.build_toc(contents, block_locations);
 
     if (sema.has_pending_footnotes()) {
-        if (sema.first_footnote_location) |location| {
+        if (sema.first_pending_footnote_location()) |location| {
             try sema.emit_diagnostic(.footnote_missing_dump, location);
         }
     }
@@ -806,7 +806,7 @@ pub const SemanticAnalyzer = struct {
     footnote_counters: std.EnumArray(FootnoteKind, usize) = std.EnumArray(FootnoteKind, usize).initFill(0),
     footnote_pending: std.EnumArray(FootnoteKind, std.ArrayList(Block.FootnoteEntry)) = std.EnumArray(FootnoteKind, std.ArrayList(Block.FootnoteEntry)).initFill(.empty),
     footnote_keys: std.StringArrayHashMapUnmanaged(FootnoteDefinition) = .empty,
-    first_footnote_location: ?Parser.Location = null,
+    first_footnote_locations: std.EnumArray(FootnoteKind, ?Parser.Location) = std.EnumArray(FootnoteKind, ?Parser.Location).initFill(null),
 
     current_heading_level: usize = 0,
     heading_counters: [Block.Heading.Level.count]u16 = @splat(0),
@@ -1251,10 +1251,13 @@ pub const SemanticAnalyzer = struct {
 
             try entries.appendSlice(sema.arena, pending.items);
             pending.clearRetainingCapacity();
+            sema.first_footnote_locations.getPtr(kind).* = null;
         }
 
         if (!sema.has_pending_footnotes()) {
-            sema.first_footnote_location = null;
+            for (std.meta.tags(FootnoteKind)) |kind| {
+                sema.first_footnote_locations.getPtr(kind).* = null;
+            }
         }
 
         return .{
@@ -1907,7 +1910,7 @@ pub const SemanticAnalyzer = struct {
                     };
 
                     try sema.enqueue_footnote(definition);
-                    sema.note_footnote_marker(node.location);
+                    sema.note_footnote_marker(definition.kind, node.location);
                     try spans.append(sema.arena, .{
                         .content = .{ .footnote = .{
                             .kind = definition.kind,
@@ -1941,7 +1944,7 @@ pub const SemanticAnalyzer = struct {
                 const key_location = get_attribute_location(node, "key", .value);
                 const definition = try sema.append_footnote_definition(kind, props.lang, compacted, props.key, node.location, key_location);
                 try sema.enqueue_footnote(definition);
-                sema.note_footnote_marker(node.location);
+                sema.note_footnote_marker(definition.kind, node.location);
 
                 try spans.append(sema.arena, .{
                     .content = .{ .footnote = .{
@@ -2642,9 +2645,10 @@ pub const SemanticAnalyzer = struct {
         return definition;
     }
 
-    fn note_footnote_marker(sema: *SemanticAnalyzer, location: Parser.Location) void {
-        if (sema.first_footnote_location == null) {
-            sema.first_footnote_location = location;
+    fn note_footnote_marker(sema: *SemanticAnalyzer, kind: FootnoteKind, location: Parser.Location) void {
+        const slot = sema.first_footnote_locations.getPtr(kind);
+        if (slot.* == null) {
+            slot.* = location;
         }
     }
 
@@ -2656,6 +2660,23 @@ pub const SemanticAnalyzer = struct {
         }
 
         return false;
+    }
+
+    fn first_pending_footnote_location(sema: *SemanticAnalyzer) ?Parser.Location {
+        var earliest: ?Parser.Location = null;
+
+        for (std.meta.tags(FootnoteKind)) |kind| {
+            if (sema.footnote_pending.get(kind).items.len == 0)
+                continue;
+
+            if (sema.first_footnote_locations.get(kind)) |location| {
+                if (earliest == null or location.offset < earliest.?.offset) {
+                    earliest = location;
+                }
+            }
+        }
+
+        return earliest;
     }
 
     /// Computes the next index number for a heading of the given level:
