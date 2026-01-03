@@ -3,7 +3,6 @@
 ## General
 
 - `specification.md` is the current "status quo" specifiction. Do not edit unless explicitly asked.
-- `docs/specification-proper-draft.md` is the new "shiny" specification. This is the one you should edit if only asked about the "specification".
   - This file contains a chapter `0. Chapter Status`. This chapter marks each other chapter of the file as FROZEN, DONE, DRAFT or MISSING
     - If a chapter is marked FROZEN, you are not permitted to change anything in it.
     - If a chapter is marked DONE, you are only permitted to perform language changes, but not semantic changes.
