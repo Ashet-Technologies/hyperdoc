@@ -1,0 +1,4 @@
+/workspace/hyperdoc/test/conformance/reject/container_children.hdoc:5:5: Node not allowed here.
+/workspace/hyperdoc/test/conformance/reject/container_children.hdoc:4:3: Node requires list body.
+/workspace/hyperdoc/test/conformance/reject/container_children.hdoc:10:3: Node not allowed here.
+error: failed to parse "/workspace/hyperdoc/test/conformance/reject/container_children.hdoc": InvalidFile

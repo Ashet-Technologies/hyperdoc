@@ -973,7 +973,7 @@ fn formatTimeValue(value: hdoc.FormattedDateTime(hdoc.Time), buffer: []u8) Rende
 
     switch (value.format) {
         .short, .rough => try writer.print("{d:0>2}:{d:0>2}", .{ value.value.hour, value.value.minute }),
-        .long, .relative => {
+        .long => {
             try writer.print("{d:0>2}:{d:0>2}:{d:0>2}", .{ value.value.hour, value.value.minute, value.value.second });
             if (value.value.microsecond > 0) {
                 try writer.print(".{d:0>6}", .{value.value.microsecond});

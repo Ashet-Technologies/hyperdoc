@@ -1,0 +1,2 @@
+/workspace/hyperdoc/test/conformance/reject/time_relative_fmt.hdoc:3:15: Invalid 'fmt' value for date/time.
+error: failed to parse "/workspace/hyperdoc/test/conformance/reject/time_relative_fmt.hdoc": InvalidFile

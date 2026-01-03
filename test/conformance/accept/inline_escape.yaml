@@ -14,6 +14,6 @@ document:
     - paragraph:
       lang: ""
       content:
-        - [] "backslash \\\\ brace-open \\{ brace-close \\}"
+        - [] "backslash \\ brace-open { brace-close }"
   ids:
     - null
