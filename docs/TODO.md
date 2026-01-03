@@ -3,7 +3,6 @@
 ## Tasks
 
 - Assign semantics to node types, paragraph kinds, ...
-- Specify "syntax" proper
 - Add links to RFCs where possible
 - Verbatim-body to text conversion is under-specified. You define verbatim syntax (: with | lines) and later say verbatim bodies become inline text spans (§8.2), but you don’t precisely define how piped lines join (LF vs preserving original CRLF, whether there is a trailing newline, whether a final EOF line_terminator contributes a newline, etc.). Different implementations may diverge. 
 - Inline “groups” exist syntactically but are not given explicit semantics. The grammar includes inline_group ::= "{" , inline_content , "}" and §5.4 makes brace balancing a core rule, but §8.2 doesn’t explicitly state that groups are semantically transparent (flattened) versus affecting whitespace normalization boundaries or span merging. 

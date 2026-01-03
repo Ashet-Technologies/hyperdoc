@@ -867,6 +867,36 @@ Semantics:
 - **Language tag:** BCP 47 (RFC 5646).
 - **Timezone offset:** `Z` or `±HH:MM`.
 - **URI/IRI:** per RFC 3987.
+- **Syntax identifier**: see §10.1.1.
+
+#### 10.1.1 Syntax identifier
+
+A **Syntax identifier** is a compact string used to label a syntax-highlighting / tokenization scheme and a language (or other syntax) within that scheme.
+
+Lexical rules (normative):
+
+- A Syntax identifier value **MUST** be non-empty.
+- It **MUST NOT** contain any whitespace or Unicode control characters (General Category `Cc`).
+- It **MAY** contain any other Unicode scalar values, subject to the `scheme` / `name` splitting rules below.
+
+Structure (normative):
+
+A Syntax identifier is either:
+
+- `name` (no scheme prefix), or
+- `scheme ":" name`
+
+Where:
+
+- `scheme` is an attribute-key-like identifier: it **MUST** match the lexical form of `attr_key` (§5.1).
+- `name` is an opaque identifier: it **MUST** be non-empty and **MUST NOT** contain `":"`.
+
+Parsing and normalization (normative):
+
+- If the value contains a `":"`, the first `":"` splits the identifier into `scheme` and `name`.
+- Otherwise, the effective `scheme` is `"hdoc"` and the entire value is the `name`.
+- Scheme matching is **ASCII case-insensitive**. The canonical scheme behavior defined by this specification uses the lowercase scheme name.
+- The meaning and matching rules of `name` are scheme-defined, except for the `"hdoc"` scheme which is defined in Appendix D.
 
 ### 10.2 Date / time lexical formats (normative)
 
@@ -1017,6 +1047,28 @@ Each element has an **effective language tag**, computed as follows:
 
 This inheritance allows documents to mix language contexts across nested elements (e.g. an English document that contains a German `quote` with an Italian paragraph inside), and keeps localized date/time values in their local context.
 
+### 10.5 `syntax` attribute
+
+The `syntax` attribute is a rendering hint for syntax-aware presentation (e.g. syntax highlighting) on `pre` (§9.3.6) and `\mono` (§9.5.2).
+
+Normative rules:
+
+- If present, the `syntax` attribute value **MUST** be a Syntax identifier (§10.1.1).
+- The `syntax` attribute **MUST NOT** affect parsing or semantic meaning of the element’s body. It is a rendering hint only.
+- Renderers **SHOULD** implement the `"hdoc"` scheme defined by this specification (Appendix D).
+- Renderers **MAY** implement additional schemes.
+- If a renderer does not recognize the scheme or the name within that scheme, it **MUST** render the content as **plain monospaced text** (i.e. without syntax-specific styling).
+
+#### 10.5.1 `plain` (normative)
+
+Within the `"hdoc"` scheme (Appendix D), the canonical name `plain` indicates an explicit request for no syntax highlighting.
+
+If the effective Syntax identifier resolves to `hdoc:plain` (including any aliases mapped to `plain`):
+
+- A renderer **MUST NOT** apply syntax highlighting.
+- A renderer **MUST NOT** attempt language autodetection.
+- A renderer **MAY** still apply generic monospace/code styling (font, background, line wrapping policy, etc.), but **MUST NOT** apply token- or language-dependent styling.
+
 ## 11. Non-normative guidance for tooling
 
 - Formatters should normalize line endings to LF.
@@ -1044,3 +1096,72 @@ pre(syntax="c"):
 |   return 0;
 | }
 ```
+
+## Appendix D. `"hdoc"` syntax scheme (normative, non-exhaustive)
+
+This appendix defines the `"hdoc"` scheme used by the `syntax` attribute (§10.5).
+
+The `"hdoc"` scheme is intended to provide stable, interoperable canonical names for common syntaxes, while allowing unknown names without making documents semantically invalid.
+
+### D.1 Canonicalization and aliasing (normative)
+
+For the purpose of interpreting `syntax` values in the `"hdoc"` scheme:
+
+- Matching of `"hdoc"` `name` values is **ASCII case-insensitive**.
+- If the `name` matches an alias in Table D.2, the effective canonical name **MUST** be the alias target.
+- Otherwise, if the `name` matches a canonical name in Table D.1, the effective canonical name is that name.
+- Otherwise, the `name` is **unrecognized** for the `"hdoc"` scheme.
+
+Tooling guidance (non-normative):
+
+- Formatters and rewriters should preserve the original `syntax` string verbatim unless they intentionally canonicalize it.
+- If canonicalizing, tooling should:
+  - prefer omitting the `"hdoc:"` scheme prefix (since `"hdoc"` is the default scheme), and
+  - prefer the canonical names in Table D.1.
+
+### D.2 Canonical `"hdoc"` names (normative)
+
+Table D.1 lists canonical `"hdoc"` syntax names defined by this specification.
+
+| Canonical name | Intended meaning                                              |
+| -------------- | ------------------------------------------------------------- |
+| `plain`        | Explicitly no highlighting (§10.5.1).                         |
+| `hdoc`         | HyperDoc source text.                                         |
+| `c`            | C.                                                            |
+| `cpp`          | C++.                                                          |
+| `csharp`       | C#.                                                           |
+| `rust`         | Rust.                                                         |
+| `zig`          | Zig.                                                          |
+| `python`       | Python.                                                       |
+| `lua`          | Lua.                                                          |
+| `js`           | JavaScript.                                                   |
+| `java`         | Java.                                                         |
+| `xml`          | XML.                                                          |
+| `json`         | JSON.                                                         |
+| `yaml`         | YAML.                                                         |
+| `toml`         | TOML.                                                         |
+| `gfm`          | GitHub Flavored Markdown.                                     |
+| `html`         | HTML.                                                         |
+
+### D.3 Normative alias mapping
+
+Table D.2 defines aliases that **MUST** be mapped to the listed canonical `"hdoc"` name for interpretation.
+
+| Alias        | Canonical `"hdoc"` name |
+| ------------ | ----------------------- |
+| `text`       | `plain`                 |
+| `none`       | `plain`                 |
+| `hyperdoc`   | `hdoc`                  |
+| `c++`        | `cpp`                   |
+| `cxx`        | `cpp`                   |
+| `cc`         | `cpp`                   |
+| `c#`         | `csharp`                |
+| `cs`         | `csharp`                |
+| `c-sharp`    | `csharp`                |
+| `py`         | `python`                |
+| `javascript` | `js`                    |
+| `ecmascript` | `js`                    |
+| `yml`        | `yaml`                  |
+| `md`         | `gfm`                   |
+| `markdown`   | `gfm`                   |
+| `xhtml`      | `html`                  |
