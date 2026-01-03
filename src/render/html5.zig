@@ -301,8 +301,8 @@ const RenderContext = struct {
         const lang_attr = langAttribute(table.lang);
         const id_attr = ctx.resolveBlockId(block_index);
 
-        const column_count = table.column_count;
-        const has_title_column = table.has_row_titles;
+        const column_count = inferColumnCount(table.rows) orelse 0;
+        const has_title_column = tableHasTitleColumn(table.rows);
 
         try writeIndent(ctx.writer, indent);
         try writeStartTag(ctx.writer, "table", .regular, .{ .id = id_attr, .lang = lang_attr });
@@ -707,8 +707,44 @@ fn tocHasEntries(node: hdoc.Document.TableOfContents) bool {
     return false;
 }
 
+fn inferColumnCount(rows: []const hdoc.Block.TableRow) ?usize {
+    for (rows) |row| {
+        switch (row) {
+            .columns => |columns| {
+                var width: usize = 0;
+                for (columns.cells) |cell| {
+                    width += cell.colspan;
+                }
+                return width;
+            },
+            .row => |data_row| {
+                var width: usize = 0;
+                for (data_row.cells) |cell| {
+                    width += cell.colspan;
+                }
+                return width;
+            },
+            .group => {},
+        }
+    }
+    return null;
+}
+
+fn tableHasTitleColumn(rows: []const hdoc.Block.TableRow) bool {
+    for (rows) |row| {
+        switch (row) {
+            .row => |data_row| if (data_row.title != null) return true,
+            .group => return true,
+            .columns => {},
+        }
+    }
+    return false;
+}
+
 fn findHeaderIndex(rows: []const hdoc.Block.TableRow) ?usize {
-    if (rows.len > 0 and rows[0] == .columns) return 0;
+    for (rows, 0..) |row, index| {
+        if (row == .columns) return index;
+    }
     return null;
 }
 

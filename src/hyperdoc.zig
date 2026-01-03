@@ -118,8 +118,8 @@ pub const Block = union(enum) {
     };
 
     pub const Table = struct {
-        column_count: usize,
-        has_row_titles: bool, // not counted inside `Table.column_count`!
+        // TODO: column_count: usize,
+        // TODO: has_row_titles: bool, // not counted inside `Table.column_count`!
         lang: LanguageTag,
         rows: []TableRow,
     };
@@ -1138,10 +1138,7 @@ pub const SemanticAnalyzer = struct {
         var rows: std.ArrayList(Block.TableRow) = .empty;
         defer rows.deinit(sema.arena);
 
-        var column_count: usize = 0;
-        var saw_header_row = false;
-        var saw_non_header_row = false;
-        var has_row_titles = false;
+        var column_count: ?usize = null;
 
         switch (node.body) {
             .list => |child_nodes| {
@@ -1149,43 +1146,39 @@ pub const SemanticAnalyzer = struct {
                 for (child_nodes) |child_node| {
                     switch (child_node.type) {
                         .columns => {
-                            if (saw_header_row) {
-                                try sema.emit_diagnostic(.duplicate_columns_row, child_node.location);
-                            }
-
-                            if (saw_non_header_row) {
-                                try sema.emit_diagnostic(.misplaced_columns_row, child_node.location);
-                            }
-
-                            saw_header_row = true;
-
                             const row_attrs = try sema.get_attributes(child_node, struct {
                                 lang: LanguageTag = .inherit,
                             });
 
                             const cells = try sema.translate_table_cells(child_node);
-                            const width = calculate_table_width(cells);
-                            try sema.update_table_column_count(&column_count, width, child_node.location);
-
                             rows.appendAssumeCapacity(.{
                                 .columns = .{
                                     .lang = row_attrs.lang,
                                     .cells = cells,
                                 },
                             });
+
+                            var width: usize = 0;
+                            for (cells) |cell| {
+                                std.debug.assert(cell.colspan > 0);
+                                width += cell.colspan;
+                            }
+
+                            column_count = column_count orelse width;
+                            if (width != column_count) {
+                                try sema.emit_diagnostic(.{ .column_count_mismatch = .{
+                                    .expected = column_count.?,
+                                    .actual = width,
+                                } }, child_node.location);
+                            }
                         },
                         .row => {
-                            saw_non_header_row = true;
-
                             const row_attrs = try sema.get_attributes(child_node, struct {
                                 lang: LanguageTag = .inherit,
                                 title: ?[]const u8 = null,
                             });
 
                             const cells = try sema.translate_table_cells(child_node);
-                            const width = calculate_table_width(cells);
-                            try sema.update_table_column_count(&column_count, width, child_node.location);
-                            has_row_titles = has_row_titles or (row_attrs.title != null);
 
                             rows.appendAssumeCapacity(.{
                                 .row = .{
@@ -1194,10 +1187,22 @@ pub const SemanticAnalyzer = struct {
                                     .cells = cells,
                                 },
                             });
+
+                            var width: usize = 0;
+                            for (cells) |cell| {
+                                std.debug.assert(cell.colspan > 0);
+                                width += cell.colspan;
+                            }
+
+                            column_count = column_count orelse width;
+                            if (width != column_count) {
+                                try sema.emit_diagnostic(.{ .column_count_mismatch = .{
+                                    .expected = column_count.?,
+                                    .actual = width,
+                                } }, child_node.location);
+                            }
                         },
                         .group => {
-                            saw_non_header_row = true;
-
                             const row_attrs = try sema.get_attributes(child_node, struct {
                                 lang: LanguageTag = .inherit,
                             });
@@ -1220,52 +1225,12 @@ pub const SemanticAnalyzer = struct {
             },
         }
 
-        if (column_count == 0) {
-            try sema.emit_diagnostic(.missing_table_column_count, node.location);
-            column_count = 1;
-        }
-
         const table: Block.Table = .{
-            .column_count = column_count,
-            .has_row_titles = has_row_titles,
             .lang = attrs.lang,
             .rows = try rows.toOwnedSlice(sema.arena),
         };
 
         return .{ table, attrs.id };
-    }
-
-    fn calculate_table_width(cells: []const Block.TableCell) usize {
-        var width: usize = 0;
-        for (cells) |cell| {
-            std.debug.assert(cell.colspan > 0);
-            width += cell.colspan;
-        }
-        return width;
-    }
-
-    fn update_table_column_count(sema: *SemanticAnalyzer, column_count: *usize, width: usize, location: Parser.Location) !void {
-        if (width == 0) {
-            if (column_count.* != 0) {
-                try sema.emit_diagnostic(.{ .column_count_mismatch = .{
-                    .expected = column_count.*,
-                    .actual = 0,
-                } }, location);
-            }
-            return;
-        }
-
-        if (column_count.* == 0) {
-            column_count.* = width;
-            return;
-        }
-
-        if (width != column_count.*) {
-            try sema.emit_diagnostic(.{ .column_count_mismatch = .{
-                .expected = column_count.*,
-                .actual = width,
-            } }, location);
-        }
     }
 
     fn translate_table_cells(sema: *SemanticAnalyzer, node: Parser.Node) error{ OutOfMemory, BadAttributes, InvalidNodeType, Unimplemented }![]Block.TableCell {
@@ -3248,9 +3213,6 @@ pub const Diagnostic = struct {
         misplaced_title_block,
         duplicate_title_block,
         column_count_mismatch: TableShapeError,
-        missing_table_column_count,
-        misplaced_columns_row,
-        duplicate_columns_row,
         duplicate_id: ReferenceError,
         unknown_id: ReferenceError,
 
@@ -3305,9 +3267,6 @@ pub const Diagnostic = struct {
                 .misplaced_title_block,
                 .duplicate_title_block,
                 .column_count_mismatch,
-                .missing_table_column_count,
-                .misplaced_columns_row,
-                .duplicate_columns_row,
                 .duplicate_id,
                 .unknown_id,
                 => .@"error",
@@ -3399,9 +3358,6 @@ pub const Diagnostic = struct {
                 .invalid_date_time_body => try w.writeAll("\\date, \\time and \\datetime do not allow any inlines inside their body."),
 
                 .column_count_mismatch => |ctx| try w.print("Expected {} columns, but found {}", .{ ctx.expected, ctx.actual }),
-                .missing_table_column_count => try w.writeAll("Table must declare at least one column via a columns or row entry."),
-                .misplaced_columns_row => try w.writeAll("The 'columns' header row must be the first item in a table."),
-                .duplicate_columns_row => try w.writeAll("Only one 'columns' header row is allowed per table."),
 
                 .duplicate_id => |ctx| try w.print("The id \"{s}\" is already taken by another node.", .{ctx.ref}),
                 .unknown_id => |ctx| try w.print("The referenced id \"{s}\" does not exist.", .{ctx.ref}),

@@ -440,8 +440,6 @@ fn dumpBlockInline(writer: *Writer, indent: usize, block: hdoc.Block) Writer.Err
         .table => |table| {
             try writeTypeTag(writer, "table");
             try dumpOptionalStringField(writer, indent + indent_step, "lang", table.lang.text);
-            try dumpOptionalNumberField(writer, indent + indent_step, "column_count", @as(?usize, table.column_count));
-            try dumpBoolField(writer, indent + indent_step, "has_row_titles", table.has_row_titles);
             try dumpTableRowsField(writer, indent + indent_step, "rows", table.rows);
         },
     }
