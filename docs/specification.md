@@ -206,6 +206,12 @@ The grammar is intentionally ambiguous; a deterministic external rule selects a 
 - Attribute values are **string literals** (see §5.5).
 - Attribute keys are identifiers with hyphen-separated segments (see §5.1 and §10.1).
 
+### 4.4 Nesting depth (syntax)
+
+- Implementations **MUST** support nesting depths of at least 32 levels.
+- Implementations **MAY** reject documents that exceed this depth with a diagnostic.
+- Nesting depth is measured as the maximum distance from the document root to any leaf node.
+
 ## 5. Grammar and additional syntax rules
 
 ### 5.1 Grammar (EBNF)
@@ -351,6 +357,8 @@ Tooling that aims to preserve author intent **SHOULD** preserve whether braces w
 
 Escape sequences are recognized only in string literals (node bodies of the `"..."` form and attribute values). No other syntax performs string-literal escape decoding.
 
+Escape decoding **MUST** occur during semantic validation, before inline text construction (§8.2) for inline-list bodies, and before attribute validation for attribute values.
+
 ### 7.1 Control character policy (semantic)
 
 - A semantic validator **MAY** reject TAB (U+0009) in source text.
@@ -431,6 +439,8 @@ Semantic processing **MUST** construct inline text as a sequence of **spans**, w
 
 - a Unicode string, and
 - an attribute set (e.g. emphasis/monospace/link, language overrides, etc.).
+
+Inline groups are structural only: when converting the inline tree into spans, implementations **MUST** flatten `inline_group` boundaries. An `inline_group` **MUST NOT** create a span boundary and **MUST NOT** affect whitespace normalization, but it **MUST** contribute the literal `{` and `}` characters to the inline text at its start and end.
 
 Processing rules:
 
@@ -586,6 +596,9 @@ The elements in this chapter **MUST** appear only as top-level block elements (d
   - `date` (optional): datetime lexical format (§10.2.3)
   - `tz` (optional): default timezone for time/datetime values (§10.2)
 
+Diagnostics:
+- If the document contains any `\date`, `\time`, or `\datetime` elements with `fmt` values other than `iso`, and `hdoc(lang)` is not specified, implementations **SHOULD** emit a diagnostic.
+
 #### 9.2.2 `title` (document title)
 
 - **Role:** document-level display title
@@ -624,6 +637,8 @@ Heading structure and numbering:
 
 Semantic constraints:
 - `toc` **MUST** be a top-level block element (a direct child of the document).
+- Multiple `toc` elements **MAY** appear in a document; each **MUST** render the same heading structure but **MAY** appear at different locations.
+- If `depth` differs between instances, each `toc` **MUST** render independently according to its own `depth` attribute.
 
 #### 9.2.5 Footnote dump: `footnotes`
 
@@ -635,6 +650,7 @@ Semantic constraints:
 
 Semantics:
 
+- Multiple `footnotes` elements **MAY** appear in a document.
 - `footnotes;` collects and renders all footnotes of all kinds accumulated since the previous `footnotes(...)` node (or since start of document if none appeared yet).
 - `footnotes(kind="footnote");` collects and renders only `kind="footnote"` entries accumulated since the previous `footnotes(...)` node.
 - `footnotes(kind="citation");` collects and renders only `kind="citation"` entries accumulated since the previous `footnotes(...)` node.
@@ -685,6 +701,13 @@ Only an empty body (`;`) is not "inline text".
   - `alt` (optional, non-empty)
   - `lang` (optional)
   - `id` (optional; top-level only)
+
+Path semantics:
+
+- `path` **MUST** use forward slashes (`/`) as path separators, regardless of host operating system.
+- `path` **MUST** be relative; absolute paths and URI schemes **MUST** be rejected.
+- Path resolution is relative to the directory containing the HyperDoc source file.
+- Path traversal outside the source directory (e.g., `../../etc/passwd`) **SHOULD** be rejected or restricted by implementations.
 
 #### 9.3.6 Preformatted: `pre`
 
