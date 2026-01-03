@@ -7,6 +7,7 @@ const snapshot_files: []const []const u8 = &.{
     "test/snapshot/nesting_and_inlines.hdoc",
     "test/snapshot/paragraph_styles.hdoc",
     "test/snapshot/tables.hdoc",
+    "test/snapshot/footnotes.hdoc",
 };
 
 pub fn build(b: *std.Build) void {

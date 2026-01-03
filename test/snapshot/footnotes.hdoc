@@ -1,0 +1,7 @@
+hdoc(version="2.0",lang="en");
+title{Footnotes Demo}
+p{Intro with footnote\footnote{Footnote text} and citation\footnote(kind="citation",key="ref1"){Citation text}.}
+footnotes;
+p{Next section references \footnote(ref="ref1"); and adds another\footnote{Second footnote}.}
+footnotes(kind="citation");
+footnotes;

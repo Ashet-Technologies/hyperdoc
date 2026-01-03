@@ -21,10 +21,23 @@ pub fn main() !u8 {
     const ground_truth_path = argv[1];
     const new_input_path = argv[2];
 
-    const ground_truth = try readFileAlloc(allocator, ground_truth_path, 10 * 1024 * 1024);
+    var files_ok = true;
+    const ground_truth = readFileAlloc(allocator, ground_truth_path, 10 * 1024 * 1024) catch |err| switch (err) {
+        error.FileNotFound => blk: {
+            files_ok = false;
+            break :blk "<file not found>";
+        },
+        else => |e| return e,
+    };
     defer allocator.free(ground_truth);
 
-    const new_input = try readFileAlloc(allocator, new_input_path, 10 * 1024 * 1024);
+    const new_input = readFileAlloc(allocator, new_input_path, 10 * 1024 * 1024) catch |err| switch (err) {
+        error.FileNotFound => blk: {
+            files_ok = false;
+            break :blk "<file not found>";
+        },
+        else => |e| return e,
+    };
     defer allocator.free(new_input);
 
     // Compare full file contents for now. This keeps the snapshot tests simple and
@@ -33,6 +46,9 @@ pub fn main() !u8 {
         error.TestExpectedEqual => return 1,
         else => return err,
     };
+
+    if (!files_ok)
+        return 1;
 
     return 0;
 }

@@ -1,0 +1,31 @@
+<header lang="en">
+  <h1>Footnotes Demo</h1>
+</header>
+<p>Intro with footnote<sup class="hdoc-footnote-ref hdoc-footnote"><a href="#hdoc-footnote-1">1</a></sup> and citation<sup class="hdoc-footnote-ref hdoc-citation"><a href="#hdoc-citation-1">1</a></sup>.</p>
+<div class="hdoc-footnotes">
+  <ol class="hdoc-footnote-list hdoc-footnote" start="1">
+    <li id="hdoc-footnote-1">
+      <p>Footnote text</p>
+    </li>
+  </ol>
+  <ol class="hdoc-footnote-list hdoc-citation" start="1">
+    <li id="hdoc-citation-1">
+      <p>Citation text</p>
+    </li>
+  </ol>
+</div>
+<p>Next section references <sup class="hdoc-footnote-ref hdoc-citation"><a href="#hdoc-citation-1">1</a></sup> and adds another<sup class="hdoc-footnote-ref hdoc-footnote"><a href="#hdoc-footnote-2">2</a></sup>.</p>
+<div class="hdoc-footnotes">
+  <ol class="hdoc-footnote-list hdoc-citation" start="1">
+    <li id="hdoc-citation-1">
+      <p>Citation text</p>
+    </li>
+  </ol>
+</div>
+<div class="hdoc-footnotes">
+  <ol class="hdoc-footnote-list hdoc-footnote" start="2">
+    <li id="hdoc-footnote-2">
+      <p>Second footnote</p>
+    </li>
+  </ol>
+</div>

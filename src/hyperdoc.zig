@@ -42,6 +42,11 @@ pub const Document = struct {
     }
 };
 
+pub const FootnoteKind = enum {
+    footnote,
+    citation,
+};
+
 /// A top level layouting element of a document.
 /// Each block is a rectangular element on the screen with
 /// variable height, but a fixed width.
@@ -56,6 +61,7 @@ pub const Block = union(enum) {
     preformatted: Preformatted,
     toc: TableOfContents,
     table: Table,
+    footnotes: Footnotes,
 
     pub const Heading = struct {
         index: Index,
@@ -162,6 +168,18 @@ pub const Block = union(enum) {
         lang: LanguageTag,
         content: []Span,
     };
+
+    pub const Footnotes = struct {
+        lang: LanguageTag,
+        entries: []FootnoteEntry,
+    };
+
+    pub const FootnoteEntry = struct {
+        index: usize,
+        kind: FootnoteKind,
+        lang: LanguageTag,
+        content: []Span,
+    };
 };
 
 pub fn FormattedDateTime(comptime DT: type) type {
@@ -180,6 +198,7 @@ pub const Span = struct {
         time: FormattedDateTime(Time),
         datetime: FormattedDateTime(DateTime),
         reference: InlineReference,
+        footnote: Footnote,
     };
 
     pub const InlineReference = struct {
@@ -225,6 +244,11 @@ pub const Span = struct {
     content: Content,
     attribs: Attributes,
     location: Parser.Location,
+};
+
+pub const Footnote = struct {
+    kind: FootnoteKind,
+    index: usize,
 };
 
 pub const ScriptPosition = enum {
@@ -618,6 +642,12 @@ pub fn parse(
     const block_locations = try sema.block_locations.toOwnedSlice(arena.allocator());
     const toc = try sema.build_toc(contents, block_locations);
 
+    if (sema.has_pending_footnotes()) {
+        if (sema.first_pending_footnote_location()) |location| {
+            try sema.emit_diagnostic(.footnote_missing_dump, location);
+        }
+    }
+
     return .{
         .arena = arena,
         .contents = contents,
@@ -753,6 +783,13 @@ pub const SemanticAnalyzer = struct {
         }
     };
 
+    const FootnoteDefinition = struct {
+        kind: FootnoteKind,
+        index: usize,
+        lang: LanguageTag,
+        content: []Span,
+    };
+
     arena: std.mem.Allocator,
     diagnostics: ?*Diagnostics,
     code: []const u8,
@@ -766,6 +803,10 @@ pub const SemanticAnalyzer = struct {
     ids: std.ArrayList(?Reference) = .empty,
     id_locations: std.ArrayList(?Parser.Location) = .empty,
     pending_refs: std.ArrayList(RefUse) = .empty,
+    footnote_counters: std.EnumArray(FootnoteKind, usize) = std.EnumArray(FootnoteKind, usize).initFill(0),
+    footnote_pending: std.EnumArray(FootnoteKind, std.ArrayList(Block.FootnoteEntry)) = std.EnumArray(FootnoteKind, std.ArrayList(Block.FootnoteEntry)).initFill(.empty),
+    footnote_keys: std.StringArrayHashMapUnmanaged(FootnoteDefinition) = .empty,
+    first_footnote_locations: std.EnumArray(FootnoteKind, ?Parser.Location) = std.EnumArray(FootnoteKind, ?Parser.Location).initFill(null),
 
     current_heading_level: usize = 0,
     heading_counters: [Block.Heading.Level.count]u16 = @splat(0),
@@ -933,6 +974,10 @@ pub const SemanticAnalyzer = struct {
                 const toc, const id = try sema.translate_toc_node(node);
                 return .{ .{ .toc = toc }, id };
             },
+            .footnotes => {
+                const footnotes = try sema.translate_footnotes_node(node);
+                return .{ .{ .footnotes = footnotes }, null };
+            },
             .table => {
                 const table, const id = try sema.translate_table_node(node);
                 return .{ .{ .table = table }, id };
@@ -953,6 +998,7 @@ pub const SemanticAnalyzer = struct {
             .@"\\time",
             .@"\\date",
             .@"\\datetime",
+            .@"\\footnote",
             .text,
             .columns,
             .group,
@@ -1170,6 +1216,54 @@ pub const SemanticAnalyzer = struct {
         };
 
         return .{ toc, attrs.id };
+    }
+
+    fn translate_footnotes_node(sema: *SemanticAnalyzer, node: Parser.Node) !Block.Footnotes {
+        const attrs = try sema.get_attributes(node, struct {
+            lang: LanguageTag = .inherit,
+            kind: ?FootnoteKind = null,
+        });
+
+        switch (node.body) {
+            .empty => {},
+            .list => |child_nodes| {
+                for (child_nodes) |child_node| {
+                    try sema.emit_diagnostic(.illegal_child_item, child_node.location);
+                }
+            },
+            .string, .verbatim, .text_span => {
+                try sema.emit_diagnostic(.illegal_child_item, node.location);
+            },
+        }
+
+        var entries: std.ArrayList(Block.FootnoteEntry) = .empty;
+        defer entries.deinit(sema.arena);
+
+        const kinds: []const FootnoteKind = if (attrs.kind) |kind|
+            &[_]FootnoteKind{kind}
+        else
+            &[_]FootnoteKind{ .footnote, .citation };
+
+        for (kinds) |kind| {
+            const pending = sema.footnote_pending.getPtr(kind);
+            if (pending.items.len == 0)
+                continue;
+
+            try entries.appendSlice(sema.arena, pending.items);
+            pending.clearRetainingCapacity();
+            sema.first_footnote_locations.getPtr(kind).* = null;
+        }
+
+        if (!sema.has_pending_footnotes()) {
+            for (std.meta.tags(FootnoteKind)) |kind| {
+                sema.first_footnote_locations.getPtr(kind).* = null;
+            }
+        }
+
+        return .{
+            .lang = attrs.lang,
+            .entries = try entries.toOwnedSlice(sema.arena),
+        };
     }
 
     fn translate_table_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Table, ?Reference } {
@@ -1497,7 +1591,7 @@ pub const SemanticAnalyzer = struct {
 
                     try merger.output.append(merger.arena, span);
                 },
-                .reference => {
+                .reference, .footnote => {
                     try merger.flush_internal(.keep);
                     std.debug.assert(merger.current_span.items.len == 0);
 
@@ -1782,6 +1876,85 @@ pub const SemanticAnalyzer = struct {
                     .location = node.location,
                 });
             },
+            .@"\\footnote" => {
+                const props = try sema.get_attributes(node, struct {
+                    key: ?Reference = null,
+                    ref: ?Reference = null,
+                    kind: ?FootnoteKind = null,
+                    lang: LanguageTag = .inherit,
+                });
+
+                const has_body = node.body != .empty;
+                if (props.key != null and props.ref != null) {
+                    try sema.emit_diagnostic(.footnote_conflicting_key_ref, node.location);
+                    return;
+                }
+
+                if (has_body) {
+                    if (props.ref != null) {
+                        try sema.emit_diagnostic(.footnote_conflicting_key_ref, node.location);
+                        return;
+                    }
+                } else {
+                    if (props.ref == null) {
+                        try sema.emit_diagnostic(.footnote_missing_ref, node.location);
+                        return;
+                    }
+                    if (props.kind != null) {
+                        try sema.emit_diagnostic(.footnote_kind_on_reference, get_attribute_location(node, "kind", .name) orelse node.location);
+                    }
+
+                    const definition = sema.footnote_keys.get(props.ref.?.text) orelse {
+                        try sema.emit_diagnostic(.{ .unknown_footnote_key = .{ .ref = props.ref.?.text } }, get_attribute_location(node, "ref", .value) orelse node.location);
+                        return;
+                    };
+
+                    try sema.enqueue_footnote(definition);
+                    sema.note_footnote_marker(definition.kind, node.location);
+                    try spans.append(sema.arena, .{
+                        .content = .{ .footnote = .{
+                            .kind = definition.kind,
+                            .index = definition.index,
+                        } },
+                        .attribs = attribs,
+                        .location = node.location,
+                    });
+                    return;
+                }
+
+                if (!has_body) {
+                    try sema.emit_diagnostic(.footnote_missing_body, node.location);
+                    return;
+                }
+
+                const kind = props.kind orelse FootnoteKind.footnote;
+
+                var content_spans: std.ArrayList(Span) = .empty;
+                defer content_spans.deinit(sema.arena);
+
+                const content_attribs = try sema.derive_attribute(node.location, attribs, .{ .lang = props.lang });
+                try sema.translate_inline_body(&content_spans, node.body, content_attribs, .emit_diagnostic);
+
+                const compacted = try sema.compact_spans(content_spans.items, .one_space);
+                if (compacted.len == 0) {
+                    try sema.emit_diagnostic(.footnote_missing_body, node.location);
+                    return;
+                }
+
+                const key_location = get_attribute_location(node, "key", .value);
+                const definition = try sema.append_footnote_definition(kind, props.lang, compacted, props.key, node.location, key_location);
+                try sema.enqueue_footnote(definition);
+                sema.note_footnote_marker(definition.kind, node.location);
+
+                try spans.append(sema.arena, .{
+                    .content = .{ .footnote = .{
+                        .kind = definition.kind,
+                        .index = definition.index,
+                    } },
+                    .attribs = attribs,
+                    .location = node.location,
+                });
+            },
 
             .hdoc,
             .h1,
@@ -1800,6 +1973,7 @@ pub const SemanticAnalyzer = struct {
             .img,
             .pre,
             .toc,
+            .footnotes,
             .table,
             .columns,
             .group,
@@ -1913,6 +2087,7 @@ pub const SemanticAnalyzer = struct {
                         try output.appendSlice(sema.arena, text);
                     },
                 },
+                .footnote => {},
             }
         }
 
@@ -2199,6 +2374,7 @@ pub const SemanticAnalyzer = struct {
             DateTime => DateTime.parse(value, timezone_hint) catch return error.InvalidValue,
             LanguageTag => LanguageTag.parse(value) catch return error.InvalidValue,
             TimeZoneOffset => TimeZoneOffset.parse(value) catch return error.InvalidValue,
+            FootnoteKind => std.meta.stringToEnum(FootnoteKind, value) orelse return error.InvalidValue,
 
             inline else => |EnumT| switch (@typeInfo(EnumT)) {
                 .@"enum" => std.meta.stringToEnum(EnumT, value) orelse return error.InvalidValue,
@@ -2258,6 +2434,12 @@ pub const SemanticAnalyzer = struct {
                     try sema.resolve_block_references(child, id_map);
                 }
             },
+            .footnotes => |*footnotes| {
+                for (footnotes.entries) |*entry| {
+                    try sema.resolve_span_slice(&entry.content, id_map);
+                }
+            },
+
             .toc => {},
             .table => |*table| {
                 for (table.rows) |*row| switch (row.*) {
@@ -2415,6 +2597,86 @@ pub const SemanticAnalyzer = struct {
             .h2 => .h3,
             .h3 => .h3,
         };
+    }
+
+    fn enqueue_footnote(sema: *SemanticAnalyzer, definition: FootnoteDefinition) !void {
+        const pending = sema.footnote_pending.getPtr(definition.kind);
+        for (pending.items) |entry| {
+            if (entry.index == definition.index) {
+                return;
+            }
+        }
+
+        try pending.append(sema.arena, .{
+            .index = definition.index,
+            .kind = definition.kind,
+            .lang = definition.lang,
+            .content = definition.content,
+        });
+    }
+
+    fn append_footnote_definition(
+        sema: *SemanticAnalyzer,
+        kind: FootnoteKind,
+        lang: LanguageTag,
+        content: []Span,
+        key: ?Reference,
+        node_location: Parser.Location,
+        key_location: ?Parser.Location,
+    ) !FootnoteDefinition {
+        const counter = sema.footnote_counters.getPtr(kind);
+        counter.* += 1;
+        const definition: FootnoteDefinition = .{
+            .kind = kind,
+            .index = counter.*,
+            .lang = lang,
+            .content = content,
+        };
+
+        if (key) |reference| {
+            const gop = try sema.footnote_keys.getOrPut(sema.arena, reference.text);
+            if (gop.found_existing) {
+                try sema.emit_diagnostic(.{ .duplicate_footnote_key = .{ .ref = reference.text } }, key_location orelse node_location);
+            } else {
+                gop.value_ptr.* = definition;
+            }
+        }
+
+        return definition;
+    }
+
+    fn note_footnote_marker(sema: *SemanticAnalyzer, kind: FootnoteKind, location: Parser.Location) void {
+        const slot = sema.first_footnote_locations.getPtr(kind);
+        if (slot.* == null) {
+            slot.* = location;
+        }
+    }
+
+    fn has_pending_footnotes(sema: *SemanticAnalyzer) bool {
+        for (std.meta.tags(FootnoteKind)) |kind| {
+            if (sema.footnote_pending.get(kind).items.len > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    fn first_pending_footnote_location(sema: *SemanticAnalyzer) ?Parser.Location {
+        var earliest: ?Parser.Location = null;
+
+        for (std.meta.tags(FootnoteKind)) |kind| {
+            if (sema.footnote_pending.get(kind).items.len == 0)
+                continue;
+
+            if (sema.first_footnote_locations.get(kind)) |location| {
+                if (earliest == null or location.offset < earliest.?.offset) {
+                    earliest = location;
+                }
+            }
+        }
+
+        return earliest;
     }
 
     /// Computes the next index number for a heading of the given level:
@@ -3217,6 +3479,7 @@ pub const Parser = struct {
         img,
         pre,
         toc,
+        footnotes,
         table,
         columns,
         group,
@@ -3235,6 +3498,7 @@ pub const Parser = struct {
         @"\\date",
         @"\\time",
         @"\\datetime",
+        @"\\footnote",
 
         unknown_block,
         unknown_inline,
@@ -3251,6 +3515,7 @@ pub const Parser = struct {
                 .@"\\date",
                 .@"\\time",
                 .@"\\datetime",
+                .@"\\footnote",
                 .unknown_inline,
                 .text,
                 => true,
@@ -3272,6 +3537,7 @@ pub const Parser = struct {
                 .img,
                 .pre,
                 .toc,
+                .footnotes,
                 .table,
                 .columns,
                 .group,
@@ -3295,6 +3561,7 @@ pub const Parser = struct {
                 .img,
                 .pre,
                 .toc,
+                .footnotes,
                 .group,
 
                 .@"\\em",
@@ -3307,6 +3574,7 @@ pub const Parser = struct {
                 .@"\\date",
                 .@"\\time",
                 .@"\\datetime",
+                .@"\\footnote",
 
                 .unknown_inline,
                 .unknown_block, // Unknown blocks must also have inline bodies to optimally retain body contents
@@ -3426,6 +3694,12 @@ pub const Diagnostic = struct {
         duplicate_id: ReferenceError,
         unknown_id: ReferenceError,
         empty_ref_body_target,
+        duplicate_footnote_key: ReferenceError,
+        unknown_footnote_key: ReferenceError,
+        footnote_conflicting_key_ref,
+        footnote_missing_ref,
+        footnote_missing_body,
+        footnote_kind_on_reference,
 
         // warnings:
         document_starts_with_bom,
@@ -3442,6 +3716,7 @@ pub const Diagnostic = struct {
         tab_character,
         automatic_heading_insertion: AutomaticHeading,
         title_inline_date_time_without_header,
+        footnote_missing_dump,
 
         pub fn severity(code: Code) Severity {
             return switch (code) {
@@ -3483,6 +3758,12 @@ pub const Diagnostic = struct {
                 .duplicate_id,
                 .unknown_id,
                 .empty_ref_body_target,
+                .duplicate_footnote_key,
+                .unknown_footnote_key,
+                .footnote_conflicting_key_ref,
+                .footnote_missing_ref,
+                .footnote_missing_body,
+                .footnote_kind_on_reference,
                 => .@"error",
 
                 .missing_document_language,
@@ -3499,6 +3780,7 @@ pub const Diagnostic = struct {
                 .document_starts_with_bom,
                 .automatic_heading_insertion,
                 .title_inline_date_time_without_header,
+                .footnote_missing_dump,
                 => .warning,
             };
         }
@@ -3578,12 +3860,19 @@ pub const Diagnostic = struct {
                 .duplicate_id => |ctx| try w.print("The id \"{s}\" is already taken by another node.", .{ctx.ref}),
                 .unknown_id => |ctx| try w.print("The referenced id \"{s}\" does not exist.", .{ctx.ref}),
                 .empty_ref_body_target => try w.writeAll("Empty-body \\ref is only supported for headings."),
+                .duplicate_footnote_key => |ctx| try w.print("The footnote key \"{s}\" is already defined.", .{ctx.ref}),
+                .unknown_footnote_key => |ctx| try w.print("The referenced footnote key \"{s}\" does not exist.", .{ctx.ref}),
+                .footnote_conflicting_key_ref => try w.writeAll("\\footnote attributes 'key' and 'ref' cannot be used together."),
+                .footnote_missing_ref => try w.writeAll("\\footnote without a body requires a ref=\"...\" attribute."),
+                .footnote_missing_body => try w.writeAll("\\footnote definitions require a non-empty body."),
+                .footnote_kind_on_reference => try w.writeAll("Attribute 'kind' is only valid on defining \\footnote entries."),
 
                 .missing_document_language => try w.writeAll("Document language is missing; set lang on the hdoc header."),
                 .tab_character => try w.writeAll("Tab character is not allowed; use spaces instead."),
 
                 .automatic_heading_insertion => |ctx| try w.print("Inserted automatic {t} to fill heading level gap.", .{ctx.level}),
                 .title_inline_date_time_without_header => try w.writeAll("Title block contains \\date/\\time/\\datetime but hdoc(title=\"...\") is missing; metadata title cannot be derived reliably."),
+                .footnote_missing_dump => try w.writeAll("Document contains footnotes but no footnotes(...) block to render them."),
             }
         }
     };
