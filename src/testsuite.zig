@@ -224,6 +224,84 @@ test "span merger preserves whitespace after inline mono" {
     }
 }
 
+test "admonition supports block-list bodies" {
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source =
+        \\hdoc(version="2.0",lang="en");
+        \\note{
+        \\  p "Outer block text."
+        \\  ul{li "Nested item"}
+        \\}
+    ;
+
+    var doc = try hdoc.parse(std.testing.allocator, source, &diagnostics);
+    defer doc.deinit();
+
+    try std.testing.expect(!diagnostics.has_error());
+    try std.testing.expectEqual(@as(usize, 1), doc.contents.len);
+
+    const admonition = doc.contents[0].admonition;
+    try std.testing.expectEqual(hdoc.Block.AdmonitionKind.note, admonition.kind);
+    try std.testing.expectEqual(@as(usize, 2), admonition.content.len);
+
+    switch (admonition.content[0]) {
+        .paragraph => |para| {
+            try std.testing.expectEqual(@as(usize, 1), para.content.len);
+            try std.testing.expectEqualStrings("Outer block text.", para.content[0].content.text);
+        },
+        else => return error.TestExpectedEqual,
+    }
+
+    switch (admonition.content[1]) {
+        .list => |list| {
+            try std.testing.expectEqual(@as(usize, 1), list.items.len);
+            try std.testing.expectEqual(@as(?u32, null), list.first);
+            try std.testing.expectEqual(@as(usize, 1), list.items[0].content.len);
+        },
+        else => return error.TestExpectedEqual,
+    }
+}
+
+test "admonition shorthand promotes inline bodies to paragraphs" {
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source =
+        "hdoc(version=\"2.0\",lang=\"en\");\n" ++
+        "warning \"Be careful.\" \n" ++
+        "tip:\n" ++
+        "| first line\n" ++
+        "| second line\n";
+
+    var doc = try hdoc.parse(std.testing.allocator, source, &diagnostics);
+    defer doc.deinit();
+
+    try std.testing.expect(!diagnostics.has_error());
+    try std.testing.expectEqual(@as(usize, 2), doc.contents.len);
+
+    const warning_block = doc.contents[0].admonition;
+    try std.testing.expectEqual(hdoc.Block.AdmonitionKind.warning, warning_block.kind);
+    try std.testing.expectEqual(@as(usize, 1), warning_block.content.len);
+    switch (warning_block.content[0]) {
+        .paragraph => |para| {
+            try std.testing.expectEqualStrings("Be careful.", para.content[0].content.text);
+        },
+        else => return error.TestExpectedEqual,
+    }
+
+    const tip_block = doc.contents[1].admonition;
+    try std.testing.expectEqual(hdoc.Block.AdmonitionKind.tip, tip_block.kind);
+    try std.testing.expectEqual(@as(usize, 1), tip_block.content.len);
+    switch (tip_block.content[0]) {
+        .paragraph => |para| {
+            try std.testing.expectEqualStrings("first line\nsecond line", para.content[0].content.text);
+        },
+        else => return error.TestExpectedEqual,
+    }
+}
+
 test "pre verbatim preserves trailing whitespace" {
     var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
     defer diagnostics.deinit();

@@ -26,6 +26,7 @@ const RenderContext = struct {
         switch (block) {
             .heading => |heading| try ctx.renderHeading(heading, block_index, indent),
             .paragraph => |paragraph| try ctx.renderParagraph(paragraph, block_index, indent),
+            .admonition => |admonition| try ctx.renderAdmonition(admonition, block_index, indent),
             .list => |list| try ctx.renderList(list, block_index, indent),
             .image => |image| try ctx.renderImage(image, block_index, indent),
             .preformatted => |preformatted| try ctx.renderPreformatted(preformatted, block_index, indent),
@@ -127,20 +128,35 @@ const RenderContext = struct {
         const lang_attr = langAttribute(paragraph.lang);
         const id_attr = ctx.resolveBlockId(block_index);
 
-        var class_buffer: [32]u8 = undefined;
-        const class_attr: ?[]const u8 = switch (paragraph.kind) {
-            .p => null,
-            else => std.fmt.bufPrint(&class_buffer, "hdoc-{s}", .{@tagName(paragraph.kind)}) catch unreachable,
-        };
-
         try writeIndent(ctx.writer, indent);
         try writeStartTag(ctx.writer, "p", .regular, .{
             .id = id_attr,
             .lang = lang_attr,
-            .class = class_attr,
         });
         try ctx.renderSpans(paragraph.content);
         try writeEndTag(ctx.writer, "p");
+        try ctx.writer.writeByte('\n');
+    }
+
+    fn renderAdmonition(ctx: *RenderContext, admonition: hdoc.Block.Admonition, block_index: ?usize, indent: usize) RenderError!void {
+        const lang_attr = langAttribute(admonition.lang);
+        const id_attr = ctx.resolveBlockId(block_index);
+
+        var class_buffer: [32]u8 = undefined;
+        const class_attr = std.fmt.bufPrint(&class_buffer, "hdoc-{s}", .{@tagName(admonition.kind)}) catch unreachable;
+
+        try writeIndent(ctx.writer, indent);
+        try writeStartTag(ctx.writer, "div", .regular, .{
+            .id = id_attr,
+            .lang = lang_attr,
+            .class = class_attr,
+        });
+        if (admonition.content.len > 0) {
+            try ctx.writer.writeByte('\n');
+            try ctx.renderBlocks(admonition.content, indent + indent_step);
+            try writeIndent(ctx.writer, indent);
+        }
+        try writeEndTag(ctx.writer, "div");
         try ctx.writer.writeByte('\n');
     }
 

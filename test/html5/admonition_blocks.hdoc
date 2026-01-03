@@ -1,0 +1,17 @@
+hdoc(version="2.0", title="Admonition Blocks", lang="en");
+
+h1 "Admonitions as Containers"
+
+note{
+  p "A note can span multiple blocks."
+  ul{
+    li "Lists are allowed."
+    li "They render inside the note container."
+  }
+}
+
+danger "String bodies become paragraphs inside the container."
+
+spoiler:
+| Hidden detail
+| spans multiple lines.

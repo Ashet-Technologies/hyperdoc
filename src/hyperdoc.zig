@@ -50,6 +50,7 @@ pub const Document = struct {
 pub const Block = union(enum) {
     heading: Heading,
     paragraph: Paragraph,
+    admonition: Admonition,
     list: List,
     image: Image,
     preformatted: Preformatted,
@@ -81,12 +82,17 @@ pub const Block = union(enum) {
     };
 
     pub const Paragraph = struct {
-        kind: ParagraphKind,
         lang: LanguageTag,
         content: []Span,
     };
 
-    pub const ParagraphKind = enum { p, note, warning, danger, tip, quote, spoiler };
+    pub const Admonition = struct {
+        kind: AdmonitionKind,
+        lang: LanguageTag,
+        content: []Block,
+    };
+
+    pub const AdmonitionKind = enum { note, warning, danger, tip, quote, spoiler };
 
     pub const List = struct {
         lang: LanguageTag,
@@ -880,9 +886,13 @@ pub const SemanticAnalyzer = struct {
                 const heading, const id = try sema.translate_heading_node(node);
                 return .{ .{ .heading = heading }, id };
             },
-            .p, .note, .warning, .danger, .tip, .quote, .spoiler => {
+            .p => {
                 const paragraph, const id = try sema.translate_paragraph_node(node);
                 return .{ .{ .paragraph = paragraph }, id };
+            },
+            .note, .warning, .danger, .tip, .quote, .spoiler => {
+                const admonition, const id = try sema.translate_admonition_node(node);
+                return .{ .{ .admonition = admonition }, id };
             },
             .ul, .ol => {
                 const list, const id = try sema.translate_list_node(node);
@@ -976,8 +986,21 @@ pub const SemanticAnalyzer = struct {
         });
 
         const heading: Block.Paragraph = .{
+            .lang = attrs.lang,
+            .content = try sema.translate_inline(node, .emit_diagnostic, .one_space),
+        };
+
+        return .{ heading, attrs.id };
+    }
+
+    fn translate_admonition_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.Admonition, ?Reference } {
+        const attrs = try sema.get_attributes(node, struct {
+            lang: LanguageTag = .inherit,
+            id: ?Reference = null,
+        });
+
+        const admonition: Block.Admonition = .{
             .kind = switch (node.type) {
-                .p => .p,
                 .note => .note,
                 .warning => .warning,
                 .danger => .danger,
@@ -987,10 +1010,10 @@ pub const SemanticAnalyzer = struct {
                 else => unreachable,
             },
             .lang = attrs.lang,
-            .content = try sema.translate_inline(node, .emit_diagnostic, .one_space),
+            .content = try sema.translate_block_list(node, .text_to_p),
         };
 
-        return .{ heading, attrs.id };
+        return .{ admonition, attrs.id };
     }
 
     fn translate_list_node(sema: *SemanticAnalyzer, node: Parser.Node) !struct { Block.List, ?Reference } {
@@ -1337,7 +1360,6 @@ pub const SemanticAnalyzer = struct {
                     const blocks = try sema.arena.alloc(Block, 1);
                     blocks[0] = .{
                         .paragraph = .{
-                            .kind = .p,
                             .lang = .inherit,
                             .content = spans,
                         },
@@ -3079,12 +3101,6 @@ pub const Parser = struct {
 
                 .title,
                 .p,
-                .note,
-                .warning,
-                .danger,
-                .tip,
-                .quote,
-                .spoiler,
 
                 .img,
                 .pre,
@@ -3106,6 +3122,12 @@ pub const Parser = struct {
                 => true,
 
                 .hdoc,
+                .note,
+                .warning,
+                .danger,
+                .tip,
+                .quote,
+                .spoiler,
                 .ul,
                 .ol,
                 .table,

@@ -24,12 +24,12 @@ p {
   Links can target \link(ref="fig-diagram"){other blocks} or external \link(uri="https://ashet.computer"){resources}.
 }
 
-note    { Notes highlight supportive information. }
-warning { Warnings call out risky behavior. }
-danger  { Danger paragraphs emphasize critical hazards. }
-tip     { Tips provide actionable hints. }
-quote   { Quotes include sourced or emphasized wording. }
-spoiler { Spoilers hide key story information until revealed. }
+note "Notes highlight supportive information."
+warning "Warnings call out risky behavior."
+danger "Danger paragraphs emphasize critical hazards."
+tip "Tips provide actionable hints."
+quote "Quotes include sourced or emphasized wording."
+spoiler "Spoilers hide key story information until revealed."
 
 h2(id="literals") { Literal and Preformatted Blocks }
 
