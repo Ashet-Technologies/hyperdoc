@@ -1,0 +1,3 @@
+test/conformance/reject/heading_sequence.hdoc:3:1: Inserted automatic h1 to fill heading level gap.
+test/conformance/reject/heading_sequence.hdoc:3:1: Inserted automatic h2 to fill heading level gap.
+test/conformance/reject/heading_sequence.hdoc:5:1: Inserted automatic h2 to fill heading level gap.

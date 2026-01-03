@@ -10,6 +10,21 @@ const snapshot_files: []const []const u8 = &.{
     "test/snapshot/footnotes.hdoc",
 };
 
+const conformance_accept_files: []const []const u8 = &.{
+    "test/conformance/accept/inline_escape.hdoc",
+    "test/conformance/accept/title_header_redundant.hdoc",
+};
+
+const conformance_reject_files: []const []const u8 = &.{
+    "test/conformance/reject/string_cr_escape.hdoc",
+    "test/conformance/reject/inline_identifier_dash.hdoc",
+    "test/conformance/reject/heading_sequence.hdoc",
+    "test/conformance/reject/nested_top_level.hdoc",
+    "test/conformance/reject/container_children.hdoc",
+    "test/conformance/reject/time_relative_fmt.hdoc",
+    "test/conformance/reject/ref_in_heading.hdoc",
+};
+
 pub fn build(b: *std.Build) void {
     // Options:
     const target = b.standardTargetOptions(.{});
@@ -72,6 +87,40 @@ pub fn build(b: *std.Build) void {
 
             test_step.dependOn(&compare_run.step);
         }
+    }
+
+    // Conformance snapshots: accept cases (YAML only):
+    for (conformance_accept_files) |path| {
+        std.debug.assert(std.mem.endsWith(u8, path, ".hdoc"));
+        const yaml_file = b.fmt("{s}.yaml", .{path[0 .. path.len - 5]});
+
+        const test_run = b.addRunArtifact(exe);
+        test_run.addArgs(&.{ "--format", "yaml" });
+        test_run.addFileArg(b.path(path));
+        const generated_file = test_run.captureStdOut();
+
+        const compare_run = b.addRunArtifact(snapshot_diff);
+        compare_run.addFileArg(b.path(yaml_file));
+        compare_run.addFileArg(generated_file);
+
+        test_step.dependOn(&compare_run.step);
+    }
+
+    // Conformance snapshots: reject cases (diagnostics on stderr, expect exit code 1):
+    for (conformance_reject_files) |path| {
+        std.debug.assert(std.mem.endsWith(u8, path, ".hdoc"));
+        const diag_file = b.fmt("{s}.diag", .{path[0 .. path.len - 5]});
+
+        const test_run = b.addRunArtifact(exe);
+        test_run.addFileArg(b.path(path));
+        test_run.expectExitCode(1);
+        const generated_diag = test_run.captureStdErr();
+
+        const compare_run = b.addRunArtifact(snapshot_diff);
+        compare_run.addFileArg(b.path(diag_file));
+        compare_run.addFileArg(generated_diag);
+
+        test_step.dependOn(&compare_run.step);
     }
 
     // Unit tests:
