@@ -2,9 +2,9 @@ name: Build
 
 on:
   pull_request:
-    branches: [master]
+    branches: [master, hdoc-2.0]
   push:
-    branches: [master]
+    branches: [master, hdoc-2.0]
 
 jobs:
   build:
@@ -20,4 +20,8 @@ jobs:
 
       - name: Build
         run: |
-          zig build
+          zig build install
+
+      - name: Test
+        run: |
+          zig build test
