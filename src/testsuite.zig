@@ -607,6 +607,89 @@ test "diagnostic codes are emitted for expected samples" {
     try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); ul{ li{ toc; } }", &.{.illegal_child_item});
 }
 
+test "table derives column count from first data row" {
+    const code =
+        \\hdoc(version="2.0",lang="en");
+        \\table {
+        \\  row(title="headered") {
+        \\    td { p "A" }
+        \\    td(colspan="2") { p "B" }
+        \\  }
+        \\}
+    ;
+
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    var doc = try hdoc.parse(std.testing.allocator, code, &diagnostics);
+    defer doc.deinit();
+
+    try std.testing.expect(!diagnostics.has_error());
+    try std.testing.expectEqual(@as(usize, 1), doc.contents.len);
+
+    switch (doc.contents[0]) {
+        .table => |table| {
+            try std.testing.expectEqual(@as(usize, 3), table.column_count);
+            try std.testing.expect(table.has_row_titles);
+        },
+        else => return error.TestExpectedEqual,
+    }
+}
+
+test "table without header or data rows is rejected" {
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); table { group \"Topic\" }", &.{.missing_table_column_count});
+}
+
+test "columns row must come first" {
+    const code =
+        \\hdoc(version="2.0",lang="en");
+        \\table {
+        \\  row { td "A" }
+        \\  columns { td "B" }
+        \\}
+    ;
+
+    try validateDiagnostics(.{}, code, &.{.misplaced_columns_row});
+}
+
+test "table allows only one columns row" {
+    const code =
+        \\hdoc(version="2.0",lang="en");
+        \\table {
+        \\  columns { td "A" }
+        \\  columns { td "B" }
+        \\}
+    ;
+
+    try validateDiagnostics(.{}, code, &.{.duplicate_columns_row});
+}
+
+test "table tracks presence of row titles" {
+    const code =
+        \\hdoc(version="2.0",lang="en");
+        \\table {
+        \\  row { td "A" }
+        \\  group { "Topic" }
+        \\}
+    ;
+
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    var doc = try hdoc.parse(std.testing.allocator, code, &diagnostics);
+    defer doc.deinit();
+
+    try std.testing.expect(!diagnostics.has_error());
+    try std.testing.expectEqual(@as(usize, 1), doc.contents.len);
+
+    switch (doc.contents[0]) {
+        .table => |table| {
+            try std.testing.expect(!table.has_row_titles);
+        },
+        else => return error.TestExpectedEqual,
+    }
+}
+
 test "title block populates metadata and warns on inline date" {
     const code = "hdoc(version=\"2.0\",lang=\"en\");\ntitle { Hello \\date{2020-01-02} }\nh1 \"Body\"";
 
