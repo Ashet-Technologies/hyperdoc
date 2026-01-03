@@ -6,7 +6,11 @@ p "This document exercises inline formatting and nested lists."
 
 p { We can mix \em{emphasis}, \strike{strike}, \mono{monospace} text. Superscript x\sup{2} and subscript x\sub{2} also appear. }
 
-p { Links point to \link(ref="top"){local anchors} or \link(uri="https://example.com"){external sites}. }
+p { Links point to \ref(ref="top"){local anchors} or \link(uri="https://example.com"){external sites}. }
+
+h2(id="formatted") {Formatted \em{Heading}}
+
+p { Empty-body references become \ref(ref="formatted",fmt="full"); \ref(ref="formatted",fmt="name"); and \ref(ref="formatted",fmt="index"); }
 
 ul {
   li { p "Top-level item one" }

@@ -172,11 +172,20 @@ pub fn FormattedDateTime(comptime DT: type) type {
 }
 
 pub const Span = struct {
+    pub const ReferenceFormat = enum { full, name, index };
+
     pub const Content = union(enum) {
         text: []const u8,
         date: FormattedDateTime(Date),
         time: FormattedDateTime(Time),
         datetime: FormattedDateTime(DateTime),
+        reference: InlineReference,
+    };
+
+    pub const InlineReference = struct {
+        ref: Reference,
+        fmt: ReferenceFormat,
+        target_block: ?usize = null,
     };
 
     pub const Attributes = struct {
@@ -226,15 +235,24 @@ pub const ScriptPosition = enum {
 
 pub const Link = union(enum) {
     none,
-    ref: Reference,
+    ref: RefTarget,
     uri: Uri,
 
     pub fn eql(lhs: Link, rhs: Link) bool {
         return switch (lhs) {
             .none => (rhs == .none),
-            .ref => (rhs == .ref) and std.mem.eql(u8, lhs.ref.text, rhs.ref.text),
+            .ref => (rhs == .ref) and lhs.ref.eql(rhs.ref),
             .uri => (rhs == .uri) and std.mem.eql(u8, lhs.uri.text, rhs.uri.text),
         };
+    }
+};
+
+pub const RefTarget = struct {
+    ref: Reference,
+    block_index: ?usize = null,
+
+    pub fn eql(lhs: RefTarget, rhs: RefTarget) bool {
+        return lhs.ref.eql(rhs.ref) and lhs.block_index == rhs.block_index;
     }
 };
 
@@ -592,6 +610,7 @@ pub fn parse(
     }
 
     try sema.validate_references(&id_map);
+    try sema.resolve_references(&id_map);
 
     const doc_lang = header.lang orelse LanguageTag.inherit;
     const title = try sema.finalize_title(header, doc_lang);
@@ -930,6 +949,7 @@ pub const SemanticAnalyzer = struct {
             .@"\\sub",
             .@"\\sup",
             .@"\\link",
+            .@"\\ref",
             .@"\\time",
             .@"\\date",
             .@"\\datetime",
@@ -1477,6 +1497,12 @@ pub const SemanticAnalyzer = struct {
 
                     try merger.output.append(merger.arena, span);
                 },
+                .reference => {
+                    try merger.flush_internal(.keep);
+                    std.debug.assert(merger.current_span.items.len == 0);
+
+                    try merger.output.append(merger.arena, span);
+                },
                 .text => |text_content| {
                     std.debug.assert(span.attribs.eql(merger.attribs));
 
@@ -1656,34 +1682,44 @@ pub const SemanticAnalyzer = struct {
             .@"\\link" => {
                 const props = try sema.get_attributes(node, struct {
                     lang: LanguageTag = .inherit,
-                    uri: ?Uri = null,
-                    ref: ?Reference = null,
+                    uri: Uri,
                 });
-
-                if (props.uri != null and props.ref != null) {
-                    try sema.emit_diagnostic(.invalid_link, node.location);
-                }
-
-                const link: Link = if (props.uri) |uri| blk: {
-                    break :blk .{ .uri = uri };
-                } else if (props.ref) |ref| blk: {
-                    break :blk .{ .ref = ref };
-                } else blk: {
-                    try sema.emit_diagnostic(.invalid_link, node.location);
-                    break :blk .none;
-                };
-
-                if (props.ref) |ref| {
-                    if (props.uri == null) {
-                        const ref_location = get_attribute_location(node, "ref", .value) orelse node.location;
-                        try sema.pending_refs.append(sema.arena, .{ .ref = ref, .location = ref_location });
-                    }
-                }
 
                 try sema.translate_inline_body(spans, node.body, try sema.derive_attribute(node.location, attribs, .{
                     .lang = props.lang,
-                    .link = link,
+                    .link = .{ .uri = props.uri },
                 }), .emit_diagnostic);
+            },
+
+            .@"\\ref" => {
+                const props = try sema.get_attributes(node, struct {
+                    lang: LanguageTag = .inherit,
+                    ref: Reference,
+                    fmt: Span.ReferenceFormat = .full,
+                });
+
+                const ref_location = get_attribute_location(node, "ref", .value) orelse node.location;
+                try sema.pending_refs.append(sema.arena, .{ .ref = props.ref, .location = ref_location });
+
+                const link_attribs = try sema.derive_attribute(node.location, attribs, .{
+                    .lang = props.lang,
+                    .link = .{ .ref = .{ .ref = props.ref } },
+                });
+
+                switch (node.body) {
+                    .empty => {
+                        try spans.append(sema.arena, .{
+                            .content = .{ .reference = .{
+                                .ref = props.ref,
+                                .fmt = props.fmt,
+                                .target_block = null,
+                            } },
+                            .attribs = link_attribs,
+                            .location = node.location,
+                        });
+                    },
+                    else => try sema.translate_inline_body(spans, node.body, link_attribs, .emit_diagnostic),
+                }
             },
 
             .@"\\mono" => {
@@ -1727,6 +1763,7 @@ pub const SemanticAnalyzer = struct {
                 //  Convert the content_spans into a "rendered string".
                 const content_text = (sema.render_spans_to_plaintext(content_spans, .reject_date_time) catch |err| switch (err) {
                     error.DateTimeRenderingUnsupported => unreachable,
+                    error.UnexpectedReference => unreachable,
                     else => |e| return e,
                 }).text;
 
@@ -1839,7 +1876,7 @@ pub const SemanticAnalyzer = struct {
         sema: *SemanticAnalyzer,
         source_spans: []const Span,
         mode: PlaintextMode,
-    ) error{ OutOfMemory, DateTimeRenderingUnsupported }!TitlePlainText {
+    ) error{ OutOfMemory, DateTimeRenderingUnsupported, UnexpectedReference }!TitlePlainText {
         var output: std.ArrayList(u8) = .empty;
         defer output.deinit(sema.arena);
 
@@ -1848,6 +1885,7 @@ pub const SemanticAnalyzer = struct {
         for (source_spans) |span| {
             switch (span.content) {
                 .text => |str| try output.appendSlice(sema.arena, str),
+                .reference => return error.UnexpectedReference,
                 .date => |value| switch (mode) {
                     .reject_date_time => return error.DateTimeRenderingUnsupported,
                     .iso_date_time => {
@@ -1953,6 +1991,7 @@ pub const SemanticAnalyzer = struct {
         if (block_title) |title_block| {
             const rendered = sema.render_spans_to_plaintext(title_block.content, .iso_date_time) catch |err| switch (err) {
                 error.DateTimeRenderingUnsupported => unreachable,
+                error.UnexpectedReference => unreachable,
                 else => |e| return e,
             };
 
@@ -2161,7 +2200,10 @@ pub const SemanticAnalyzer = struct {
             LanguageTag => LanguageTag.parse(value) catch return error.InvalidValue,
             TimeZoneOffset => TimeZoneOffset.parse(value) catch return error.InvalidValue,
 
-            else => @compileError("Unsupported attribute type: " ++ @typeName(T)),
+            inline else => |EnumT| switch (@typeInfo(EnumT)) {
+                .@"enum" => std.meta.stringToEnum(EnumT, value) orelse return error.InvalidValue,
+                else => @compileError("Unsupported attribute type: " ++ @typeName(EnumT)),
+            },
         };
     }
 
@@ -2169,6 +2211,107 @@ pub const SemanticAnalyzer = struct {
         for (sema.pending_refs.items) |ref_use| {
             if (!id_map.contains(ref_use.ref.text)) {
                 try sema.emit_diagnostic(.{ .unknown_id = .{ .ref = ref_use.ref.text } }, ref_use.location);
+            }
+        }
+    }
+
+    fn resolve_references(
+        sema: *SemanticAnalyzer,
+        id_map: *const std.StringArrayHashMapUnmanaged(usize),
+    ) error{OutOfMemory}!void {
+        for (sema.blocks.items) |*block| {
+            try sema.resolve_block_references(block, id_map);
+        }
+
+        if (sema.title_block) |*title_block| {
+            try sema.resolve_span_slice(&title_block.content, id_map);
+        }
+    }
+
+    fn resolve_block_references(
+        sema: *SemanticAnalyzer,
+        block: *Block,
+        id_map: *const std.StringArrayHashMapUnmanaged(usize),
+    ) error{OutOfMemory}!void {
+        switch (block.*) {
+            .heading => |*heading| {
+                try sema.resolve_span_slice(&heading.content, id_map);
+            },
+            .paragraph => |*paragraph| {
+                try sema.resolve_span_slice(&paragraph.content, id_map);
+            },
+            .list => |*list| {
+                for (list.items) |*item| {
+                    for (item.content) |*child| {
+                        try sema.resolve_block_references(child, id_map);
+                    }
+                }
+            },
+            .image => |*image| {
+                try sema.resolve_span_slice(&image.content, id_map);
+            },
+            .preformatted => |*preformatted| {
+                try sema.resolve_span_slice(&preformatted.content, id_map);
+            },
+            .toc => {},
+            .table => |*table| {
+                for (table.rows) |*row| switch (row.*) {
+                    .columns => |*columns| {
+                        for (columns.cells) |*cell| {
+                            for (cell.content) |*child| {
+                                try sema.resolve_block_references(child, id_map);
+                            }
+                        }
+                    },
+                    .group => |*group| {
+                        try sema.resolve_span_slice(&group.content, id_map);
+                    },
+                    .row => |*table_row| {
+                        for (table_row.cells) |*cell| {
+                            for (cell.content) |*child| {
+                                try sema.resolve_block_references(child, id_map);
+                            }
+                        }
+                    },
+                };
+            },
+        }
+    }
+
+    fn resolve_span_slice(
+        sema: *SemanticAnalyzer,
+        spans: *[]Span,
+        id_map: *const std.StringArrayHashMapUnmanaged(usize),
+    ) error{OutOfMemory}!void {
+        for (spans.*) |*span| {
+            var target_index: ?usize = null;
+            switch (span.attribs.link) {
+                .ref => |ref_target| {
+                    target_index = ref_target.block_index orelse id_map.get(ref_target.ref.text);
+                    span.attribs.link = .{ .ref = .{
+                        .ref = ref_target.ref,
+                        .block_index = target_index,
+                    } };
+                },
+                else => {},
+            }
+
+            switch (span.content) {
+                .reference => |ref_content| {
+                    const resolved_index = target_index orelse id_map.get(ref_content.ref.text) orelse continue;
+                    const target_block = sema.blocks.items[resolved_index];
+                    switch (target_block) {
+                        .heading => {},
+                        else => try sema.emit_diagnostic(.empty_ref_body_target, span.location),
+                    }
+                    span.content = .{ .reference = .{
+                        .ref = ref_content.ref,
+                        .fmt = ref_content.fmt,
+                        .target_block = resolved_index,
+                    } };
+                    span.attribs.link = .{ .ref = .{ .ref = ref_content.ref, .block_index = resolved_index } };
+                },
+                else => {},
             }
         }
     }
@@ -3083,6 +3226,7 @@ pub const Parser = struct {
         @"\\sub",
         @"\\sup",
         @"\\link",
+        @"\\ref",
         @"\\date",
         @"\\time",
         @"\\datetime",
@@ -3098,6 +3242,7 @@ pub const Parser = struct {
                 .@"\\sub",
                 .@"\\sup",
                 .@"\\link",
+                .@"\\ref",
                 .@"\\date",
                 .@"\\time",
                 .@"\\datetime",
@@ -3153,6 +3298,7 @@ pub const Parser = struct {
                 .@"\\sub",
                 .@"\\sup",
                 .@"\\link",
+                .@"\\ref",
                 .@"\\date",
                 .@"\\time",
                 .@"\\datetime",
@@ -3255,7 +3401,6 @@ pub const Diagnostic = struct {
         block_list_required: NodeBodyError,
         invalid_inline_combination: InlineCombinationError,
         link_not_nestable,
-        invalid_link,
         invalid_date_time,
         invalid_date_time_body,
         invalid_date_time_fmt: DateTimeFormatError,
@@ -3275,6 +3420,7 @@ pub const Diagnostic = struct {
         duplicate_columns_row,
         duplicate_id: ReferenceError,
         unknown_id: ReferenceError,
+        empty_ref_body_target,
 
         // warnings:
         document_starts_with_bom,
@@ -3312,7 +3458,6 @@ pub const Diagnostic = struct {
                 .block_list_required,
                 .invalid_inline_combination,
                 .link_not_nestable,
-                .invalid_link,
                 .invalid_date_time,
                 .invalid_date_time_fmt,
                 .missing_timezone,
@@ -3332,6 +3477,7 @@ pub const Diagnostic = struct {
                 .duplicate_columns_row,
                 .duplicate_id,
                 .unknown_id,
+                .empty_ref_body_target,
                 => .@"error",
 
                 .missing_document_language,
@@ -3391,7 +3537,6 @@ pub const Diagnostic = struct {
                 .redundant_inline => |ctx| try w.print("The inline \\{t} has no effect.", .{ctx.attribute}),
                 .invalid_inline_combination => |ctx| try w.print("Cannot combine \\{t} with \\{t}.", .{ ctx.first, ctx.second }),
                 .link_not_nestable => try w.writeAll("Links are not nestable"),
-                .invalid_link => try w.writeAll("\\link requires either ref=\"…\" or uri=\"…\" attribute."),
 
                 .attribute_leading_trailing_whitespace => try w.writeAll("Attribute value has invalid leading or trailing whitespace."),
 
@@ -3427,6 +3572,7 @@ pub const Diagnostic = struct {
 
                 .duplicate_id => |ctx| try w.print("The id \"{s}\" is already taken by another node.", .{ctx.ref}),
                 .unknown_id => |ctx| try w.print("The referenced id \"{s}\" does not exist.", .{ctx.ref}),
+                .empty_ref_body_target => try w.writeAll("Empty-body \\ref is only supported for headings."),
 
                 .missing_document_language => try w.writeAll("Document language is missing; set lang on the hdoc header."),
                 .tab_character => try w.writeAll("Tab character is not allowed; use spaces instead."),

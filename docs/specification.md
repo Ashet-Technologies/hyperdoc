@@ -812,6 +812,7 @@ Notes:
 Semantics:
 
 - `\ref(ref="X")` **MUST** resolve to a top-level element with `id="X"`, otherwise it is semantically invalid.
+- A `\ref` inline element **MUST NOT** appear inside `h1`, `h2`, `h3`, or `title` elements.
 - If `\ref` has a non-empty body, the body **MUST** be used as the rendered link text.
 - If `\ref` has an empty body (`;`), the following rules apply:
   - If the referenced target is a heading (`h1`, `h2`, `h3`), the renderer **MUST** synthesize link text from the target and `fmt`:

@@ -135,7 +135,11 @@ fn writeSpanAttributes(writer: *Writer, span: hdoc.Span) Writer.Error!void {
         .none => {},
         .ref => |value| {
             try writeAttrSeparator(writer, &first);
-            try writer.print("link=\"ref:{f}\"", .{std.zig.fmtString(value.text)});
+            if (value.block_index) |idx| {
+                try writer.print("link=\"ref:{f}#{d}\"", .{ std.zig.fmtString(value.ref.text), idx });
+            } else {
+                try writer.print("link=\"ref:{f}\"", .{std.zig.fmtString(value.ref.text)});
+            }
         },
         .uri => |value| {
             try writeAttrSeparator(writer, &first);
@@ -215,6 +219,17 @@ fn writeSpanContentInline(writer: *Writer, content: hdoc.Span.Content) Writer.Er
         .datetime => |datetime| {
             try writer.writeByte('"');
             try writeFormattedDateTimeInline(writer, datetime);
+            try writer.writeByte('"');
+        },
+        .reference => |reference| {
+            try writer.writeByte('"');
+            try writer.writeAll("ref:");
+            try writer.writeAll(reference.ref.text);
+            try writer.writeByte('@');
+            try writer.writeAll(@tagName(reference.fmt));
+            if (reference.target_block) |idx| {
+                try writer.print("#{d}", .{idx});
+            }
             try writer.writeByte('"');
         },
     }
