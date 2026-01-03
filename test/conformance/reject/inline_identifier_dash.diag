@@ -1,0 +1,2 @@
+/workspace/hyperdoc/test/conformance/reject/inline_identifier_dash.hdoc:3:9: Invalid identifier character: '-'.
+error: failed to parse "/workspace/hyperdoc/test/conformance/reject/inline_identifier_dash.hdoc": SyntaxError

@@ -60,7 +60,7 @@ test "parser accept identifier and word tokens" {
         .diagnostics = null,
     };
 
-    const ident = try parser.accept_identifier();
+    const ident = try parser.accept_identifier(.node);
     try std.testing.expectEqualStrings("h1", ident.text);
     try std.testing.expectEqual(@as(usize, 0), ident.location.offset);
     try std.testing.expectEqual(@as(usize, 2), ident.location.length);
@@ -82,7 +82,7 @@ test "parser rejects identifiers with invalid start characters" {
         .diagnostics = null,
     };
 
-    try std.testing.expectError(error.InvalidCharacter, parser.accept_identifier());
+    try std.testing.expectError(error.InvalidCharacter, parser.accept_identifier(.node));
 }
 
 test "parser accept string literals and unescape" {
@@ -563,10 +563,16 @@ test "table of contents inserts automatic headings when skipping levels" {
     var doc = try hdoc.parse(std.testing.allocator, source, &diagnostics);
     defer doc.deinit();
 
-    try std.testing.expectEqual(@as(usize, 3), diagnostics.items.items.len);
+    try std.testing.expectEqual(@as(usize, 5), diagnostics.items.items.len);
     try std.testing.expect(diagnosticCodesEqual(diagnostics.items.items[0].code, .missing_document_language));
-    try std.testing.expect(diagnosticCodesEqual(diagnostics.items.items[1].code, .{ .automatic_heading_insertion = .{ .level = .h1 } }));
-    try std.testing.expect(diagnosticCodesEqual(diagnostics.items.items[2].code, .{ .automatic_heading_insertion = .{ .level = .h2 } }));
+    try std.testing.expect(diagnosticCodesEqual(diagnostics.items.items[1].code, .{
+        .invalid_heading_sequence = .{ .level = .h3, .missing = .h2 },
+    }));
+    try std.testing.expect(diagnosticCodesEqual(diagnostics.items.items[2].code, .{
+        .invalid_heading_sequence = .{ .level = .h2, .missing = .h1 },
+    }));
+    try std.testing.expect(diagnosticCodesEqual(diagnostics.items.items[3].code, .{ .automatic_heading_insertion = .{ .level = .h1 } }));
+    try std.testing.expect(diagnosticCodesEqual(diagnostics.items.items[4].code, .{ .automatic_heading_insertion = .{ .level = .h2 } }));
 
     const toc = doc.toc;
     try std.testing.expectEqual(.h1, toc.level);
@@ -879,7 +885,7 @@ test "diagnostic codes are emitted for expected samples" {
     try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); hdoc(version=\"2.0\",lang=\"en\");", &.{ .misplaced_hdoc_header, .duplicate_hdoc_header });
     try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); h1 \"bad\\q\"", &.{.{ .invalid_string_escape = .{ .codepoint = 'q' } }});
     try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); h1 \"bad\\u{9}\"", &.{.{ .illegal_character = .{ .codepoint = 0x9 } }});
-    try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); ul{ li{ toc; } }", &.{.illegal_child_item});
+    try validateDiagnostics(.{}, "hdoc(version=\"2.0\",lang=\"en\"); ul{ li{ toc; } }", &.{ .illegal_child_item, .list_body_required });
 }
 
 test "table derives column count from first data row" {
