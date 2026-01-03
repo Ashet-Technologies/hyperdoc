@@ -472,8 +472,13 @@ const RenderContext = struct {
             const href_value = switch (span.attribs.link) {
                 .none => unreachable,
                 .ref => |reference| blk: {
+                    if (ctx.resolveBlockId(reference.block_index)) |resolved| {
+                        var href_buffer: [128]u8 = undefined;
+                        break :blk std.fmt.bufPrint(&href_buffer, "#{s}", .{resolved}) catch unreachable;
+                    }
+
                     var href_buffer: [128]u8 = undefined;
-                    break :blk std.fmt.bufPrint(&href_buffer, "#{s}", .{reference.text}) catch unreachable;
+                    break :blk std.fmt.bufPrint(&href_buffer, "#{s}", .{reference.ref.text}) catch unreachable;
                 },
                 .uri => |uri| uri.text,
             };
@@ -530,11 +535,74 @@ const RenderContext = struct {
             .date => |date| try ctx.renderDateTimeValue(.date, date, content_lang),
             .time => |time| try ctx.renderDateTimeValue(.time, time, content_lang),
             .datetime => |datetime| try ctx.renderDateTimeValue(.datetime, datetime, content_lang),
+            .reference => |reference| {
+                try ctx.renderReference(reference, content_lang);
+            },
         }
 
         while (opened_len > 0) {
             opened_len -= 1;
             try writeEndTag(ctx.writer, opened[opened_len]);
+        }
+    }
+
+    fn renderReference(ctx: *RenderContext, reference: hdoc.Span.InlineReference, content_lang: ?[]const u8) RenderError!void {
+        if (reference.target_block) |target_idx| {
+            if (target_idx < ctx.doc.contents.len) {
+                switch (ctx.doc.contents[target_idx]) {
+                    .heading => |heading| return ctx.renderHeadingReference(reference, heading, content_lang),
+                    else => {},
+                }
+            }
+        }
+
+        try ctx.renderReferenceText(reference.ref.text, content_lang);
+    }
+
+    fn renderHeadingReference(ctx: *RenderContext, reference: hdoc.Span.InlineReference, heading: hdoc.Block.Heading, content_lang: ?[]const u8) RenderError!void {
+        var has_bdi = false;
+        if (content_lang) |lang| {
+            try writeStartTag(ctx.writer, "bdi", .regular, .{ .lang = lang });
+            has_bdi = true;
+        }
+
+        const print_index = reference.fmt != .name;
+        if (print_index) {
+            var index_buffer: [32]u8 = undefined;
+            const index_label = try formatHeadingIndexLabel(heading.index, &index_buffer);
+            try writeEscapedHtml(ctx.writer, index_label);
+        }
+
+        if (reference.fmt == .full and heading.content.len > 0) {
+            try ctx.writer.writeByte(' ');
+        }
+
+        switch (reference.fmt) {
+            .full, .name => try ctx.renderReferenceTargetSpans(heading.content),
+            .index => {},
+        }
+
+        if (has_bdi) {
+            try writeEndTag(ctx.writer, "bdi");
+        }
+    }
+
+    fn renderReferenceText(ctx: *RenderContext, text: []const u8, content_lang: ?[]const u8) RenderError!void {
+        if (content_lang) |lang| {
+            try writeStartTag(ctx.writer, "bdi", .regular, .{ .lang = lang });
+            try writeEscapedHtml(ctx.writer, text);
+            try writeEndTag(ctx.writer, "bdi");
+            return;
+        }
+
+        try writeEscapedHtml(ctx.writer, text);
+    }
+
+    fn renderReferenceTargetSpans(ctx: *RenderContext, spans: []const hdoc.Span) RenderError!void {
+        for (spans) |span| {
+            var adjusted = span;
+            adjusted.attribs.link = .none;
+            try ctx.renderSpan(adjusted);
         }
     }
 
@@ -788,6 +856,25 @@ fn formatIsoDateTime(value: hdoc.DateTime, buffer: []u8) RenderError![]const u8 
     const time_text = try formatIsoTime(value.time, &time_buffer);
 
     return std.fmt.bufPrint(buffer, "{s}T{s}", .{ date_text, time_text }) catch unreachable;
+}
+
+fn formatHeadingIndexLabel(index: hdoc.Block.Heading.Index, buffer: []u8) RenderError![]const u8 {
+    var stream = std.io.fixedBufferStream(buffer);
+    const writer = stream.writer();
+
+    const parts = switch (index) {
+        .h1 => index.h1[0..1],
+        .h2 => index.h2[0..2],
+        .h3 => index.h3[0..3],
+    };
+
+    for (parts, 0..) |value, idx| {
+        if (idx != 0) try writer.writeByte('.');
+        try writer.print("{d}", .{value});
+    }
+    try writer.writeByte('.');
+
+    return stream.getWritten();
 }
 
 fn formatDateValue(value: hdoc.FormattedDateTime(hdoc.Date), buffer: []u8) RenderError![]const u8 {

@@ -10,6 +10,7 @@
 - Run `zig build` to validate the main application still compiles
 - Test `./zig-out/bin/hyperdoc` with the `.hdoc` files in `examples/` and `test/`.
 - Avoid editing documentation unless the request explicitly asks for it.
+- `src/hyperdoc.zig` must not contain locale- or rendering-specific parts.
 - Treat `docs/specification.md` as the authoritative source of behavior; examples may be outdated or incorrect.
 - If the spec is unclear or conflicts with code/tests, ask before changing behavior.
 - Do not implement "just make it work" fallbacks that alter semantics to satisfy examples.

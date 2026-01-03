@@ -15,7 +15,7 @@ p(id="foo") {
 p {
   This paragraph contains \em{inline} formatting. We don't support \strike{bold} or \strike{italic} as it's a stylistic choice.
   Other formatting we have is \mono{monospaced}, superscript (x\sup{2}) and subscript(x\sub{2}).
-  We can also \link(ref="foo"){link to other parts of a document} or \link(uri="https://ashet.computer"){to websites}.
+  We can also \ref(ref="foo"){link to other parts of a document} or \link(uri="https://ashet.computer"){to websites}.
   With \mono(syntax="c"){int *value = 10;} we can also have language information and potential syntax highlighting attached to monospaced font.
 }
 

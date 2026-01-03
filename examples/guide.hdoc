@@ -21,7 +21,7 @@ p {
 }
 
 p {
-  Links can target \link(ref="fig-diagram"){other blocks} or external \link(uri="https://ashet.computer"){resources}.
+  Links can target \ref(ref="fig-diagram"){other blocks} or external \link(uri="https://ashet.computer"){resources}.
 }
 
 note    { Notes highlight supportive information. }

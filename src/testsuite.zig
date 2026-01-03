@@ -415,6 +415,62 @@ test "parser handles unknown node types" {
     }
 }
 
+test "\\ref synthesizes heading text for empty bodies" {
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source =
+        \\hdoc(version="2.0",lang="en");
+        \\h1(id="intro"){Introduction}
+        \\p{See \ref(ref="intro"); and \ref(ref="intro",fmt="name"); and \ref(ref="intro",fmt="index");}
+    ;
+
+    var doc = try hdoc.parse(std.testing.allocator, source, &diagnostics);
+    defer doc.deinit();
+
+    try std.testing.expect(!diagnostics.has_error());
+    try std.testing.expectEqual(@as(usize, 2), doc.contents.len);
+
+    const paragraph = doc.contents[1].paragraph;
+    const expected_formats = [_]hdoc.Span.ReferenceFormat{ .full, .name, .index };
+
+    var seen: usize = 0;
+    for (paragraph.content) |span| {
+        if (span.content != .reference) continue;
+
+        const reference = span.content.reference;
+        try std.testing.expect(seen < expected_formats.len);
+        try std.testing.expectEqual(expected_formats[seen], reference.fmt);
+        try std.testing.expectEqual(@as(?usize, 0), reference.target_block);
+
+        switch (span.attribs.link) {
+            .ref => |link| try std.testing.expectEqual(@as(?usize, 0), link.block_index),
+            else => return error.TestExpectedEqual,
+        }
+
+        seen += 1;
+    }
+
+    try std.testing.expectEqual(expected_formats.len, seen);
+}
+
+test "\\ref empty body rejects non-heading targets" {
+    var diagnostics: hdoc.Diagnostics = .init(std.testing.allocator);
+    defer diagnostics.deinit();
+
+    const source =
+        \\hdoc(version="2.0",lang="en");
+        \\p(id="p1"){Body}
+        \\p{\ref(ref="p1");}
+    ;
+
+    var doc = try hdoc.parse(std.testing.allocator, source, &diagnostics);
+    defer doc.deinit();
+
+    try std.testing.expect(diagnostics.has_error());
+    try std.testing.expect(diagnosticCodesEqual(diagnostics.items.items[0].code, .empty_ref_body_target));
+}
+
 test "table of contents inserts automatic headings when skipping levels" {
     const source =
         \\hdoc(version="2.0");
@@ -791,7 +847,7 @@ test "diagnostics for missing timezone and unknown id" {
 
     const source =
         \\hdoc(version="2.0");
-        \\p{ \time"12:00:00" \link(ref="missing"){missing} }
+        \\p{ \time"12:00:00" \ref(ref="missing"){missing} }
     ;
 
     var doc = try hdoc.parse(std.testing.allocator, source, &diagnostics);
