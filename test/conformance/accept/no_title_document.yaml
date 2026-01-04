@@ -1,0 +1,19 @@
+document:
+  version:
+    major: 2
+    minor: 0
+  lang: "en"
+  title: null
+  author: null
+  date: null
+  toc:
+    level: h1
+    headings: []
+    children: []
+  contents:
+    - paragraph:
+      lang: ""
+      content:
+        - [] "Untitled body"
+  ids:
+    - null
