@@ -1,2 +1,13 @@
-/workspace/hyperdoc/test/conformance/reject/ref_in_heading.hdoc:5:14: \\ref is not allowed in this context.
-error: failed to parse "/workspace/hyperdoc/test/conformance/reject/ref_in_heading.hdoc": InvalidFile
+[
+  {
+    "code": {
+      "inline_not_allowed": {
+        "node_type": "\\ref"
+      }
+    },
+    "location": {
+      "line": 5,
+      "column": 14
+    }
+  }
+]

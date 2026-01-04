@@ -112,6 +112,7 @@ pub fn build(b: *std.Build) void {
         const diag_file = b.fmt("{s}.diag", .{path[0 .. path.len - 5]});
 
         const test_run = b.addRunArtifact(exe);
+        test_run.addArgs(&.{"--json-diagnostics"});
         test_run.addFileArg(b.path(path));
         test_run.expectExitCode(1);
         const generated_diag = test_run.captureStdErr();
