@@ -1,6 +1,6 @@
 hdoc(version="2.0");
 
-h1 { Small Computer Feature Matrix }
+title { Small Computer Feature Matrix }
 
 table {
   columns {
@@ -63,7 +63,7 @@ table {
     td "✅"
     td "✅"
     td "❌"
-    td { p { ❌\sup{1} } }
+    td { p { ❌\footnote{Neotron Pico uses PS/2 for mouse/keyboard and VGA for video.} } }
     td "❌"
   }
   row(title="Modular Design") {
@@ -71,7 +71,7 @@ table {
     td "❌"
     td "❌"
     td "✅"
-    td { p { ✅\sup{2} } }
+    td { p { ✅\footnote{Cody Computer has a single cartridge that can be added.} } }
   }
   row(title="Full Documentation") {
     td "✅"
@@ -96,6 +96,6 @@ table {
   }
 }
 
-p { \sup{1}: Neotron Pico uses PS/2 for mouse/keyboard and VGA for video. }
+footnotes;
 
-p { \sup{2}: Cody Computer has a single cartridge that can be added. }
+

@@ -491,7 +491,7 @@ const RenderContext = struct {
 
         try writeIndent(ctx.writer, indent + indent_step);
         try writeStartTag(ctx.writer, "th", .regular, .{
-            .scope = "colgroup",
+            .scope = "rowgroup",
             .colspan = @as(u32, @intCast(@max(@as(usize, 1), column_count))),
         });
         try ctx.renderSpans(group.content);

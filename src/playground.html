@@ -144,6 +144,252 @@
       color: #ecaa04;
       font-weight: 600;
     }
+
+    #preview {
+      color: #111827;
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    #preview :is(h1, h2, h3, h4, h5, h6) {
+      margin: 0.9em 0 0.35em;
+      line-height: 1.25;
+      letter-spacing: -0.01em;
+    }
+
+    #preview :is(p, ul, ol, figure, pre, blockquote) {
+      margin: 0 0 0.9em;
+    }
+
+    #preview :is(ul, ol) {
+      padding-left: 1.35em;
+    }
+
+    #preview li {
+      margin: 0.25em 0;
+    }
+
+    #preview a {
+      color: #2563eb;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 2px;
+    }
+
+    #preview a:hover {
+      text-decoration-thickness: 2px;
+    }
+
+    #preview img {
+      max-width: 100%;
+      height: auto;
+    }
+
+    #preview .hdoc-doc-meta {
+      margin: 0.25em 0 0;
+      color: #6b7280;
+      font-size: 0.95em;
+    }
+
+    #preview code.hdoc-code {
+      font-family: ui-monospace, "JetBrains Mono", Consolas, "Courier New", monospace;
+      font-size: 0.95em;
+      background: #f3f4f6;
+      border: 1px solid #e5e7eb;
+      padding: 0.08em 0.32em;
+      border-radius: 6px;
+    }
+
+    #preview pre {
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: #0b1220;
+      color: #e5e7eb;
+      border: 1px solid #111827;
+      overflow: auto;
+    }
+
+    #preview pre code.hdoc-code {
+      white-space: pre;
+      background: transparent;
+      border: none;
+      padding: 0;
+      border-radius: 0;
+      color: inherit;
+      font-size: 13px;
+    }
+
+    #preview pre code.hdoc-code code.hdoc-code {
+      background: rgba(148, 163, 184, 0.14);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      padding: 0.05em 0.25em;
+    }
+
+    #preview :is(.hdoc-note, .hdoc-warning, .hdoc-danger, .hdoc-tip) {
+      margin: 1em 0;
+      border-radius: 12px;
+      padding: 12px 12px 12px 44px;
+      border: 1px solid var(--hdoc-callout-border);
+      background: var(--hdoc-callout-bg);
+      color: var(--hdoc-callout-fg);
+      position: relative;
+    }
+
+    #preview :is(.hdoc-note, .hdoc-warning, .hdoc-danger, .hdoc-tip)::before {
+      content: var(--hdoc-callout-icon);
+      position: absolute;
+      left: 12px;
+      top: 12px;
+      line-height: 1;
+    }
+
+    #preview .hdoc-note {
+      --hdoc-callout-icon: "ℹ️";
+      --hdoc-callout-bg: #eff6ff;
+      --hdoc-callout-border: #bfdbfe;
+      --hdoc-callout-fg: #0f172a;
+    }
+
+    #preview .hdoc-warning {
+      --hdoc-callout-icon: "⚠️";
+      --hdoc-callout-bg: #fffbeb;
+      --hdoc-callout-border: #fcd34d;
+      --hdoc-callout-fg: #78350f;
+    }
+
+    #preview .hdoc-danger {
+      --hdoc-callout-icon: "🛑";
+      --hdoc-callout-bg: #fef2f2;
+      --hdoc-callout-border: #fecaca;
+      --hdoc-callout-fg: #7f1d1d;
+    }
+
+    #preview .hdoc-tip {
+      --hdoc-callout-icon: "💡";
+      --hdoc-callout-bg: #ecfdf5;
+      --hdoc-callout-border: #a7f3d0;
+      --hdoc-callout-fg: #064e3b;
+    }
+
+    #preview :is(.hdoc-note, .hdoc-warning, .hdoc-danger, .hdoc-tip, .hdoc-quote, .hdoc-spoiler) > :first-child {
+      margin-top: 0;
+    }
+
+    #preview :is(.hdoc-note, .hdoc-warning, .hdoc-danger, .hdoc-tip, .hdoc-quote, .hdoc-spoiler) > :last-child {
+      margin-bottom: 0;
+    }
+
+    #preview .hdoc-quote {
+      margin: 1em 0;
+      border-radius: 12px;
+      padding: 12px 12px 12px 14px;
+      border-left: 4px solid #10b981;
+      background: #f0fdf4;
+      color: #064e3b;
+    }
+
+    #preview .hdoc-spoiler {
+      margin: 1em 0;
+      border-radius: 12px;
+      padding: 12px;
+      border: 1px dashed #d1d5db;
+      background: #f3f4f6;
+      position: relative;
+    }
+
+    #preview .hdoc-spoiler::before {
+      content: "Spoiler (hover to reveal)";
+      display: block;
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 8px;
+    }
+
+    #preview .hdoc-spoiler > * {
+      filter: blur(6px);
+      transition: filter 120ms ease;
+    }
+
+    #preview .hdoc-spoiler:hover > *,
+    #preview .hdoc-spoiler:focus-within > * {
+      filter: none;
+    }
+
+    #preview table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      background: #ffffff;
+      overflow: hidden;
+      font-size: 14px;
+    }
+
+    #preview :is(th, td) {
+      padding: 8px 10px;
+      border-bottom: 1px solid #e5e7eb;
+      border-right: 1px solid #e5e7eb;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    #preview tr > :last-child {
+      border-right: none;
+    }
+
+    #preview tbody tr:last-child > :is(th, td) {
+      border-bottom: none;
+    }
+
+    #preview thead th {
+      background: #f9fafb;
+      font-weight: 650;
+      color: #111827;
+    }
+
+    #preview th[scope="row"] {
+      background: #f9fafb;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    #preview th[scope="rowgroup"] {
+      background: #eef2ff;
+      color: #312e81;
+      font-weight: 700;
+    }
+
+    #preview tbody tr:nth-child(even) td {
+      background: #fcfcfd;
+    }
+
+    #preview :is(th, td):empty {
+      padding: 0;
+    }
+
+    #preview table :is(p, ul, ol) {
+      margin: 0;
+    }
+
+    #preview table :is(ul, ol) {
+      padding-left: 1.2em;
+    }
+
+    #preview sup.hdoc-footnote-ref {
+      font-size: 0.75em;
+    }
+
+    #preview .hdoc-footnotes {
+      margin: 1.2em 0 0;
+      padding-top: 0.8em;
+      border-top: 1px solid #e5e7eb;
+      color: #374151;
+    }
+
+    #preview .hdoc-footnote-list {
+      margin: 0;
+      padding-left: 1.3em;
+    }
   </style>
 </head>
 
@@ -177,14 +423,157 @@
     const decoder = new TextDecoder();
     const wasmUrl = "./hyperdoc_wasm.wasm";
 
-    const initialText = `hdoc(version="2.0", lang="en");
-title {
-  HyperDoc Playground
+    const initialText = `hdoc(version="2.0", lang="en", author="Felix \\"xq\\" Queißner", date="2025-12-17T13:45:00+01:00");
+
+title { HyperDoc 2.0 Examples }
+
+toc(depth="2") {}
+
+h1(id="paragraphs") { Paragraphs and Inline Text }
+
+p(id="p-basic") {
+  This paragraph shows plain text mixed with \\em{emphasis}, \\strike{strike-through}, and \\mono{monospaced} spans.
+}
+
+p(lang="de") {
+  Dieser Absatz zeigt das Attribut \\mono{lang} auf Blockebene.
+}
+
+p "This paragraph uses a string literal body instead of a list."
+
+p {
+  Inline scripts support \\mono(syntax="zig"){const version = "2.0";} as well as sub/superscripts like H\\sub{2}O and x\\sup{2}.
 }
 
 p {
-  Type HyperDoc content on the left to render HTML here.
-}`;
+  Links can target \\ref(ref="fig-diagram"){other blocks} or external \\link(uri="https://ashet.computer"){resources}.
+}
+
+footnotes;
+
+h1(id="lists") { Lists }
+
+h2 { Unordered Lists }
+
+ul {
+  li { p { Apples } }
+  li "Bananas"
+  li { p { \em{Cucumbers} with inline markup. } }
+}
+
+h2(id="ol") { Ordered Lists }
+
+ol(first="3") {
+  li { p { Start counting at three. } }
+  li "Continue with a string item."
+  li { p { Finish the sequence. } }
+}
+
+h1(id="admonitions") "Admonitions"
+tip {
+  p { Tips provide actionable hints\\footnote{You can also write footnotes this way}. }
+  p { Tips can also include multiple paragraphs and even lists: }
+  ul {
+    li "Item 1"
+    li "Item 2"
+  }
+}
+
+note "Notes highlight supportive information."
+
+warning {
+  p { Warnings call out risky behavior\\footnote(key="shared"){You can even share the same footnote in multiple locations.,}. }
+}
+
+danger {
+  p { Danger paragraphs emphasize critical hazards\\footnote(ref="shared");. }
+}
+
+quote {
+  p "Quotes include sourced or emphasized wording."
+  p { - Unknown author }
+}
+
+spoiler "Spoilers hide key story information until revealed."
+
+footnotes;
+
+h1(id="literals") { Literal and Preformatted Blocks }
+
+p:
+| Literal blocks keep exact content and skip parsing, so characters like \\{ \\} are not special.
+| They are introduced by a trailing colon.
+| You can capture snippets without escaping anything.
+
+pre(id="code-sample", syntax="zig") {test {
+    const message = "HyperDoc";
+    const answer = \\mono(syntax="zig"){42};
+}
+}
+
+h1(id="media") { Figures }
+
+p {
+  The image below has a caption, alt text, and a relative asset path. 
+}
+
+img(id="fig-diagram", alt="Diagram showing a HyperDoc example", path="./assets/diagram.svg") {
+  HyperDoc is centered inside a rounded rectangle.
+}
+
+h1(id="dates") { Dates and Times }
+
+p {
+  The event was announced on \\date(fmt="long"){2025-12-17} at \\time(fmt="short"){13:45:00Z}.
+  A combined timestamp looks like \\datetime(fmt="iso"){2025-12-17T13:45:00Z}.
+}
+
+h1 "References"
+
+p {
+  In chapter \\ref(ref="paragraphs"); we've read about how we can format paragraphs.
+  This chapter here teaches about references.
+}
+
+p {
+  References to another chapter can use the numeric value (like \\ref(ref="ol", fmt="index");), use only the name (like \\ref(ref="table-ref",fmt="name");) or we can use a \\ref(ref="table-ref"){custom name like with regular links}.
+}
+
+h1(id="table-ref") { Tables }
+
+p {
+  See the dedicated tables example file for row groups and colspan usage.
+}
+
+table(id="inventory") {
+  columns {
+    td "Item"
+    td "Quantity"
+    td "Notes"
+  }
+  group { Fresh Produce }
+  row(title="Fruit") {
+    td "Apples"
+    td "12"
+    td { p { Delivered on \\date(fmt="short"){2025-02-08}. } }
+  }
+  row(title="Vegetables") {
+    td "Carrots"
+    td "7"
+    td { p { Store at \\time(fmt="rough"){08:00:00Z}. } }
+  }
+  group { Pantry }
+  row(title="Dry Goods") {
+    td "Rice"
+    td "3"
+    td { p { Packed on \\datetime(fmt="relative"){2025-02-08T08:00:00Z}. } }
+  }
+  row(title="Bulk") {
+    td(colspan="2") { p { This cell spans two columns. } }
+    td "Requires label"
+  }
+}
+`;
 
     sourceField.value = initialText;
 
