@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>HyperDoc Playground</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: #f8f9fb;
+    }
+
+    header {
+      padding: 12px 16px;
+      font-size: 18px;
+      font-weight: 600;
+      border-bottom: 1px solid #d8dde6;
+      background: #ffffff;
+    }
+
+    .layout {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      padding: 12px;
+      box-sizing: border-box;
+    }
+
+    .pane {
+      display: flex;
+      flex-direction: column;
+      border: 1px solid #d8dde6;
+      border-radius: 8px;
+      background: #ffffff;
+      overflow: hidden;
+    }
+
+    .pane-header {
+      padding: 10px 12px;
+      font-weight: 600;
+      border-bottom: 1px solid #e4e7ed;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    textarea {
+      flex: 1;
+      width: 100%;
+      border: none;
+      padding: 12px;
+      resize: none;
+      font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
+      font-size: 14px;
+      box-sizing: border-box;
+      outline: none;
+    }
+
+    .preview {
+      flex: 1;
+      padding: 12px;
+      overflow: auto;
+      box-sizing: border-box;
+    }
+
+    .diagnostics {
+      list-style: none;
+      margin: 0;
+      padding: 12px;
+      border-top: 1px solid #e4e7ed;
+      max-height: 180px;
+      overflow: auto;
+      display: none;
+      gap: 8px;
+      flex-direction: column;
+      background: #fff6f6;
+    }
+
+    .diagnostics.visible {
+      display: flex;
+    }
+
+    .diagnostics li {
+      margin: 0;
+      padding: 8px 10px;
+      background: #ffe3e3;
+      border: 1px solid #ffc2c2;
+      border-radius: 6px;
+      font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
+      font-size: 13px;
+    }
+
+    .status {
+      font-size: 13px;
+      color: #4a5568;
+    }
+
+    .status.error {
+      color: #c53030;
+      font-weight: 600;
+    }
+
+    .status.ok {
+      color: #2f855a;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <header>HyperDoc Playground</header>
+  <div class="layout">
+    <section class="pane">
+      <div class="pane-header">
+        <span>HyperDoc Source</span>
+        <span class="status" id="left-status">Waiting for WASM…</span>
+      </div>
+      <textarea id="source" aria-label="HyperDoc source"></textarea>
+    </section>
+    <section class="pane">
+      <div class="pane-header">
+        <span>Preview</span>
+        <span class="status" id="render-status"></span>
+      </div>
+      <div class="preview" id="preview"></div>
+      <ul class="diagnostics" id="diagnostics"></ul>
+    </section>
+  </div>
+  <script type="module">
+    const sourceField = document.getElementById("source");
+    const preview = document.getElementById("preview");
+    const diagnosticsList = document.getElementById("diagnostics");
+    const renderStatus = document.getElementById("render-status");
+    const leftStatus = document.getElementById("left-status");
+
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    const wasmUrl = "./hyperdoc_wasm.wasm";
+
+    const initialText = `hdoc(version="2.0", lang="en");
+title {
+  HyperDoc Playground
+}
+
+paragraph {
+  Type HyperDoc content on the left to render HTML here.
+}`;
+
+    sourceField.value = initialText;
+
+    function setStatus(text, className) {
+      renderStatus.textContent = text;
+      renderStatus.className = `status ${className ?? ""}`.trim();
+    }
+
+    function setDiagnostics(items) {
+      diagnosticsList.replaceChildren();
+      if (items.length === 0) {
+        diagnosticsList.classList.remove("visible");
+        return;
+      }
+
+      items.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = `Line ${item.line}, Column ${item.column}: ${item.message}`;
+        diagnosticsList.append(li);
+      });
+      diagnosticsList.classList.add("visible");
+    }
+
+    async function bootstrap() {
+      try {
+        const logs = {
+          buffer: "",
+          reset() {
+            this.buffer = "";
+          },
+          append(ptr, len, memory) {
+            if (len === 0 || ptr === 0 || !memory) return;
+            const chunk = new Uint8Array(memory.buffer, ptr, len);
+            this.buffer += decoder.decode(chunk);
+          },
+          flush(level) {
+            const msg = this.buffer;
+            this.reset();
+            const method = ["error", "warn", "info", "debug"][level] ?? "log";
+            console[method](msg);
+          },
+        };
+
+        const importObject = {
+          env: {
+            reset_log() {
+              logs.reset();
+            },
+            append_log(ptr, len) {
+              logs.append(ptr, len, wasmMemory);
+            },
+            flush_log(level) {
+              logs.flush(level);
+            },
+          },
+        };
+
+        const response = await fetch(wasmUrl);
+        const bytes = await response.arrayBuffer();
+        const { instance } = await WebAssembly.instantiate(bytes, importObject);
+        const wasm = instance.exports;
+        let wasmMemory = wasm.memory;
+
+        leftStatus.textContent = "WASM ready";
+
+        function getMemory() {
+          wasmMemory = wasm.memory || wasmMemory;
+          return wasmMemory;
+        }
+
+        function process() {
+          const text = sourceField.value;
+          const data = encoder.encode(text);
+          if (!wasm.hdoc_set_document_len(data.length)) {
+            setStatus("Allocation failed", "error");
+            setDiagnostics([]);
+            preview.textContent = "";
+            return;
+          }
+
+          const ptr = wasm.hdoc_document_ptr();
+
+          const memory = getMemory();
+          if (data.length > 0 && memory && ptr !== 0) {
+            new Uint8Array(memory.buffer, ptr, data.length).set(data);
+          }
+
+          const ok = wasm.hdoc_process() !== 0;
+
+          if (ok) {
+            const htmlPtr = wasm.hdoc_html_ptr();
+            const htmlLen = wasm.hdoc_html_len();
+            const htmlBytes = htmlLen === 0 ? new Uint8Array() : new Uint8Array(getMemory().buffer, htmlPtr, htmlLen);
+            preview.innerHTML = decoder.decode(htmlBytes);
+            setStatus("Rendered", "ok");
+            setDiagnostics([]);
+          } else {
+            preview.innerHTML = "";
+            const count = wasm.hdoc_diagnostic_count();
+            const entries = [];
+            for (let i = 0; i < count; i += 1) {
+              const msgPtr = wasm.hdoc_diagnostic_message_ptr(i);
+              const msgLen = wasm.hdoc_diagnostic_message_len(i);
+              const message = msgLen === 0 ? "" : decoder.decode(new Uint8Array(getMemory().buffer, msgPtr, msgLen));
+              entries.push({
+                line: wasm.hdoc_diagnostic_line(i),
+                column: wasm.hdoc_diagnostic_column(i),
+                message,
+              });
+            }
+            setStatus("Diagnostics found", "error");
+            setDiagnostics(entries);
+          }
+        }
+
+        sourceField.addEventListener("input", process);
+        process();
+      } catch (error) {
+        leftStatus.textContent = "Failed to load WASM";
+        setStatus("Unable to start playground", "error");
+        diagnosticsList.classList.add("visible");
+        diagnosticsList.textContent = String(error);
+      }
+    }
+
+    bootstrap();
+  </script>
+</body>
+</html>

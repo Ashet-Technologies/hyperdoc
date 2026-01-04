@@ -41,6 +41,7 @@ pub fn build(b: *std.Build) void {
     // Targets:
     const run_step = b.step("run", "Run the app");
     const test_step = b.step("test", "Run unit tests");
+    const wasm_target = b.resolveTargetQuery(.{ .cpu_arch = .wasm32, .os_tag = .freestanding });
 
     // Build:
     const hyperdoc = b.addModule("hyperdoc", .{
@@ -59,6 +60,20 @@ pub fn build(b: *std.Build) void {
         }),
     });
     b.installArtifact(exe);
+
+    const wasm_exe = b.addExecutable(.{
+        .name = "hyperdoc_wasm",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/wasm.zig"),
+            .target = wasm_target,
+            .optimize = optimize,
+            .single_threaded = true,
+            .imports = &.{
+                .{ .name = "hyperdoc", .module = hyperdoc },
+            },
+        }),
+    });
+    b.installArtifact(wasm_exe);
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
