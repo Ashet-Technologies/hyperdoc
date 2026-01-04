@@ -29,3 +29,5 @@ Requires [Zig 0.15.2](https://ziglang.org/) installed.
 ```sh-session
 [user@host] hyperdoc$ zig build test
 ```
+
+> Optional: installing Node.js enables the WASM integration tests that exercise the compiled `hyperdoc_wasm.wasm` via `node test/wasm/validate.js`.

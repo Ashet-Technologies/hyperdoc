@@ -118,6 +118,9 @@ fn capture_diagnostics(source: *hyperdoc.Diagnostics) !void {
         diag.code.format(&adapter.new_interface) catch {
             adapter.err = error.WriteFailed;
         };
+        adapter.new_interface.flush() catch {
+            adapter.err = error.WriteFailed;
+        };
         if (adapter.err) |_| return;
 
         const rendered = diagnostic_text.items[start..];
@@ -170,6 +173,9 @@ export fn hdoc_process() bool {
     var html_adapter = html_writer.any().adaptToNewApi(&html_adapter_buffer);
 
     hyperdoc.render.html5(parsed, &html_adapter.new_interface) catch {
+        html_adapter.err = error.WriteFailed;
+    };
+    html_adapter.new_interface.flush() catch {
         html_adapter.err = error.WriteFailed;
     };
     if (html_adapter.err) |_| {
