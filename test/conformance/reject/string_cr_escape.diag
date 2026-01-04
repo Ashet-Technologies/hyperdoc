@@ -1,2 +1,13 @@
-/workspace/hyperdoc/test/conformance/reject/string_cr_escape.hdoc:3:8: Forbidden control character U+000D.
-error: failed to parse "/workspace/hyperdoc/test/conformance/reject/string_cr_escape.hdoc": InvalidFile
+[
+  {
+    "code": {
+      "illegal_character": {
+        "codepoint": 13
+      }
+    },
+    "location": {
+      "line": 3,
+      "column": 8
+    }
+  }
+]

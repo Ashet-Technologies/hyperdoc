@@ -34,17 +34,25 @@ pub fn main() !u8 {
         options,
     );
 
-    for (diagnostics.items.items) |diag| {
-        try stderr.interface.print("{s}:{f}: {f}\n", .{
-            options.file_path,
-            diag.location,
-            diag.code,
-        });
+    if (options.json_diagnostics) {
+        const json_options: std.json.Stringify.Options = .{ .whitespace = .indent_2 };
+        try std.json.Stringify.value(diagnostics.items.items, json_options, &stderr.interface);
+        try stderr.interface.writeByte('\n');
+    } else {
+        for (diagnostics.items.items) |diag| {
+            try stderr.interface.print("{s}:{f}: {f}\n", .{
+                options.file_path,
+                diag.location,
+                diag.code,
+            });
+        }
     }
     try stderr.interface.flush();
 
     parse_result catch |err| {
-        std.log.err("failed to parse \"{s}\": {t}", .{ options.file_path, err });
+        if (!options.json_diagnostics) {
+            std.log.err("failed to parse \"{s}\": {t}", .{ options.file_path, err });
+        }
         return 1;
     };
 
@@ -73,6 +81,7 @@ fn parse_and_process(allocator: std.mem.Allocator, diagnostics: *hdoc.Diagnostic
 const CliOptions = struct {
     format: RenderFormat = .html,
     file_path: []const u8,
+    json_diagnostics: bool = false,
 };
 
 const RenderFormat = enum {
@@ -95,6 +104,11 @@ fn parse_options(stderr: *std.Io.Writer, argv: []const []const u8) !CliOptions {
                 if (std.mem.eql(u8, value, "--format")) {
                     i += 1;
                     options.format = std.meta.stringToEnum(RenderFormat, argv[i]) orelse return error.InvalidCli;
+                    i += 1;
+                    continue;
+                }
+                if (std.mem.eql(u8, value, "--json-diagnostics")) {
+                    options.json_diagnostics = true;
                     i += 1;
                     continue;
                 }

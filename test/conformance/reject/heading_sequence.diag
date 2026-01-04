@@ -1,6 +1,59 @@
-/workspace/hyperdoc/test/conformance/reject/heading_sequence.hdoc:3:1: h3 requires a preceding h2.
-/workspace/hyperdoc/test/conformance/reject/heading_sequence.hdoc:5:1: h3 requires a preceding h2.
-/workspace/hyperdoc/test/conformance/reject/heading_sequence.hdoc:3:1: Inserted automatic h1 to fill heading level gap.
-/workspace/hyperdoc/test/conformance/reject/heading_sequence.hdoc:3:1: Inserted automatic h2 to fill heading level gap.
-/workspace/hyperdoc/test/conformance/reject/heading_sequence.hdoc:5:1: Inserted automatic h2 to fill heading level gap.
-error: failed to parse "/workspace/hyperdoc/test/conformance/reject/heading_sequence.hdoc": InvalidFile
+[
+  {
+    "code": {
+      "invalid_heading_sequence": {
+        "level": "h3",
+        "missing": "h2"
+      }
+    },
+    "location": {
+      "line": 3,
+      "column": 1
+    }
+  },
+  {
+    "code": {
+      "invalid_heading_sequence": {
+        "level": "h3",
+        "missing": "h2"
+      }
+    },
+    "location": {
+      "line": 5,
+      "column": 1
+    }
+  },
+  {
+    "code": {
+      "automatic_heading_insertion": {
+        "level": "h1"
+      }
+    },
+    "location": {
+      "line": 3,
+      "column": 1
+    }
+  },
+  {
+    "code": {
+      "automatic_heading_insertion": {
+        "level": "h2"
+      }
+    },
+    "location": {
+      "line": 3,
+      "column": 1
+    }
+  },
+  {
+    "code": {
+      "automatic_heading_insertion": {
+        "level": "h2"
+      }
+    },
+    "location": {
+      "line": 5,
+      "column": 1
+    }
+  }
+]
