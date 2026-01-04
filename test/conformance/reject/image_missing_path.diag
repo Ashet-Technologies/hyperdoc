@@ -1,0 +1,14 @@
+[
+  {
+    "code": {
+      "missing_attribute": {
+        "type": "img",
+        "name": "path"
+      }
+    },
+    "location": {
+      "line": 3,
+      "column": 1
+    }
+  }
+]

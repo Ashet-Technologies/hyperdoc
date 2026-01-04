@@ -1,0 +1,20 @@
+[
+  {
+    "code": {
+      "misplaced_hdoc_header": {}
+    },
+    "location": {
+      "line": 3,
+      "column": 1
+    }
+  },
+  {
+    "code": {
+      "duplicate_hdoc_header": {}
+    },
+    "location": {
+      "line": 3,
+      "column": 1
+    }
+  }
+]

@@ -1,0 +1,11 @@
+[
+  {
+    "code": {
+      "missing_hdoc_header": {}
+    },
+    "location": {
+      "line": 1,
+      "column": 1
+    }
+  }
+]

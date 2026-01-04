@@ -1,0 +1,24 @@
+document:
+  version:
+    major: 2
+    minor: 0
+  lang: "en"
+  title:
+    simple: "Proper Order"
+    full:
+      lang: ""
+      content:
+        - [] "Proper Order"
+  author: null
+  date: null
+  toc:
+    level: h1
+    headings: []
+    children: []
+  contents:
+    - paragraph:
+      lang: ""
+      content:
+        - [] "Body content"
+  ids:
+    - null

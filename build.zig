@@ -11,18 +11,26 @@ const snapshot_files: []const []const u8 = &.{
 };
 
 const conformance_accept_files: []const []const u8 = &.{
+    "test/conformance/accept/header_and_title_order.hdoc",
+    "test/conformance/accept/image_with_required_path.hdoc",
     "test/conformance/accept/inline_escape.hdoc",
+    "test/conformance/accept/no_title_document.hdoc",
     "test/conformance/accept/title_header_redundant.hdoc",
 };
 
 const conformance_reject_files: []const []const u8 = &.{
-    "test/conformance/reject/string_cr_escape.hdoc",
-    "test/conformance/reject/inline_identifier_dash.hdoc",
-    "test/conformance/reject/heading_sequence.hdoc",
-    "test/conformance/reject/nested_top_level.hdoc",
     "test/conformance/reject/container_children.hdoc",
+    "test/conformance/reject/duplicate_header.hdoc",
+    "test/conformance/reject/hdoc_body_non_empty.hdoc",
+    "test/conformance/reject/heading_sequence.hdoc",
+    "test/conformance/reject/image_missing_path.hdoc",
+    "test/conformance/reject/inline_identifier_dash.hdoc",
+    "test/conformance/reject/missing_header.hdoc",
+    "test/conformance/reject/nested_top_level.hdoc",
     "test/conformance/reject/time_relative_fmt.hdoc",
     "test/conformance/reject/ref_in_heading.hdoc",
+    "test/conformance/reject/string_cr_escape.hdoc",
+    "test/conformance/reject/title_after_content.hdoc",
 };
 
 pub fn build(b: *std.Build) void {
