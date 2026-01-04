@@ -33,6 +33,8 @@ const conformance_reject_files: []const []const u8 = &.{
     "test/conformance/reject/title_after_content.hdoc",
 };
 
+const www_dir: std.Build.InstallDir = .{ .custom = "www" };
+
 pub fn build(b: *std.Build) void {
     // Options:
     const target = b.standardTargetOptions(.{});
@@ -73,7 +75,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    wasm_exe.root_module.export_symbol_names = &.{
+    wasm_exe.root_module.export_symbol_names = comptime &.{
         "hdoc_set_document_len",
         "hdoc_document_ptr",
         "hdoc_process",
@@ -82,10 +84,17 @@ pub fn build(b: *std.Build) void {
         "hdoc_diagnostic_count",
         "hdoc_diagnostic_line",
         "hdoc_diagnostic_column",
+        "hdoc_diagnostic_fatal",
         "hdoc_diagnostic_message_ptr",
         "hdoc_diagnostic_message_len",
     };
-    b.installArtifact(wasm_exe);
+    const install_wasm = b.addInstallArtifact(wasm_exe, .{
+        .dest_dir = .{ .override = www_dir },
+    });
+    b.getInstallStep().dependOn(&install_wasm.step);
+
+    const install_web = b.addInstallFileWithDir(b.path("src/playground.html"), www_dir, "index.html");
+    b.getInstallStep().dependOn(&install_web.step);
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
@@ -193,7 +202,7 @@ pub fn build(b: *std.Build) void {
     const node_path = b.findProgram(&.{"node"}, &.{}) catch null;
     if (node_path) |node| {
         const wasm_validate = b.addSystemCommand(&.{ node, "test/wasm/validate.js" });
-        wasm_validate.step.dependOn(b.getInstallStep());
+        wasm_validate.step.dependOn(&install_wasm.step);
         test_step.dependOn(&wasm_validate.step);
     } else {
         std.debug.print("node not found; skipping WASM integration tests\n", .{});

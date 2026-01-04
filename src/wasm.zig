@@ -74,6 +74,7 @@ const DiagnosticView = struct {
     line: u32,
     column: u32,
     message: []u8,
+    is_fatal: bool,
 };
 
 var document_buffer: std.array_list.Managed(u8) = std.array_list.Managed(u8).init(allocator);
@@ -128,6 +129,10 @@ fn capture_diagnostics(source: *hyperdoc.Diagnostics) !void {
             .line = diag.location.line,
             .column = diag.location.column,
             .message = rendered,
+            .is_fatal = switch (diag.code.severity()) {
+                .warning => false,
+                .@"error" => true,
+            },
         });
     }
 }
@@ -210,6 +215,12 @@ export fn hdoc_diagnostic_column(index: usize) u32 {
     if (index >= diagnostic_views.items.len) return 0;
 
     return diagnostic_views.items[index].column;
+}
+
+export fn hdoc_diagnostic_fatal(index: usize) bool {
+    if (index >= diagnostic_views.items.len) return false;
+
+    return diagnostic_views.items[index].is_fatal;
 }
 
 export fn hdoc_diagnostic_message_ptr(index: usize) ?[*]const u8 {

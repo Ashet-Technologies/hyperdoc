@@ -9,7 +9,7 @@ const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
 const repoRoot = path.join(__dirname, '..', '..');
-const wasmPath = path.join(repoRoot, 'zig-out', 'bin', 'hyperdoc_wasm.wasm');
+const wasmPath = path.join(repoRoot, 'zig-out', 'www', 'hyperdoc_wasm.wasm');
 
 const htmlSnapshotTests = [
   {

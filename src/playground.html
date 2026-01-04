@@ -1,11 +1,12 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <title>HyperDoc Playground</title>
   <style>
     :root {
-      color-scheme: light dark;
+      /* color-scheme: light dark; */
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     }
 
@@ -72,6 +73,10 @@
       box-sizing: border-box;
     }
 
+    .preview.outdated {
+      opacity: 0.4;
+    }
+
     .diagnostics {
       list-style: none;
       margin: 0;
@@ -92,11 +97,19 @@
     .diagnostics li {
       margin: 0;
       padding: 8px 10px;
-      background: #ffe3e3;
-      border: 1px solid #ffc2c2;
+      background: lime;
+      border: 1px solid magenta;
       border-radius: 6px;
       font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
       font-size: 13px;
+    }
+    .diagnostics li.error {
+      background: #ffe3e3;
+      border-color: #ffc2c2;
+    }
+    .diagnostics li.warning {
+      background: #ffe371;
+      border-color: #e3a00f;
     }
 
     .status {
@@ -113,8 +126,14 @@
       color: #2f855a;
       font-weight: 600;
     }
+
+    .status.warning {
+      color: #ecaa04;
+      font-weight: 600;
+    }
   </style>
 </head>
+
 <body>
   <header>HyperDoc Playground</header>
   <div class="layout">
@@ -124,6 +143,7 @@
         <span class="status" id="left-status">Waiting for WASM…</span>
       </div>
       <textarea id="source" aria-label="HyperDoc source"></textarea>
+      <ul class="diagnostics" id="diagnostics"></ul>
     </section>
     <section class="pane">
       <div class="pane-header">
@@ -131,7 +151,6 @@
         <span class="status" id="render-status"></span>
       </div>
       <div class="preview" id="preview"></div>
-      <ul class="diagnostics" id="diagnostics"></ul>
     </section>
   </div>
   <script type="module">
@@ -150,7 +169,7 @@ title {
   HyperDoc Playground
 }
 
-paragraph {
+p {
   Type HyperDoc content on the left to render HTML here.
 }`;
 
@@ -171,6 +190,7 @@ paragraph {
       items.forEach((item) => {
         const li = document.createElement("li");
         li.textContent = `Line ${item.line}, Column ${item.column}: ${item.message}`;
+        li.classList.add(item.fatal ? "error" : "warning")
         diagnosticsList.append(li);
       });
       diagnosticsList.classList.add("visible");
@@ -242,17 +262,9 @@ paragraph {
 
           const ok = wasm.hdoc_process() !== 0;
 
-          if (ok) {
-            const htmlPtr = wasm.hdoc_html_ptr();
-            const htmlLen = wasm.hdoc_html_len();
-            const htmlBytes = htmlLen === 0 ? new Uint8Array() : new Uint8Array(getMemory().buffer, htmlPtr, htmlLen);
-            preview.innerHTML = decoder.decode(htmlBytes);
-            setStatus("Rendered", "ok");
-            setDiagnostics([]);
-          } else {
-            preview.innerHTML = "";
+          const entries = [];
+          {
             const count = wasm.hdoc_diagnostic_count();
-            const entries = [];
             for (let i = 0; i < count; i += 1) {
               const msgPtr = wasm.hdoc_diagnostic_message_ptr(i);
               const msgLen = wasm.hdoc_diagnostic_message_len(i);
@@ -261,14 +273,49 @@ paragraph {
                 line: wasm.hdoc_diagnostic_line(i),
                 column: wasm.hdoc_diagnostic_column(i),
                 message,
+                fatal: wasm.hdoc_diagnostic_fatal(i) !== 0,
               });
             }
-            setStatus("Diagnostics found", "error");
             setDiagnostics(entries);
+          }
+
+          if (ok) {
+            const htmlPtr = wasm.hdoc_html_ptr();
+            const htmlLen = wasm.hdoc_html_len();
+            const htmlBytes = htmlLen === 0 ? new Uint8Array() : new Uint8Array(getMemory().buffer, htmlPtr, htmlLen);
+            preview.innerHTML = decoder.decode(htmlBytes);
+            if (entries.length > 0) {
+              setStatus("Warnings found", "warning");
+            } else {
+              setStatus("Rendered", "ok");
+            }
+            preview.classList.remove("outdated");
+          } else {
+            preview.classList.add("outdated");
+            setStatus("Errors found", "error");
           }
         }
 
         sourceField.addEventListener("input", process);
+        sourceField.addEventListener("keydown", (e) => {
+          if (e.keyCode == 9 || e.which == 9) {
+            e.preventDefault();
+            const head_pos = sourceField.selectionStart;
+
+            const head = sourceField.value.substring(0, head_pos);
+            const tail = sourceField.value.substring(sourceField.selectionEnd);
+
+            const line_start = head.lastIndexOf("\n") + 1;
+            const line_pos = head_pos - line_start;
+
+            const indent_len = 2;
+
+            const indent = "  ".substring(0, indent_len - (line_pos % indent_len));
+
+            sourceField.value = head + indent + tail;
+            sourceField.selectionEnd = head_pos + indent.length;
+          }
+        });
         process();
       } catch (error) {
         leftStatus.textContent = "Failed to load WASM";
@@ -281,4 +328,5 @@ paragraph {
     bootstrap();
   </script>
 </body>
+
 </html>
