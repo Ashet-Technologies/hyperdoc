@@ -73,6 +73,18 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+    wasm_exe.root_module.export_symbol_names = &.{
+        "hdoc_set_document_len",
+        "hdoc_document_ptr",
+        "hdoc_process",
+        "hdoc_html_ptr",
+        "hdoc_html_len",
+        "hdoc_diagnostic_count",
+        "hdoc_diagnostic_line",
+        "hdoc_diagnostic_column",
+        "hdoc_diagnostic_message_ptr",
+        "hdoc_diagnostic_message_len",
+    };
     b.installArtifact(wasm_exe);
 
     const run_cmd = b.addRunArtifact(exe);
@@ -177,6 +189,15 @@ pub fn build(b: *std.Build) void {
         .use_llvm = true,
     });
     test_step.dependOn(&b.addRunArtifact(main_tests).step);
+
+    const node_path = b.findProgram(&.{"node"}, &.{}) catch null;
+    if (node_path) |node| {
+        const wasm_validate = b.addSystemCommand(&.{ node, "test/wasm/validate.js" });
+        wasm_validate.step.dependOn(b.getInstallStep());
+        test_step.dependOn(&wasm_validate.step);
+    } else {
+        std.debug.print("node not found; skipping WASM integration tests\n", .{});
+    }
 }
 
 fn rawFileMod(b: *std.Build, path: []const u8) std.Build.Module.Import {

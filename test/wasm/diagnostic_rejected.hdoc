@@ -1,0 +1,2 @@
+h1 "Missing header"
+p { This file lacks the required hdoc header. }
