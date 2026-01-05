@@ -18,7 +18,7 @@
   "main": "./out/src/extension.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ashet-hypertext/hyperdoc.git"
+    "url": "https://github.com/Ashet-Technologies/hyperdoc.git"
   },
   "contributes": {
     "languages": [
