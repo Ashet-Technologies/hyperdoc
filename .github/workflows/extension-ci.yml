@@ -1,0 +1,75 @@
+name: Extension CI
+
+on:
+  pull_request:
+    branches: [master, hdoc-2.0]
+  push:
+    branches: [master, hdoc-2.0]
+
+jobs:
+  build-and-package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Build Zig artifacts
+        run: zig build install
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install extension dependencies
+        run: npm ci
+        working-directory: vscode-ext
+
+      - name: Copy wasm artifacts into extension bundle
+        run: |
+          mkdir -p vscode-ext/wasm
+          cp zig-out/www/hyperdoc_wasm.wasm vscode-ext/wasm/ || true
+          cp zig-out/www/hyperdoc_wasm_lsp.wasm vscode-ext/wasm/
+
+      - name: Build extension
+        run: npm run compile
+        working-directory: vscode-ext
+
+      - name: Test extension
+        run: npm test
+        working-directory: vscode-ext
+
+      - name: Package extension
+        run: |
+          npm run package
+          mv *.vsix hyperdoc-vscode.vsix
+        working-directory: vscode-ext
+
+      - name: Upload packaged extension
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyperdoc-vscode.vsix
+          path: vscode-ext/hyperdoc-vscode.vsix
+
+  publish:
+    needs: build-and-package
+    if: github.event_name == 'push' && github.ref == 'refs/heads/hdoc-2.0'
+    runs-on: ubuntu-latest
+    environment:
+      name: vscode-marketplace
+    steps:
+      - name: Download packaged extension
+        uses: actions/download-artifact@v4
+        with:
+          name: hyperdoc-vscode.vsix
+          path: artifacts
+
+      - name: Publish to VS Code Marketplace
+        run: npx --yes vsce publish --packagePath artifacts/hyperdoc-vscode.vsix -p "$VSCE_PAT"
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
