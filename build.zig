@@ -93,6 +93,23 @@ pub fn build(b: *std.Build) void {
     });
     b.getInstallStep().dependOn(&install_wasm.step);
 
+    const wasm_lsp_exe = b.addExecutable(.{
+        .name = "hyperdoc_wasm_lsp",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/wasm-lsp.zig"),
+            .target = wasm_target,
+            .optimize = optimize,
+            .single_threaded = true,
+            .imports = &.{
+                .{ .name = "hyperdoc", .module = hyperdoc },
+            },
+        }),
+    });
+    const install_wasm_lsp = b.addInstallArtifact(wasm_lsp_exe, .{
+        .dest_dir = .{ .override = www_dir },
+    });
+    b.getInstallStep().dependOn(&install_wasm_lsp.step);
+
     const install_web = b.addInstallFileWithDir(b.path("src/playground.html"), www_dir, "index.html");
     b.getInstallStep().dependOn(&install_web.step);
 

@@ -1,0 +1,13 @@
+default: setup build test
+
+setup:
+	npm install
+
+build:
+	npm run compile
+
+test:
+	npm test
+
+package:
+	npm run package
