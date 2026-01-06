@@ -10,6 +10,7 @@
   - Finding: String literals ("...") support \u{...} escapes (§7.2.1). Inline text streams (bodies of p, h1) do not (§6.1 only lists \\, \{, \}).
   - Issue: Authors cannot enter invisible characters (like Non-Breaking Space U+00A0 or Zero Width Space U+200B) into a paragraph without pasting the raw invisible character, which is brittle and invisible in editors.
 - Issue: "Lexical" implies only regex-level matching. It does not strictly forbid 2023-02-31. For a strict format, "Semantic" validity (Gregorian correctness) should be enforced to prevent invalid metadata.
+- Allow non-structural headings inside quotes again (they don't contribute to the ToC)
 
 ## Potential Future Features
 
