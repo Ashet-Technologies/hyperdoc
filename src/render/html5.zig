@@ -144,7 +144,7 @@ const RenderContext = struct {
         const id_attr = ctx.resolveBlockId(block_index);
 
         var class_buffer: [32]u8 = undefined;
-        const class_attr = std.fmt.bufPrint(&class_buffer, "hdoc-{s}", .{@tagName(admonition.kind)}) catch unreachable;
+        const class_attr = std.fmt.bufPrint(&class_buffer, "hdoc-admonition hdoc-{s}", .{@tagName(admonition.kind)}) catch unreachable;
 
         try writeIndent(ctx.writer, indent);
         try writeStartTag(ctx.writer, "div", .regular, .{
