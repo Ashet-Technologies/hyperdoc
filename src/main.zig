@@ -74,7 +74,7 @@ fn parse_and_process(allocator: std.mem.Allocator, diagnostics: *hdoc.Diagnostic
 
     switch (options.format) {
         .yaml => try hdoc.render.yaml(parsed, output_stream),
-        .html => try hdoc.render.html5(parsed, output_stream),
+        .html => try hdoc.render.html5(parsed, output_stream, .{}),
     }
 }
 

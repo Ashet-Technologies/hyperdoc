@@ -177,7 +177,7 @@ export fn hdoc_process() bool {
     var html_adapter_buffer: [256]u8 = undefined;
     var html_adapter = html_writer.any().adaptToNewApi(&html_adapter_buffer);
 
-    hyperdoc.render.html5(parsed, &html_adapter.new_interface) catch {
+    hyperdoc.render.html5(parsed, &html_adapter.new_interface, .{}) catch {
         html_adapter.err = error.WriteFailed;
     };
     html_adapter.new_interface.flush() catch {

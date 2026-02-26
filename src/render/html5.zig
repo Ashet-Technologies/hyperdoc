@@ -8,8 +8,16 @@ const Writer = std.Io.Writer;
 const RenderError = Writer.Error || error{NoSpaceLeft};
 const indent_step: usize = 2;
 
-pub fn render(doc: hdoc.Document, writer: *Writer) RenderError!void {
-    var ctx: RenderContext = .{ .doc = &doc, .writer = writer };
+pub const RenderOptions = struct {
+    rewrite_uri_ctx: ?*anyopaque = null,
+    rewrite_uri_fn: ?*const fn (ctx: ?*anyopaque, uri: []const u8, writer: *std.Io.Writer) std.Io.Writer.Error!void = null,
+
+    rewrite_img_ctx: ?*anyopaque = null,
+    rewrite_img_fn: ?*const fn (ctx: ?*anyopaque, uri: []const u8, writer: *std.Io.Writer) std.Io.Writer.Error!void = null,
+};
+
+pub fn render(doc: hdoc.Document, writer: *Writer, options: RenderOptions) RenderError!void {
+    var ctx: RenderContext = .{ .doc = &doc, .writer = writer, .options = options };
 
     try ctx.renderDocumentHeader();
 
@@ -21,6 +29,7 @@ pub fn render(doc: hdoc.Document, writer: *Writer) RenderError!void {
 const RenderContext = struct {
     doc: *const hdoc.Document,
     writer: *Writer,
+    options: RenderOptions,
 
     fn renderBlock(ctx: *RenderContext, block: hdoc.Block, block_index: ?usize, indent: usize) RenderError!void {
         switch (block) {
@@ -211,8 +220,17 @@ const RenderContext = struct {
         try ctx.writer.writeByte('\n');
 
         try writeIndent(ctx.writer, indent + indent_step);
+
+        var uri_buffer: [4096]u8 = undefined;
+        var uri_writer: std.Io.Writer = .fixed(&uri_buffer);
+
+        if (ctx.options.rewrite_uri_fn) |rewrite_uri|
+            try rewrite_uri(ctx.options.rewrite_uri_ctx, image.path, &uri_writer)
+        else
+            try uri_writer.writeAll(image.path);
+
         try writeStartTag(ctx.writer, "img", .auto_close, .{
-            .src = image.path,
+            .src = uri_writer.buffered(),
             .alt = image.alt,
         });
         try ctx.writer.writeByte('\n');
@@ -570,21 +588,30 @@ const RenderContext = struct {
 
         const link_tag = span.attribs.link != .none;
         if (link_tag) {
-            const href_value = switch (span.attribs.link) {
+            var href_buffer: [4096]u8 = undefined;
+
+            var href_writer: std.Io.Writer = .fixed(&href_buffer);
+
+            switch (span.attribs.link) {
                 .none => unreachable,
-                .ref => |reference| blk: {
-                    if (ctx.resolveBlockId(reference.block_index)) |resolved| {
-                        var href_buffer: [128]u8 = undefined;
-                        break :blk std.fmt.bufPrint(&href_buffer, "#{s}", .{resolved}) catch unreachable;
-                    }
+                .ref => |reference| {
+                    const ref = if (ctx.resolveBlockId(reference.block_index)) |resolved|
+                        resolved
+                    else
+                        reference.ref.text;
 
-                    var href_buffer: [128]u8 = undefined;
-                    break :blk std.fmt.bufPrint(&href_buffer, "#{s}", .{reference.ref.text}) catch unreachable;
+                    try href_writer.print("#{s}", .{ref});
                 },
-                .uri => |uri| uri.text,
-            };
+                .uri => |uri| if (ctx.options.rewrite_uri_fn) |rewrite_uri|
+                    try rewrite_uri(ctx.options.rewrite_uri_ctx, uri.text, &href_writer)
+                else
+                    try href_writer.writeAll(uri.text),
+            }
 
-            try writeStartTag(ctx.writer, "a", .regular, .{ .href = href_value, .lang = takeLang(&pending_lang) });
+            try writeStartTag(ctx.writer, "a", .regular, .{
+                .href = href_writer.buffered(),
+                .lang = takeLang(&pending_lang),
+            });
             opened[opened_len] = "a";
             opened_len += 1;
         }
