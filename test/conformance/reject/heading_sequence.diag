@@ -1,0 +1,59 @@
+[
+  {
+    "code": {
+      "invalid_heading_sequence": {
+        "level": "h3",
+        "missing": "h2"
+      }
+    },
+    "location": {
+      "line": 3,
+      "column": 1
+    }
+  },
+  {
+    "code": {
+      "invalid_heading_sequence": {
+        "level": "h3",
+        "missing": "h2"
+      }
+    },
+    "location": {
+      "line": 5,
+      "column": 1
+    }
+  },
+  {
+    "code": {
+      "automatic_heading_insertion": {
+        "level": "h1"
+      }
+    },
+    "location": {
+      "line": 3,
+      "column": 1
+    }
+  },
+  {
+    "code": {
+      "automatic_heading_insertion": {
+        "level": "h2"
+      }
+    },
+    "location": {
+      "line": 3,
+      "column": 1
+    }
+  },
+  {
+    "code": {
+      "automatic_heading_insertion": {
+        "level": "h2"
+      }
+    },
+    "location": {
+      "line": 5,
+      "column": 1
+    }
+  }
+]

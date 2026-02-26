@@ -1,0 +1,134 @@
+document:
+  version:
+    major: 2
+    minor: 0
+  lang: "en"
+  title:
+    simple: "Tables"
+    full:
+      lang: "en"
+      content:
+        - [] "Tables"
+  author: null
+  date: null
+  toc:
+    level: h1
+    headings:
+      - 0
+    children:
+      -
+        level: h2
+        headings: []
+        children: []
+  contents:
+    - heading:
+      level: h1
+      lang: ""
+      content:
+        - [] "Table Coverage"
+    - paragraph:
+      lang: ""
+      content:
+        - [] "This file covers header rows, data rows with titles, groups, and colspans."
+    - table:
+      lang: ""
+      column_count: 3
+      has_row_titles: true
+      rows:
+        - columns:
+          lang: ""
+          cells:
+            - lang: ""
+              colspan: 1
+              content:
+                - paragraph:
+                  lang: ""
+                  content:
+                    - [] "Column A"
+            - lang: ""
+              colspan: 1
+              content:
+                - paragraph:
+                  lang: ""
+                  content:
+                    - [] "Column B"
+            - lang: ""
+              colspan: 1
+              content:
+                - paragraph:
+                  lang: ""
+                  content:
+                    - [] "Column C"
+        - group:
+          lang: ""
+          content:
+            - [] "\"Section One\""
+        - row:
+          lang: ""
+          title: "Row 1"
+          cells:
+            - lang: ""
+              colspan: 1
+              content:
+                - paragraph:
+                  lang: ""
+                  content:
+                    - [] "A1"
+            - lang: ""
+              colspan: 2
+              content:
+                - paragraph:
+                  lang: ""
+                  content:
+                    - [] "B1-C1"
+        - row:
+          lang: ""
+          title: "Row 2"
+          cells:
+            - lang: ""
+              colspan: 2
+              content:
+                - paragraph:
+                  lang: ""
+                  content:
+                    - [] "A2-B2"
+            - lang: ""
+              colspan: 1
+              content:
+                - paragraph:
+                  lang: ""
+                  content:
+                    - [] "C2"
+        - group:
+          lang: ""
+          content:
+            - [] "\"Section Two\""
+        - row:
+          lang: ""
+          title: "Row 3"
+          cells:
+            - lang: ""
+              colspan: 1
+              content:
+                - paragraph:
+                  lang: ""
+                  content:
+                    - [] "A3"
+            - lang: ""
+              colspan: 1
+              content:
+                - paragraph:
+                  lang: ""
+                  content:
+                    - [] "B3"
+            - lang: ""
+              colspan: 1
+              content:
+                - paragraph:
+                  lang: ""
+                  content:
+                    - [] "C3"
+  ids:
+    - null
+    - null
+    - null

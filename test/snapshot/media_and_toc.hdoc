@@ -1,0 +1,21 @@
+hdoc(version="2.0", title="Media and TOC", lang="en", tz="+00:00");
+
+h1(id="intro") "Media and TOC"
+
+toc(depth="3");
+
+h2(id="code") "Preformatted"
+
+pre(syntax="python") { print("hello world") }
+
+h2(id="figure") "Figure"
+
+img(id="fig-code",path="./example.png",alt="Example figure") { Figure caption text. }
+
+h2(id="dates") "Dates and Times"
+
+p { Today is \date(fmt="iso"){2024-03-01}. }
+
+p { The meeting is at \time(fmt="long"){14:30:45+00:00}. }
+
+p { Release happens on \datetime(fmt="short"){2024-04-15T08:00:00+00:00}. }

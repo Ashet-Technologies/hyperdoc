@@ -1,0 +1,11 @@
+[
+  {
+    "code": {
+      "illegal_child_item": {}
+    },
+    "location": {
+      "line": 4,
+      "column": 3
+    }
+  }
+]

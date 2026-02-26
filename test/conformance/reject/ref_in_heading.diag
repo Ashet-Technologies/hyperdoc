@@ -1,0 +1,13 @@
+[
+  {
+    "code": {
+      "inline_not_allowed": {
+        "node_type": "\\ref"
+      }
+    },
+    "location": {
+      "line": 5,
+      "column": 14
+    }
+  }
+]

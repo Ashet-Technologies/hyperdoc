@@ -1,0 +1,21 @@
+document:
+  version:
+    major: 2
+    minor: 0
+  lang: "en"
+  title: null
+  author: null
+  date: null
+  toc:
+    level: h1
+    headings: []
+    children: []
+  contents:
+    - image:
+      lang: ""
+      alt: "Example figure"
+      path: "media/picture.png"
+      content:
+        - [] "Figure caption"
+  ids:
+    - null

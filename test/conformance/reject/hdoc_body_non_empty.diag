@@ -1,0 +1,11 @@
+[
+  {
+    "code": {
+      "non_empty_hdoc_body": {}
+    },
+    "location": {
+      "line": 1,
+      "column": 1
+    }
+  }
+]

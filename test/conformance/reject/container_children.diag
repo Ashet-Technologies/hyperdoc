@@ -1,0 +1,29 @@
+[
+  {
+    "code": {
+      "illegal_child_item": {}
+    },
+    "location": {
+      "line": 5,
+      "column": 5
+    }
+  },
+  {
+    "code": {
+      "list_body_required": {}
+    },
+    "location": {
+      "line": 4,
+      "column": 3
+    }
+  },
+  {
+    "code": {
+      "illegal_child_item": {}
+    },
+    "location": {
+      "line": 10,
+      "column": 3
+    }
+  }
+]

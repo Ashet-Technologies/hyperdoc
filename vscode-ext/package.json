@@ -1,0 +1,80 @@
+{
+  "name": "hyperdoc-vscode",
+  "displayName": "HyperDoc",
+  "description": "HyperDoc language basics, highlighting, and completion.",
+  "version": "0.0.1",
+  "publisher": "hyperdoc",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:hyperdoc",
+    "onCommand:hyperdoc.startWasmLanguageServer"
+  ],
+  "main": "./out/src/extension.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ashet-Technologies/hyperdoc.git"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "hyperdoc",
+        "aliases": [
+          "HyperDoc",
+          "hyperdoc"
+        ],
+        "extensions": [
+          ".hdoc"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "hyperdoc",
+        "scopeName": "source.hyperdoc",
+        "path": "./syntaxes/hyperdoc.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "hyperdoc.startWasmLanguageServer",
+        "title": "HyperDoc: Start Wasm Language Server"
+      }
+    ],
+    "configuration": {
+      "title": "HyperDoc",
+      "properties": {
+        "hyperdoc.languageServer.wasmPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to a HyperDoc language server WebAssembly binary. Leave empty to disable the wasm language server stub."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "echo \"No lint configured\"",
+    "test": "mocha -r ts-node/register test/**/*.test.ts",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "@types/vscode": "1.85.0",
+    "@types/mocha": "^10.0.6",
+    "mocha": "^10.4.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.0",
+    "vsce": "^2.15.0",
+    "vscode": "^1.1.37",
+    "vscode-languageclient": "^9.0.1"
+  }
+}

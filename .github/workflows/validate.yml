@@ -2,9 +2,9 @@ name: Build
 
 on:
   pull_request:
-    branches: [master]
+    branches: [master, hdoc-2.0]
   push:
-    branches: [master]
+    branches: [master, hdoc-2.0]
 
 jobs:
   build:
@@ -16,8 +16,12 @@ jobs:
       - name: Setup Zig
         uses: mlugg/setup-zig@v2
         with:
-          version: 0.15.1
+          version: 0.15.2
 
       - name: Build
         run: |
-          zig build
+          zig build install
+
+      - name: Test
+        run: |
+          zig build test

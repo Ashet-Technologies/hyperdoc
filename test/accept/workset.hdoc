@@ -1,0 +1,22 @@
+hdoc(version="2.0", lang="en");
+
+h1 "First"
+
+h2 "First.1"
+h2 "First.2"
+h2 "First.3"
+
+p { We can mix \em{emphasis}, \strike{strike}, \mono{monospace} text. Superscript x\sup{2} and subscript x\sub{2} also appear. }
+
+h1 "Second"
+h2 "Second.2"
+h3 "Second.2.first"
+h3 "Second.2.second"
+h3 "Second.2.third"
+h2 "Second.3"
+
+h1 "Third"
+h2 "Third.1"
+h3 "Third.1.first"
+h3 "Third.1.second"
+h3 "Third.1.third"

@@ -1,0 +1,89 @@
+document:
+  version:
+    major: 2
+    minor: 0
+  lang: "en"
+  title:
+    simple: "Paragraph Styles"
+    full:
+      lang: "en"
+      content:
+        - [] "Paragraph Styles"
+  author: null
+  date: null
+  toc:
+    level: h1
+    headings:
+      - 0
+    children:
+      -
+        level: h2
+        headings: []
+        children: []
+  contents:
+    - heading:
+      level: h1
+      lang: ""
+      content:
+        - [] "Paragraph Styles"
+    - paragraph:
+      lang: ""
+      content:
+        - [] "A standard paragraph introducing the styles below."
+    - admonition:
+      kind: note
+      lang: ""
+      content:
+        - paragraph:
+          lang: ""
+          content:
+            - [] "Notes provide informational context without urgency."
+    - admonition:
+      kind: warning
+      lang: ""
+      content:
+        - paragraph:
+          lang: ""
+          content:
+            - [] "Warnings highlight potential issues to watch for."
+    - admonition:
+      kind: danger
+      lang: ""
+      content:
+        - paragraph:
+          lang: ""
+          content:
+            - [] "Danger blocks signal critical problems."
+    - admonition:
+      kind: tip
+      lang: ""
+      content:
+        - paragraph:
+          lang: ""
+          content:
+            - [] "Tips offer helpful hints for readers."
+    - admonition:
+      kind: quote
+      lang: ""
+      content:
+        - paragraph:
+          lang: ""
+          content:
+            - [] "Quoted material sits in its own paragraph style."
+    - admonition:
+      kind: spoiler
+      lang: ""
+      content:
+        - paragraph:
+          lang: ""
+          content:
+            - [] "This is a spoiler; renderers may hide or blur this content."
+  ids:
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null
+    - null

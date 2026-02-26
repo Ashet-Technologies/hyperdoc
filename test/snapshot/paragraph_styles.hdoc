@@ -1,0 +1,17 @@
+hdoc(version="2.0", title="Paragraph Styles", lang="en");
+
+h1 "Paragraph Styles"
+
+p "A standard paragraph introducing the styles below."
+
+note "Notes provide informational context without urgency."
+
+warning "Warnings highlight potential issues to watch for."
+
+danger "Danger blocks signal critical problems."
+
+tip "Tips offer helpful hints for readers."
+
+quote "Quoted material sits in its own paragraph style."
+
+spoiler "This is a spoiler; renderers may hide or blur this content."

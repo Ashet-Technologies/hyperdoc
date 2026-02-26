@@ -1,0 +1,74 @@
+{
+  "name": "HyperDoc",
+  "scopeName": "source.hyperdoc",
+  "patterns": [
+    {
+      "name": "entity.name.type.hyperdoc",
+      "match": "^(\\s*)(\\\\?[A-Za-z0-9_]+)",
+      "captures": {
+        "1": {
+          "name": "punctuation.whitespace.leading.hyperdoc"
+        },
+        "2": {
+          "name": "entity.name.tag.hyperdoc"
+        }
+      }
+    },
+    {
+      "name": "support.function.inline.hyperdoc",
+      "match": "\\\\[A-Za-z0-9_]+"
+    },
+    {
+      "name": "variable.parameter.attribute.hyperdoc",
+      "match": "([A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)?)(\\s*)(=)",
+      "captures": {
+        "1": {
+          "name": "variable.parameter.attribute.hyperdoc"
+        },
+        "2": {
+          "name": "punctuation.separator.attribute.hyperdoc"
+        },
+        "3": {
+          "name": "keyword.operator.assignment.hyperdoc"
+        }
+      }
+    },
+    {
+      "name": "string.quoted.double.hyperdoc",
+      "match": "\"(?:\\\\.|[^\"\\\\])*\""
+    },
+    {
+      "name": "punctuation.section.braces.hyperdoc",
+      "match": "[{}]"
+    },
+    {
+      "name": "punctuation.section.parens.hyperdoc",
+      "match": "[()]"
+    },
+    {
+      "name": "punctuation.terminator.empty-body.hyperdoc",
+      "match": ";"
+    },
+    {
+      "name": "punctuation.definition.verbatim.hyperdoc",
+      "match": "(:)(?=\\s*(?:$|\\n|\\|))",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.verbatim.start.hyperdoc"
+        }
+      }
+    },
+    {
+      "name": "meta.verbatim.line.hyperdoc",
+      "match": "^\\s*(\\|)(.*)$",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.verbatim.bar.hyperdoc"
+        },
+        "2": {
+          "name": "string.unquoted.verbatim.hyperdoc"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,121 @@
+document:
+  version:
+    major: 2
+    minor: 0
+  lang: "en"
+  title:
+    simple: "Nesting and Inlines"
+    full:
+      lang: "en"
+      content:
+        - [] "Nesting and Inlines"
+  author: null
+  date: null
+  toc:
+    level: h1
+    headings:
+      - 0
+    children:
+      -
+        level: h2
+        headings:
+          - 4
+        children:
+          -
+            level: h3
+            headings: []
+            children: []
+  contents:
+    - heading:
+      level: h1
+      lang: ""
+      content:
+        - [] "Nesting and Inline Styling"
+    - paragraph:
+      lang: ""
+      content:
+        - [] "This document exercises inline formatting and nested lists."
+    - paragraph:
+      lang: ""
+      content:
+        - [] "We can mix "
+        - [em] "emphasis"
+        - [] ", "
+        - [strike] "strike"
+        - [] ", "
+        - [mono] "monospace"
+        - [] " text. Superscript x"
+        - [position="superscript"] "2"
+        - [] " and subscript x"
+        - [position="subscript"] "2"
+        - [] " also appear."
+    - paragraph:
+      lang: ""
+      content:
+        - [] "Links point to "
+        - [link="ref:top#0"] "local anchors"
+        - [] " or "
+        - [link="uri:https://example.com"] "external sites"
+        - [] "."
+    - heading:
+      level: h2
+      lang: ""
+      content:
+        - [] "Formatted "
+        - [em] "Heading"
+    - paragraph:
+      lang: ""
+      content:
+        - [] "Empty-body references become "
+        - [link="ref:formatted#4"] "ref:formatted@full#4"
+        - [] " "
+        - [link="ref:formatted#4"] "ref:formatted@name#4"
+        - [] " and "
+        - [link="ref:formatted#4"] "ref:formatted@index#4"
+        - [] ""
+    - list:
+      lang: ""
+      first: null
+      items:
+        - lang: ""
+          content:
+            - paragraph:
+              lang: ""
+              content:
+                - [] "Top-level item one"
+        - lang: ""
+          content:
+            - paragraph:
+              lang: ""
+              content:
+                - [] "Top-level item two with nested list"
+            - list:
+              lang: ""
+              first: 1
+              items:
+                - lang: ""
+                  content:
+                    - paragraph:
+                      lang: ""
+                      content:
+                        - [] "Nested ordered item A"
+                - lang: ""
+                  content:
+                    - paragraph:
+                      lang: ""
+                      content:
+                        - [] "Nested ordered item B"
+        - lang: ""
+          content:
+            - paragraph:
+              lang: ""
+              content:
+                - [] "Top-level item three"
+  ids:
+    - "top"
+    - null
+    - null
+    - null
+    - "formatted"
+    - null
+    - null

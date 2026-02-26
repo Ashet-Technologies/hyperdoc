@@ -1,0 +1,13 @@
+[
+  {
+    "code": {
+      "invalid_identifier_character": {
+        "char": 45
+      }
+    },
+    "location": {
+      "line": 3,
+      "column": 9
+    }
+  }
+]

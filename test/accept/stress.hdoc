@@ -1,0 +1,74 @@
+hdoc(version="2.0");
+
+p {
+  On Monday at 09:07, the support desk logged a ticket titled "Login loop (again)". The user wrote, "I click
+  'Sign in', the page flashes, and I'm back where I started." Someone replied, "That sounds like a cookie
+  issue—clear your cache," but the customer insisted they’d already tried: "Chrome, Safari, even a private window."
+  The message ended with an oddly specific note: "It only happens when the Wi-Fi name is 'Office-Guest'." Nobody
+  knew whether to laugh or worry.
+}
+
+p {
+  The product manager’s summary was short but loaded: "We shipped the hotfix; we didn't fix the root
+  cause." In the same breath, she added, "Don't roll back unless you absolutely have to—it's worse." Later,
+  in a longer thread, she used quotes inside quotes: "When QA says 'it’s fine', what they mean is 'it hasn’t
+  exploded yet'." The tone wasn’t cruel, just tired, and the timestamps (11:58, 12:01, 12:03) made it feel like
+  a miniature drama.
+}
+
+p {
+  In the meeting notes (version 3.2.1), someone wrote: The "simple" migration is no longer simple. They listed
+  steps like: export → transform → validate → import, then added a parenthetical aside (which itself contained
+  parentheses): "Use the staging key (not the production key (seriously))". A different person pasted a pseudo-path,
+  /var/tmp/builds/2025-12-23/, and then warned, "If you see `NULL` in the output, don't 'fix' it by replacing it with
+  '0'—that's how we broke reporting last time."
+}
+
+p {
+  When the vendor called, they insisted everything was "within spec"; our engineer disagreed. "Within spec" can mean
+  two opposite things, she said: either the spec is strict, or the spec is meaningless. She pulled up a screenshot and
+  quoted the line: "Error: expected ']' but found '\}'". Then she joked, "At least it’s honest," and forwarded the log
+  snippet with a subject line that read, "Re: Re: RE: Please confirm ASAP!!!" (three exclamation marks included, unfortunately).
+}
+
+p {
+  The draft contract read like a puzzle: "Client shall provide 'reasonable access' to systems," while another clause said,
+  "Provider may request access at any time." Someone circled the phrase "reasonable access" and wrote, "Reasonable for whom?"
+  A lawyer suggested adding: "…as mutually agreed in writing," but the team worried that "in writing" would exclude Slack, email,
+  and tickets—so they proposed: "…in writing (including electronic messages)". Even that sparked debate: does "electronic messages"
+  include chat reactions, like 👍 or ✅?
+}
+
+p {
+  A teammate tried to reproduce the bug and wrote a narrative that sounded like a short story: "I opened the dashboard, clicked
+  'Reports', then typed 'Q4' into the search field." The UI responded with "No results found" even though the sidebar clearly showed "Q4
+  Forecast". The odd part: if you type "Q4 " (with a trailing space), results appear. He ended the note with, "Yes, I know that sounds
+  fake," and added, "But watch: 'Q4' ≠ 'Q4 '." It’s the sort of thing parsers and humans both hate.
+}
+
+p {
+  The incident timeline included times in different formats—09:15 CET, 08:15 UTC, and "around 8-ish"—which made the postmortem messy.
+  One line said, "Database CPU hit 92% (again)," another said, "CPU was fine; it was I/O." Someone pasted a link:
+  \link(uri="https://example.com/status?from=2025-12-23T08:00:00Z&to=2025-12-23T10:00:00Z"){https://example.com/status?from=2025-12-23T08:00:00Z&to=2025-12-23T10:00:00Z} and then asked, "Why does
+  the graph show a dip at 08:37?" The answer was "maintenance," but the maintenance note was filed under "misc"—not "maintenance."
+}
+
+p {
+  In the customer’s feedback form, the message was polite but pointed: "Your app is great—until it isn't." They described a checkout flow where the
+  total briefly showed €19.99, then flipped to €1,999.00, then back again. "I know it's probably formatting," they wrote, "but seeing that number
+  made me think I'd been scammed." Another sentence used both quote styles: "The label says 'Total', but the tooltip says "Estimated total"." The
+  difference matters when people are anxious.
+}
+
+p {
+  A developer left a comment in the code review: "This is readable, but it's not maintainable." When asked what that meant, he replied, "Readable
+  means I can understand it today; maintainable means I can change it tomorrow without breaking it." He pointed at a line that looked harmless — \mono(syntax="c"){if (a < b && c > d) return;} — and said, "It encodes policy with no explanation." Then, in the same comment, he used
+  markdown-like fragments that shouldn’t be parsed as such: *not emphasis*, *not italics*, and [not a link](just text).
+}
+
+p {
+  Before the release, the checklist included items that were half instruction, half superstition: "Update changelog; tag release; don't forget the
+  'README' typo." Someone wrote "DONE" in all caps, then later edited it to "done" because the automation treats "DONE" as a keyword. Another item
+  read: "Confirm the 'rollback plan' exists (even if we never use it)." The final note—"If anything feels off, stop"—was simple, but it carried the
+  weight of every prior incident, every "it’s fine," every quiet "…maybe not."
+}

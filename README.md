@@ -1,62 +1,33 @@
 # Ashet HyperDocument Format
 
-This format is used for both the _Hyper Wiki_ as well as the _Gateway_ application to store and display
-hyperlinked documents.
+## Motivation
 
-The format is a rich-text format that can encode/store/display the following document blocks:
+> TODO: Write motivation
 
-- paragraphs (consisting of a sequence of spans)
-  - regular text
-  - links
-  - bold/emphasised text
-  - monospaced text
-  - line break
-- 3 levels of headings
-- ordered and unordered lists
-  - each list item is a paragraph or another list
-- quotes (paragraph with special styling)
-- preformatted text (code blocks, also uses the paragraph formatting)
-- images
+## Specification
 
-Regular text is assumed to use a proportional font, while preformatted text is required to be rendered as monospace.
+[Read the specification](docs/specification.md).
 
-## Storage
+## Building
 
-HyperDocument is stored as a trivial-to-parse plain text format, not necessarily meant to be edited by humans,
-but still human readable.
+Requires [Zig 0.15.2](https://ziglang.org/) installed.
 
-**Example:**
+### Build debug application
 
-```lua
-hdoc "1.0"
-p {
-  span "Hello, World!\n"
-  link "http://google.com" "Visit Google!"
-  span "\n"
-  emph "This is fat!"
-  span "\n"
-  mono "int main()"
-  span "\n"
-}
-enumerate {
-  item { p { span "first" } }
-  item { p { span "second" } }
-  item { p { span "third" } }
-}
-itemize {
-  item { p { span "first" } }
-  item { p { span "second" } }
-  item { p { span "third" } }
-}
-quote {
-  span "Life is what happens when you're busy making other plans.\n - John Lennon"
-}
-pre {
-  span "const std = @import(\"std\");\n"
-  span "\n"
-  span "pub fn main() !void {\n"
-  span "    std.debug.print(\"Hello, World!\\n\", .{});\n"
-  span "}\n"
-}
-image "dog.png"
+```sh-session
+[user@host] hyperdoc$ zig build
 ```
+
+### Build release application
+
+```sh-session
+[user@host] hyperdoc$ zig build -Drelease
+```
+
+### Run test suite
+
+```sh-session
+[user@host] hyperdoc$ zig build test
+```
+
+> Optional: installing Node.js enables the WASM integration tests that exercise the compiled `hyperdoc_wasm.wasm` via `node test/wasm/validate.js`.

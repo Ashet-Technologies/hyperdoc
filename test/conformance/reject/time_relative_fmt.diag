@@ -1,0 +1,11 @@
+[
+  {
+    "code": {
+      "invalid_date_time_fmt": {}
+    },
+    "location": {
+      "line": 3,
+      "column": 15
+    }
+  }
+]

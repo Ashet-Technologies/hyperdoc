@@ -1,0 +1,5 @@
+hdoc(version="2.0", lang="en");
+
+p(id="target") "Target"
+
+h1 { Heading \ref(ref="target") "see"; }

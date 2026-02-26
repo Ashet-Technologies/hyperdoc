@@ -1,0 +1,5 @@
+hdoc(version="2.0", title="Metadata Title", date="2024-08-16T09:30:00", lang="en", tz="+02:00");
+
+title { Metadata Title From Block }
+
+p { This document uses header metadata and a title block without any explicit headings. }

@@ -1,0 +1,3 @@
+hdoc(version="2.0");
+title "WASM Warning Coverage"
+p { The header intentionally omits a lang attribute. }

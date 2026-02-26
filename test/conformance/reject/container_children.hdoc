@@ -1,0 +1,11 @@
+hdoc(version="2.0", lang="en");
+
+ul {
+  li {
+    h1 "Heading child"
+  }
+}
+
+note {
+  h1 "Inside note"
+}

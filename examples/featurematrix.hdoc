@@ -1,0 +1,101 @@
+hdoc(version="2.0");
+
+title { Small Computer Feature Matrix }
+
+table {
+  columns {
+    td "Ashet Home Computer"
+    td { p { \link(uri="https://www.raspberrypi.com/products/raspberry-pi-4-model-b/specifications/") "Raspberry Pi 4" } }
+    td { p { \link(uri="https://store.arduino.cc/products/arduino-uno-rev3") "Arduino Uno REV3" } }
+    td { p { \link(uri="https://github.com/neotron-Compute/neotron-Pico") "Neotron Pico" } }
+    td { p { \link(uri="https://www.codycomputer.org/") "Cody Computer" } }
+  }
+  row(title="CPU Bus Width") {
+    td "32 bit"
+    td "64 bit"
+    td "8 bit"
+    td "32 bit"
+    td "8 bit"
+  }
+  row(title="CPU Architecture") {
+    td "Arm Cortex-M33"
+    td "Arm Cortex-A72"
+    td "AVRe+"
+    td "Arm Cortex-M0+"
+    td "6502"
+  }
+  row(title="CPU Model") {
+    td { p { \link(uri="https://www.raspberrypi.com/products/rp2350/") "Raspberry Pi RP2350" } }
+    td { p { \link(uri="https://www.raspberrypi.com/documentation/computers/processors.html#bcm2711") "Broadcom BCM2711" } }
+    td { p { \link(uri="https://www.microchip.com/en-us/product/atmega328p") "ATmega328P" } }
+    td { p { \link(uri="https://www.raspberrypi.com/products/rp2040/") "Raspberry Pi RP2040" } }
+    td { p { \link(uri="https://wdc65xx.com/integrated-circuit") "W65C02S" } }
+  }
+  row(title="CPU Cores") {
+    td "2"
+    td "4"
+    td "1"
+    td "2"
+    td "1"
+  }
+  row(title="CPU Clock") {
+    td "150 MHz"
+    td "1.8 GHz"
+    td "16 MHz"
+    td "133 MHz"
+    td "1 MHz"
+  }
+  row(title="System Memory") {
+    td "8 MB"
+    td "1, 2, 4 or 8 GB"
+    td "2 KB"
+    td "264 kB"
+    td "64 kB"
+  }
+  row(title="Comprehensible") {
+    td "✅"
+    td "❌"
+    td "✅"
+    td "✅"
+    td "✅"
+  }
+  row(title="Modern I/O") {
+    td "✅"
+    td "✅"
+    td "❌"
+    td { p { ❌\footnote{Neotron Pico uses PS/2 for mouse/keyboard and VGA for video.} } }
+    td "❌"
+  }
+  row(title="Modular Design") {
+    td "✅"
+    td "❌"
+    td "❌"
+    td "✅"
+    td { p { ✅\footnote{Cody Computer has a single cartridge that can be added.} } }
+  }
+  row(title="Full Documentation") {
+    td "✅"
+    td "❌"
+    td "✅"
+    td "✅"
+    td "✅"
+  }
+  row(title="Ethernet") {
+    td "✅"
+    td "✅"
+    td "❌"
+    td "❌"
+    td "❌"
+  }
+  row(title="Parallax Propeller") {
+    td { p { ✅ (\link(uri="https://www.parallax.com/propeller-2"){Propeller 2}) } }
+    td "❌"
+    td "❌"
+    td "❌"
+    td { p { ✅ (\link(uri="https://www.parallax.com/propeller-1"){Propeller 1}) } }
+  }
+}
+
+footnotes;
+
+

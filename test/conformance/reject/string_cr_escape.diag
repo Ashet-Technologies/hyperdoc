@@ -1,0 +1,13 @@
+[
+  {
+    "code": {
+      "illegal_character": {
+        "codepoint": 13
+      }
+    },
+    "location": {
+      "line": 3,
+      "column": 8
+    }
+  }
+]

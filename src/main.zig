@@ -1,127 +1,134 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const hdoc = @import("hyperdoc");
-const args_parser = @import("args");
+
+var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
 
 pub fn main() !u8 {
-    var stdout_buf: [1024]u8 = undefined;
-    const stdout_file: std.fs.File = .stdout();
-    var stdout_writer = stdout_file.writer(&stdout_buf);
-    const stdout = &stdout_writer.interface;
-    var stderr_buf: [1024]u8 = undefined;
-    const stderr_file: std.fs.File = .stderr();
-    var stderr_writer = stderr_file.writer(&stderr_buf);
-    const stderr = &stderr_writer.interface;
-
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-
-    const allocator = gpa.allocator();
-
-    var cli = args_parser.parseForCurrentProcess(CliOptions, allocator, .print) catch return 1;
-    defer cli.deinit();
-
-    if (cli.options.help) {
-        try printUsage(cli.executable_name.?, stdout);
-        return 0;
-    }
-
-    if (cli.positionals.len != 1) {
-        try printUsage(cli.executable_name.?, stderr);
-        return 1;
-    }
-
-    var error_location: hdoc.ErrorLocation = undefined;
-
-    var document: hdoc.Document = blk: {
-        const source_text = try std.fs.cwd().readFileAlloc(
-            allocator,
-            cli.positionals[0],
-            512 << 20,
-        ); // 512MB
-        defer allocator.free(source_text);
-
-        break :blk hdoc.parse(allocator, source_text, &error_location) catch |err| {
-            error_location.source = cli.positionals[0];
-            std.log.err("{f}: Failed to parse document: {s}", .{
-                error_location,
-                switch (err) {
-                    error.UnexpectedToken,
-                    error.InvalidIdentifier,
-                    error.UnexpectedCharacter,
-                    error.InvalidTopLevelItem,
-                    error.InvalidSpan,
-                    => "syntax error",
-                    error.InvalidFormat => "not a HyperDocument file",
-                    error.InvalidVersion => "unsupported file version",
-                    error.OutOfMemory => "out of memory",
-                    error.EndOfFile => "unexpected end of file",
-                    error.InvalidEscapeSequence => "illegal escape sequence",
-                    // else => |e|   @errorName(e),
-                },
-            });
-            return 1;
-        };
+    defer if (builtin.mode == .Debug) {
+        std.debug.assert(debug_allocator.deinit() == .ok);
     };
-    defer document.deinit();
-
-    const output_file: ?std.fs.File = if (cli.options.output != null and !std.mem.eql(u8, cli.options.output.?, "-"))
-        try std.fs.cwd().createFile(cli.options.output.?, .{})
+    const allocator = if (builtin.mode == .Debug)
+        debug_allocator.allocator()
     else
-        null;
-    defer if (output_file) |f| f.close();
+        std.heap.smp_allocator;
 
-    const renderDocument = switch (cli.options.format) {
-        .hdoc => &@import("renderer/HyperDoc.zig").render,
-        .html => &@import("renderer/Html.zig").render,
-        .markdown => &@import("renderer/Markdown.zig").render,
+    var stderr_buffer: [4096]u8 = undefined;
+    var stderr = std.fs.File.stderr().writer(&stderr_buffer);
+
+    var stdout_buffer: [4096]u8 = undefined;
+    var stdout = std.fs.File.stdout().writer(&stdout_buffer);
+
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+
+    const options = try parse_options(&stderr.interface, args);
+
+    var diagnostics: hdoc.Diagnostics = .init(allocator);
+    defer diagnostics.deinit();
+
+    const parse_result = parse_and_process(
+        allocator,
+        &diagnostics,
+        &stdout.interface,
+        options,
+    );
+
+    if (options.json_diagnostics) {
+        const json_options: std.json.Stringify.Options = .{ .whitespace = .indent_2 };
+        try std.json.Stringify.value(diagnostics.items.items, json_options, &stderr.interface);
+        try stderr.interface.writeByte('\n');
+    } else {
+        for (diagnostics.items.items) |diag| {
+            try stderr.interface.print("{s}:{f}: {f}\n", .{
+                options.file_path,
+                diag.location,
+                diag.code,
+            });
+        }
+    }
+    try stderr.interface.flush();
+
+    parse_result catch |err| {
+        if (!options.json_diagnostics) {
+            std.log.err("failed to parse \"{s}\": {t}", .{ options.file_path, err });
+        }
+        return 1;
     };
 
-    if (output_file) |f| {
-        var out_buf: [1024]u8 = undefined;
-        var out_writer = f.writer(&out_buf);
-        const output_stream = &out_writer.interface;
-        try renderDocument(output_stream, document);
-        try output_stream.flush();
-    } else {
-        try renderDocument(stdout, document);
-        try stdout.flush();
-    }
+    try stdout.interface.flush();
 
     return 0;
 }
 
-const TargetFormat = enum {
-    hdoc,
-    html,
-    markdown,
-};
+fn parse_and_process(allocator: std.mem.Allocator, diagnostics: *hdoc.Diagnostics, output_stream: *std.Io.Writer, options: CliOptions) !void {
+    const document = try std.fs.cwd().readFileAlloc(allocator, options.file_path, 1024 * 1024 * 10);
+    defer allocator.free(document);
+
+    var parsed = try hdoc.parse(allocator, document, diagnostics);
+    defer parsed.deinit();
+
+    if (diagnostics.has_error()) {
+        return error.InvalidFile;
+    }
+
+    switch (options.format) {
+        .yaml => try hdoc.render.yaml(parsed, output_stream),
+        .html => try hdoc.render.html5(parsed, output_stream, .{}),
+    }
+}
 
 const CliOptions = struct {
-    help: bool = false,
-    format: TargetFormat = .hdoc,
-    output: ?[]const u8 = null,
-
-    pub const shorthands = .{
-        .h = "help",
-        .f = "format",
-        .o = "output",
-    };
+    format: RenderFormat = .html,
+    file_path: []const u8,
+    json_diagnostics: bool = false,
 };
 
-fn printUsage(exe_name: []const u8, stream: *std.Io.Writer) !void {
-    try stream.print("{s} [-h] [-f <format>] <file>\n", .{
-        std.fs.path.basename(exe_name),
-    });
-    try stream.writeAll(
-        \\
-        \\Options:
-        \\  -h, --help              Prints this text
-        \\  -f, --format <format>   Converts the given <file> into <format>. Legal values are:
-        \\                          - hdoc     - Formats the input file into canonical format.
-        \\                          - html     - Renders the HyperDocument as HTML.
-        \\                          - markdown - Renders the HyperDocument as CommonMark.
-        \\  -o, --output <result>   Instead of printing to stdout, will put the output into <result>.
-        \\
-    );
-    try stream.flush();
+const RenderFormat = enum {
+    yaml,
+    html,
+};
+
+fn parse_options(stderr: *std.Io.Writer, argv: []const []const u8) !CliOptions {
+    var options: CliOptions = .{
+        .file_path = "",
+    };
+
+    const app_name = argv[0];
+
+    {
+        var i: usize = 1;
+        while (i < argv.len) {
+            const value = argv[i];
+            if (std.mem.startsWith(u8, value, "--")) {
+                if (std.mem.eql(u8, value, "--format")) {
+                    i += 1;
+                    options.format = std.meta.stringToEnum(RenderFormat, argv[i]) orelse return error.InvalidCli;
+                    i += 1;
+                    continue;
+                }
+                if (std.mem.eql(u8, value, "--json-diagnostics")) {
+                    options.json_diagnostics = true;
+                    i += 1;
+                    continue;
+                }
+                return error.InvalidCli;
+            }
+
+            if (options.file_path.len > 0) {
+                return error.InvalidCli;
+            }
+            options.file_path = value;
+
+            i += 1;
+        }
+    }
+
+    if (options.file_path.len == 0) {
+        try stderr.print("usage: {s} <file>\n", .{app_name});
+        try stderr.flush();
+        return error.InvalidCli;
+    }
+
+    return options;
 }
