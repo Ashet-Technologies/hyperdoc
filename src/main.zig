@@ -2,22 +2,19 @@ const std = @import("std");
 const hdoc = @import("hyperdoc");
 const args_parser = @import("args");
 
-pub fn main() !u8 {
+pub fn main(init: std.process.Init) !u8 {
     var stdout_buf: [1024]u8 = undefined;
-    const stdout_file: std.fs.File = .stdout();
-    var stdout_writer = stdout_file.writer(&stdout_buf);
+    const stdout_file: std.Io.File = .stdout();
+    var stdout_writer = stdout_file.writer(init.io, &stdout_buf);
     const stdout = &stdout_writer.interface;
     var stderr_buf: [1024]u8 = undefined;
-    const stderr_file: std.fs.File = .stderr();
-    var stderr_writer = stderr_file.writer(&stderr_buf);
+    const stderr_file: std.Io.File = .stderr();
+    var stderr_writer = stderr_file.writer(init.io, &stderr_buf);
     const stderr = &stderr_writer.interface;
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
+    const allocator = init.gpa;
 
-    const allocator = gpa.allocator();
-
-    var cli = args_parser.parseForCurrentProcess(CliOptions, allocator, .print) catch return 1;
+    var cli = args_parser.parseForCurrentProcess(CliOptions, init, .print) catch return 1;
     defer cli.deinit();
 
     if (cli.options.help) {
@@ -33,10 +30,11 @@ pub fn main() !u8 {
     var error_location: hdoc.ErrorLocation = undefined;
 
     var document: hdoc.Document = blk: {
-        const source_text = try std.fs.cwd().readFileAlloc(
-            allocator,
+        const source_text = try std.Io.Dir.cwd().readFileAlloc(
+            init.io,
             cli.positionals[0],
-            512 << 20,
+            allocator,
+            .limited(512 << 20),
         ); // 512MB
         defer allocator.free(source_text);
 
@@ -64,11 +62,11 @@ pub fn main() !u8 {
     };
     defer document.deinit();
 
-    const output_file: ?std.fs.File = if (cli.options.output != null and !std.mem.eql(u8, cli.options.output.?, "-"))
-        try std.fs.cwd().createFile(cli.options.output.?, .{})
+    const output_file: ?std.Io.File = if (cli.options.output != null and !std.mem.eql(u8, cli.options.output.?, "-"))
+        try std.Io.Dir.cwd().createFile(init.io, cli.options.output.?, .{})
     else
         null;
-    defer if (output_file) |f| f.close();
+    defer if (output_file) |f| f.close(init.io);
 
     const renderDocument = switch (cli.options.format) {
         .hdoc => &@import("renderer/HyperDoc.zig").render,
@@ -78,7 +76,7 @@ pub fn main() !u8 {
 
     if (output_file) |f| {
         var out_buf: [1024]u8 = undefined;
-        var out_writer = f.writer(&out_buf);
+        var out_writer = f.writer(init.io, &out_buf);
         const output_stream = &out_writer.interface;
         try renderDocument(output_stream, document);
         try output_stream.flush();
