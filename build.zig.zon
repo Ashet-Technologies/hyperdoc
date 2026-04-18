@@ -2,15 +2,15 @@
     .name = .hyperdoc,
     .version = "0.1.0",
     .fingerprint = 0xfd1a4802abc4739e,
-
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .parser_toolkit = .{
             .url = "git+https://github.com/ikskuh/parser-toolkit.git#62e0a3dca3632bb361df59407b2d7805280ab1b9",
             .hash = "parser_toolkit-0.1.0-baYGPUVCEwBaVmu09ORh0lLlVjRaJ489TdSIdTa_8VWg",
         },
         .args = .{
-            .url = "git+https://github.com/ikskuh/zig-args.git#8ae26b44a884ff20dca98ee84c098e8f8e94902f",
-            .hash = "args-0.0.0-CiLiqojRAACGzDRO7A9dw7kWSchNk29caJZkXuMCb0Cn",
+            .url = "git+https://github.com/ikskuh/zig-args.git#d47ae21768f9ec47c2a4154ab48b87166965b820",
+            .hash = "args-0.0.0-CiLiqmvgAADyJmrzcQTP9IOYNvTzR_KGrg3ZNNsH2Qv0",
         },
     },
 
