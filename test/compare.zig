@@ -3,15 +3,11 @@
 //!
 const std = @import("std");
 
-var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+pub fn main(init: std.process.Init) !u8 {
+    const allocator = init.arena.allocator();
 
-const allocator = arena.allocator();
-
-pub fn main() !u8 {
-    defer arena.deinit();
-
-    const argv = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, argv);
+    const argv = try init.minimal.args.toSlice(allocator);
+    defer allocator.free(argv);
 
     if (argv.len != 3) {
         std.debug.print("usage: {s} <ground truth> <new input>\n", .{argv[0]});
@@ -22,7 +18,12 @@ pub fn main() !u8 {
     const new_input_path = argv[2];
 
     var files_ok = true;
-    const ground_truth = readFileAlloc(allocator, ground_truth_path, 10 * 1024 * 1024) catch |err| switch (err) {
+    const ground_truth = std.Io.Dir.cwd().readFileAlloc(
+        init.io,
+        ground_truth_path,
+        allocator,
+        .limited(10 * 1024 * 1024),
+    ) catch |err| switch (err) {
         error.FileNotFound => blk: {
             files_ok = false;
             break :blk "<file not found>";
@@ -31,7 +32,12 @@ pub fn main() !u8 {
     };
     defer allocator.free(ground_truth);
 
-    const new_input = readFileAlloc(allocator, new_input_path, 10 * 1024 * 1024) catch |err| switch (err) {
+    const new_input = std.Io.Dir.cwd().readFileAlloc(
+        init.io,
+        new_input_path,
+        allocator,
+        .limited(10 * 1024 * 1024),
+    ) catch |err| switch (err) {
         error.FileNotFound => blk: {
             files_ok = false;
             break :blk "<file not found>";
@@ -44,24 +50,10 @@ pub fn main() !u8 {
     // uses std.testing's string mismatch reporting.
     std.testing.expectEqualStrings(ground_truth, new_input) catch |err| switch (err) {
         error.TestExpectedEqual => return 1,
-        else => return err,
     };
 
     if (!files_ok)
         return 1;
 
     return 0;
-}
-
-fn readFileAlloc(alloc: std.mem.Allocator, path: []const u8, max_bytes: usize) ![]u8 {
-    const file = try openFile(path);
-    defer file.close();
-    return file.readToEndAlloc(alloc, max_bytes);
-}
-
-fn openFile(path: []const u8) !std.fs.File {
-    if (std.fs.path.isAbsolute(path)) {
-        return std.fs.openFileAbsolute(path, .{});
-    }
-    return std.fs.cwd().openFile(path, .{});
 }

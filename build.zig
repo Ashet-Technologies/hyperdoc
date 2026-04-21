@@ -140,7 +140,7 @@ pub fn build(b: *std.Build) void {
             const test_run = b.addRunArtifact(exe);
             test_run.addArgs(&.{ "--format", snapshot_file[snapshot_file.len - 4 ..] });
             test_run.addFileArg(b.path(path));
-            const generated_file = test_run.captureStdOut();
+            const generated_file = test_run.captureStdOut(.{});
 
             const compare_run = b.addRunArtifact(snapshot_diff);
             compare_run.addFileArg(b.path(snapshot_file));
@@ -158,7 +158,7 @@ pub fn build(b: *std.Build) void {
         const test_run = b.addRunArtifact(exe);
         test_run.addArgs(&.{ "--format", "yaml" });
         test_run.addFileArg(b.path(path));
-        const generated_file = test_run.captureStdOut();
+        const generated_file = test_run.captureStdOut(.{});
 
         const compare_run = b.addRunArtifact(snapshot_diff);
         compare_run.addFileArg(b.path(yaml_file));
@@ -176,7 +176,7 @@ pub fn build(b: *std.Build) void {
         test_run.addArgs(&.{"--json-diagnostics"});
         test_run.addFileArg(b.path(path));
         test_run.expectExitCode(1);
-        const generated_diag = test_run.captureStdErr();
+        const generated_diag = test_run.captureStdErr(.{});
 
         const compare_run = b.addRunArtifact(snapshot_diff);
         compare_run.addFileArg(b.path(diag_file));

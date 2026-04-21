@@ -13,16 +13,16 @@ const hdoc = @import("./hyperdoc.zig");
 // TODO: Write unit test for clean_utf8_input() illegal codepoint detection (any other control character -> error)
 
 test "validate examples directory" {
-    try parseDirectoryTree("examples");
+    try parseDirectoryTree(std.testing.io, "examples");
 }
 
 test "validate tests directory" {
-    try parseDirectoryTree("test/accept");
+    try parseDirectoryTree(std.testing.io, "test/accept");
 }
 
-fn parseDirectoryTree(path: []const u8) !void {
-    var dir = try std.fs.cwd().openDir(path, .{ .iterate = true });
-    defer dir.close();
+fn parseDirectoryTree(io: std.Io, path: []const u8) !void {
+    var dir = try std.Io.Dir.cwd().openDir(io, path, .{ .iterate = true });
+    defer dir.close(io);
 
     var walker = try dir.walk(std.testing.allocator);
     defer walker.deinit();
@@ -30,7 +30,7 @@ fn parseDirectoryTree(path: []const u8) !void {
     var path_buffer: std.array_list.Managed(u8) = .init(std.testing.allocator);
     defer path_buffer.deinit();
 
-    while (try walker.next()) |entry| {
+    while (try walker.next(io)) |entry| {
         if (entry.kind != .file)
             continue;
         if (!std.mem.endsWith(u8, entry.path, ".hdoc"))
@@ -38,7 +38,12 @@ fn parseDirectoryTree(path: []const u8) !void {
 
         errdefer std.log.err("failed to process \"{f}/{f}\"", .{ std.zig.fmtString(path), std.zig.fmtString(entry.path) });
 
-        const source = try entry.dir.readFileAlloc(std.testing.allocator, entry.basename, 10 * 1024 * 1024);
+        const source = try entry.dir.readFileAlloc(
+            io,
+            entry.basename,
+            std.testing.allocator,
+            .limited(10 * 1024 * 1024),
+        );
         defer std.testing.allocator.free(source);
 
         path_buffer.clearRetainingCapacity();
@@ -783,9 +788,9 @@ const LogDiagOptions = struct {
 fn logDiagnostics(diag: *const hdoc.Diagnostics, opts: LogDiagOptions) void {
     for (diag.items.items) |item| {
         var buf: [256]u8 = undefined;
-        var stream = std.io.fixedBufferStream(&buf);
-        item.code.format(stream.writer()) catch {};
-        std.log.err("Diagnostic {s}:{d}:{d}: {s}", .{ opts.file_path, item.location.line, item.location.column, stream.getWritten() });
+        var stream: std.Io.Writer = .fixed(&buf);
+        item.code.format(&stream) catch {};
+        std.log.err("Diagnostic {s}:{d}:{d}: {s}", .{ opts.file_path, item.location.line, item.location.column, stream.buffered() });
     }
 }
 

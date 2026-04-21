@@ -1680,7 +1680,7 @@ pub const SemanticAnalyzer = struct {
 
             const string = switch (mode) {
                 .strip => switch (merger.whitespace) {
-                    .one_space => std.mem.trimRight(u8, raw_string, whitespace_chars),
+                    .one_space => std.mem.trimEnd(u8, raw_string, whitespace_chars),
                     .keep_space => raw_string,
                 },
                 .keep => raw_string,
@@ -2167,8 +2167,7 @@ pub const SemanticAnalyzer = struct {
     }
 
     fn format_iso_time(value: Time, buffer: []u8) []const u8 {
-        var stream = std.io.fixedBufferStream(buffer);
-        const writer = stream.writer();
+        var writer: std.Io.Writer = .fixed(buffer);
 
         writer.print("{d:0>2}:{d:0>2}:{d:0>2}", .{ value.hour, value.minute, value.second }) catch unreachable;
         if (value.microsecond > 0) {
@@ -2185,7 +2184,7 @@ pub const SemanticAnalyzer = struct {
             writer.print("{c}{d:0>2}:{d:0>2}", .{ sign, hour, minute }) catch unreachable;
         }
 
-        return stream.getWritten();
+        return writer.buffered();
     }
 
     fn format_iso_datetime(value: DateTime, buffer: []u8) []const u8 {
@@ -3981,7 +3980,7 @@ pub const Diagnostic = struct {
             };
         }
 
-        pub fn format(code: Code, w: anytype) !void {
+        pub fn format(code: Code, w: *std.Io.Writer) !void {
             switch (code) {
                 .document_starts_with_bom => try w.writeAll("Document starts with BOM (U+FEFF). HyperDoc recommends not using the BOM with UTF-8."),
 
@@ -4131,7 +4130,7 @@ pub const InlineAttribute = enum {
 
 test "fuzz parser" {
     const Impl = struct {
-        fn testOne(impl: @This(), data: []const u8) !void {
+        fn testOne(impl: @This(), smith: *std.testing.Smith) !void {
             _ = impl;
 
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -4139,6 +4138,12 @@ test "fuzz parser" {
 
             var diagnostics: Diagnostics = .init(std.testing.allocator);
             defer diagnostics.deinit();
+
+            var buff: [1024 * 1024]u8 = undefined;
+            const data = blk: {
+                const len = smith.slice(&buff);
+                break :blk buff[0..len];
+            };
 
             var doc = parse(std.testing.allocator, data, &diagnostics) catch return;
             defer doc.deinit();
@@ -4159,7 +4164,13 @@ test "fuzz parser" {
 
 test "fuzz string unescape" {
     const Impl = struct {
-        fn testOne(impl: @This(), string_literal: []const u8) !void {
+        fn testOne(impl: @This(), smith: *std.testing.Smith) !void {
+            var buff: [1024]u8 = undefined;
+            const string_literal = blk: {
+                const len = smith.slice(&buff);
+                break :blk buff[0..len];
+            };
+
             // Don't test if the string doesn't follow our rules:
             if (string_literal.len < 2)
                 return;
@@ -4286,8 +4297,13 @@ test "fuzz string unescape" {
 
 test "fuzz Date.parse" {
     const Impl = struct {
-        fn testOne(impl: @This(), string_literal: []const u8) !void {
+        fn testOne(impl: @This(), smith: *std.testing.Smith) !void {
             _ = impl;
+            var buff: [1024]u8 = undefined;
+            const string_literal = blk: {
+                const len = smith.slice(&buff);
+                break :blk buff[0..len];
+            };
             _ = Date.parse(string_literal) catch return;
         }
     };
@@ -4339,7 +4355,7 @@ test "fuzz Date.parse" {
     };
 
     for (corpus) |item| {
-        try Impl.testOne(.{}, item);
+        _ = Date.parse(item) catch return;
     }
 
     try std.testing.fuzz(Impl{}, Impl.testOne, .{
@@ -4349,8 +4365,13 @@ test "fuzz Date.parse" {
 
 test "fuzz Time.parse" {
     const Impl = struct {
-        fn testOne(impl: @This(), string_literal: []const u8) !void {
+        fn testOne(impl: @This(), smith: *std.testing.Smith) !void {
             _ = impl;
+            var buff: [1024]u8 = undefined;
+            const string_literal = blk: {
+                const len = smith.slice(&buff);
+                break :blk buff[0..len];
+            };
             _ = Time.parse(string_literal, null) catch return;
         }
     };
@@ -4406,8 +4427,13 @@ test "fuzz Time.parse" {
 
 test "fuzz DateTime.parse" {
     const Impl = struct {
-        fn testOne(impl: @This(), string_literal: []const u8) !void {
+        fn testOne(impl: @This(), smith: *std.testing.Smith) !void {
             _ = impl;
+            var buff: [1024]u8 = undefined;
+            const string_literal = blk: {
+                const len = smith.slice(&buff);
+                break :blk buff[0..len];
+            };
             _ = DateTime.parse(string_literal, null) catch return;
         }
     };

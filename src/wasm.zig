@@ -8,14 +8,35 @@ extern fn append_log(ptr: [*]const u8, len: usize) void;
 extern fn flush_log(level: LogLevel) void;
 
 const LogWriter = struct {
-    fn appendWrite(self: LogWriter, chunk: []const u8) error{OutOfMemory}!usize {
-        _ = self;
+    fn appendWrite(chunk: []const u8) usize {
         append_log(chunk.ptr, chunk.len);
         return chunk.len;
     }
 
-    fn writer(self: LogWriter) std.io.GenericWriter(LogWriter, error{OutOfMemory}, appendWrite) {
-        return .{ .context = self };
+    fn drain(w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
+        var count: usize = 0;
+        if (w.end > 0) {
+            count += appendWrite(w.buffered());
+            w.end = 0;
+        }
+        if (data.len > 1) {
+            for (data[0 .. data.len - 1]) |item| {
+                count += appendWrite(item);
+            }
+        }
+        for (0..splat) |_| {
+            count += appendWrite(data[data.len - 1]);
+        }
+        return count;
+    }
+
+    fn writer(buffer: []u8) std.Io.Writer {
+        return .{
+            .buffer = buffer,
+            .vtable = &.{
+                .drain = LogWriter.drain,
+            },
+        };
     }
 };
 
@@ -29,9 +50,9 @@ fn log_to_host(
 
     reset_log();
 
-    const log_writer = LogWriter{};
-    const writer = log_writer.writer();
-    _ = std.fmt.format(writer, format, args) catch {};
+    var buffer: [256]u8 = undefined;
+    var writer = LogWriter.writer(&buffer);
+    writer.print(format, args) catch {};
 
     const mapped: LogLevel = switch (level) {
         .err => .err,
@@ -55,7 +76,7 @@ pub const std_options: std.Options = .{
     .enable_segfault_handler = false,
     .logFn = log_to_host,
     .queryPageSize = fixedPageSize,
-    .cryptoRandomSeed = zeroRandom,
+    // .cryptoRandomSeed = zeroRandom,
 };
 
 const allocator = std.heap.wasm_allocator;
@@ -77,23 +98,10 @@ const DiagnosticView = struct {
     is_fatal: bool,
 };
 
-var document_buffer: std.array_list.Managed(u8) = std.array_list.Managed(u8).init(allocator);
-var html_buffer: std.array_list.Managed(u8) = std.array_list.Managed(u8).init(allocator);
-var diagnostic_views: std.array_list.Managed(DiagnosticView) = std.array_list.Managed(DiagnosticView).init(allocator);
-var diagnostic_text: std.array_list.Managed(u8) = std.array_list.Managed(u8).init(allocator);
-
-const CountingWriter = struct {
-    count: usize = 0,
-
-    fn write(self: *CountingWriter, bytes: []const u8) error{}!usize {
-        self.count += bytes.len;
-        return bytes.len;
-    }
-
-    fn generic(self: *CountingWriter) std.Io.GenericWriter(*CountingWriter, error{}, write) {
-        return .{ .context = self };
-    }
-};
+var document_buffer: std.array_list.Managed(u8) = .init(allocator);
+var html_buffer: std.Io.Writer.Allocating = .init(allocator);
+var diagnostic_views: std.array_list.Managed(DiagnosticView) = .init(allocator);
+var diagnostic_text: std.Io.Writer.Allocating = .init(allocator);
 
 fn capture_diagnostics(source: *hyperdoc.Diagnostics) !void {
     diagnostic_views.clearRetainingCapacity();
@@ -103,28 +111,20 @@ fn capture_diagnostics(source: *hyperdoc.Diagnostics) !void {
 
     var total: usize = 0;
     for (source.items.items) |diag| {
-        var cw: CountingWriter = .{};
-        _ = diag.code.format(cw.generic()) catch {};
-        total += cw.count;
+        var cw: std.Io.Writer.Discarding = .init(&.{});
+        _ = diag.code.format(&cw.writer) catch {};
+        total += @intCast(cw.fullCount());
     }
 
     diagnostic_text.ensureTotalCapacityPrecise(total) catch return;
 
-    var diag_writer = diagnostic_text.writer();
-    var adapter_buffer: [256]u8 = undefined;
-    var adapter = diag_writer.any().adaptToNewApi(&adapter_buffer);
+    const diag_writer = &diagnostic_text.writer;
 
     for (source.items.items) |diag| {
-        const start = diagnostic_text.items.len;
-        diag.code.format(&adapter.new_interface) catch {
-            adapter.err = error.WriteFailed;
-        };
-        adapter.new_interface.flush() catch {
-            adapter.err = error.WriteFailed;
-        };
-        if (adapter.err) |_| return;
+        const start = diagnostic_text.writer.end;
+        try diag.code.format(diag_writer);
 
-        const rendered = diagnostic_text.items[start..];
+        const rendered = diagnostic_text.writer.buffered()[start..];
         try diagnostic_views.append(.{
             .line = diag.location.line,
             .column = diag.location.column,
@@ -173,32 +173,24 @@ export fn hdoc_process() bool {
         return false;
     }
 
-    var html_writer = html_buffer.writer();
-    var html_adapter_buffer: [256]u8 = undefined;
-    var html_adapter = html_writer.any().adaptToNewApi(&html_adapter_buffer);
+    const html_writer = &html_buffer.writer;
 
-    hyperdoc.render.html5(parsed, &html_adapter.new_interface, .{}) catch {
-        html_adapter.err = error.WriteFailed;
-    };
-    html_adapter.new_interface.flush() catch {
-        html_adapter.err = error.WriteFailed;
-    };
-    if (html_adapter.err) |_| {
+    hyperdoc.render.html5(parsed, html_writer, .{}) catch {
         capture_diagnostics(&diagnostics) catch {};
         return false;
-    }
+    };
 
     capture_diagnostics(&diagnostics) catch {};
     return true;
 }
 
 export fn hdoc_html_ptr() ?[*]const u8 {
-    if (html_buffer.items.len == 0) return null;
-    return html_buffer.items.ptr;
+    if (html_buffer.writer.end == 0) return null;
+    return html_buffer.writer.buffer.ptr;
 }
 
 export fn hdoc_html_len() usize {
-    return html_buffer.items.len;
+    return html_buffer.writer.end;
 }
 
 export fn hdoc_diagnostic_count() usize {

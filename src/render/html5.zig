@@ -927,7 +927,7 @@ fn formatIsoDate(value: hdoc.Date, buffer: []u8) RenderError![]const u8 {
     return std.fmt.bufPrint(buffer, "{d:0>4}-{d:0>2}-{d:0>2}", .{ value.year, value.month, value.day }) catch unreachable;
 }
 
-fn writeTimeZone(writer: anytype, timezone: hdoc.TimeZoneOffset) RenderError!void {
+fn writeTimeZone(writer: *std.Io.Writer, timezone: hdoc.TimeZoneOffset) RenderError!void {
     const minutes = @intFromEnum(timezone);
     if (minutes == 0) {
         try writer.writeByte('Z');
@@ -943,16 +943,15 @@ fn writeTimeZone(writer: anytype, timezone: hdoc.TimeZoneOffset) RenderError!voi
 }
 
 fn formatIsoTime(value: hdoc.Time, buffer: []u8) RenderError![]const u8 {
-    var stream = std.io.fixedBufferStream(buffer);
-    const writer = stream.writer();
+    var writer: std.Io.Writer = .fixed(buffer);
 
     try writer.print("{d:0>2}:{d:0>2}:{d:0>2}", .{ value.hour, value.minute, value.second });
     if (value.microsecond > 0) {
         try writer.print(".{d:0>6}", .{value.microsecond});
     }
-    try writeTimeZone(writer, value.timezone);
+    try writeTimeZone(&writer, value.timezone);
 
-    return stream.getWritten();
+    return writer.buffered();
 }
 
 fn formatIsoDateTime(value: hdoc.DateTime, buffer: []u8) RenderError![]const u8 {
@@ -966,8 +965,7 @@ fn formatIsoDateTime(value: hdoc.DateTime, buffer: []u8) RenderError![]const u8 
 }
 
 fn formatHeadingIndexLabel(index: hdoc.Block.Heading.Index, buffer: []u8) RenderError![]const u8 {
-    var stream = std.io.fixedBufferStream(buffer);
-    const writer = stream.writer();
+    var writer: std.Io.Writer = .fixed(buffer);
 
     const parts = switch (index) {
         .h1 => index.h1[0..1],
@@ -981,7 +979,7 @@ fn formatHeadingIndexLabel(index: hdoc.Block.Heading.Index, buffer: []u8) Render
     }
     try writer.writeByte('.');
 
-    return stream.getWritten();
+    return writer.buffered();
 }
 
 fn formatDateValue(value: hdoc.FormattedDateTime(hdoc.Date), buffer: []u8) RenderError![]const u8 {
@@ -995,8 +993,7 @@ fn formatDateValue(value: hdoc.FormattedDateTime(hdoc.Date), buffer: []u8) Rende
 }
 
 fn formatTimeValue(value: hdoc.FormattedDateTime(hdoc.Time), buffer: []u8) RenderError![]const u8 {
-    var stream = std.io.fixedBufferStream(buffer);
-    const writer = stream.writer();
+    var writer: std.Io.Writer = .fixed(buffer);
 
     switch (value.format) {
         .short, .rough => try writer.print("{d:0>2}:{d:0>2}", .{ value.value.hour, value.value.minute }),
@@ -1011,10 +1008,10 @@ fn formatTimeValue(value: hdoc.FormattedDateTime(hdoc.Time), buffer: []u8) Rende
 
     if (value.format != .iso) {
         try writer.writeByte(' ');
-        try writeTimeZone(writer, value.value.timezone);
+        try writeTimeZone(&writer, value.value.timezone);
     }
 
-    return stream.getWritten();
+    return writer.buffered();
 }
 
 fn formatDateTimeValue(value: hdoc.FormattedDateTime(hdoc.DateTime), buffer: []u8) RenderError![]const u8 {

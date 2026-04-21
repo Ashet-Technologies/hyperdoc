@@ -4,7 +4,7 @@ const hdoc = @import("hyperdoc");
 
 var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
 
-pub fn main() !u8 {
+pub fn main(init: std.process.Init) !u8 {
     defer if (builtin.mode == .Debug) {
         std.debug.assert(debug_allocator.deinit() == .ok);
     };
@@ -14,13 +14,12 @@ pub fn main() !u8 {
         std.heap.smp_allocator;
 
     var stderr_buffer: [4096]u8 = undefined;
-    var stderr = std.fs.File.stderr().writer(&stderr_buffer);
+    var stderr = std.Io.File.stderr().writer(init.io, &stderr_buffer);
 
     var stdout_buffer: [4096]u8 = undefined;
-    var stdout = std.fs.File.stdout().writer(&stdout_buffer);
+    var stdout = std.Io.File.stdout().writer(init.io, &stdout_buffer);
 
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
 
     const options = try parse_options(&stderr.interface, args);
 
@@ -28,6 +27,7 @@ pub fn main() !u8 {
     defer diagnostics.deinit();
 
     const parse_result = parse_and_process(
+        init.io,
         allocator,
         &diagnostics,
         &stdout.interface,
@@ -61,8 +61,19 @@ pub fn main() !u8 {
     return 0;
 }
 
-fn parse_and_process(allocator: std.mem.Allocator, diagnostics: *hdoc.Diagnostics, output_stream: *std.Io.Writer, options: CliOptions) !void {
-    const document = try std.fs.cwd().readFileAlloc(allocator, options.file_path, 1024 * 1024 * 10);
+fn parse_and_process(
+    io: std.Io,
+    allocator: std.mem.Allocator,
+    diagnostics: *hdoc.Diagnostics,
+    output_stream: *std.Io.Writer,
+    options: CliOptions,
+) !void {
+    const document = try std.Io.Dir.cwd().readFileAlloc(
+        io,
+        options.file_path,
+        allocator,
+        .limited(1024 * 1024 * 10),
+    );
     defer allocator.free(document);
 
     var parsed = try hdoc.parse(allocator, document, diagnostics);
