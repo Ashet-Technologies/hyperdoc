@@ -762,10 +762,10 @@ fn diagnosticCodesEqual(lhs: hdoc.Diagnostic.Code, rhs: hdoc.Diagnostic.Code) bo
                 .void => return true,
 
                 .@"struct" => |struct_info| {
-                    inline for (struct_info.fields) |fld| {
-                        const a = @field(a_struct, fld.name);
-                        const b = @field(b_struct, fld.name);
-                        const eql = switch (fld.type) {
+                    inline for (struct_info.field_names, struct_info.field_types) |fld_name, fld_type| {
+                        const a = @field(a_struct, fld_name);
+                        const b = @field(b_struct, fld_name);
+                        const eql = switch (fld_type) {
                             []const u8 => std.mem.eql(u8, a, b),
                             else => (a == b),
                         };

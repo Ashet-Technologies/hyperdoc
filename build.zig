@@ -115,9 +115,7 @@ pub fn build(b: *std.Build) void {
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |arg| {
-        run_cmd.addArgs(arg);
-    }
+    run_cmd.addPassthruArgs();
 
     run_step.dependOn(&run_cmd.step);
 
@@ -216,7 +214,7 @@ pub fn build(b: *std.Build) void {
     });
     test_step.dependOn(&b.addRunArtifact(main_tests).step);
 
-    const node_path = b.findProgram(&.{"node"}, &.{}) catch null;
+    const node_path = b.findProgram(.{ .names = &.{"node"} });
     if (node_path) |node| {
         const wasm_validate = b.addSystemCommand(&.{ node, "test/wasm/validate.js" });
         wasm_validate.step.dependOn(&install_wasm.step);

@@ -5,10 +5,10 @@ const hdoc = @import("hyperdoc");
 var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
 
 pub fn main(init: std.process.Init) !u8 {
-    defer if (builtin.mode == .Debug) {
+    defer if (builtin.optimize == .debug) {
         std.debug.assert(debug_allocator.deinit() == .ok);
     };
-    const allocator = if (builtin.mode == .Debug)
+    const allocator = if (builtin.optimize == .debug)
         debug_allocator.allocator()
     else
         std.heap.smp_allocator;

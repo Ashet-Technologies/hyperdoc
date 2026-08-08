@@ -809,9 +809,9 @@ fn writeStartTag(writer: *Writer, tag: []const u8, style: enum { regular, auto_c
     try writer.print("<{s}", .{tag});
 
     const Attribs = @TypeOf(attribs);
-    inline for (@typeInfo(Attribs).@"struct".fields) |fld| {
-        const value = @field(attribs, fld.name);
-        try writeAttribute(writer, fld.name, value);
+    inline for (@typeInfo(Attribs).@"struct".field_names) |fld_name| {
+        const value = @field(attribs, fld_name);
+        try writeAttribute(writer, fld_name, value);
     }
 
     switch (style) {

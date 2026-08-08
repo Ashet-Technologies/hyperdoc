@@ -69,7 +69,7 @@ pub const Block = union(enum) {
         content: []Span,
 
         pub const Level = enum(u2) {
-            pub const count: comptime_int = @typeInfo(@This()).@"enum".fields.len;
+            pub const count: comptime_int = @typeInfo(@This()).@"enum".field_names.len;
 
             h1 = 0,
             h2 = 1,
@@ -1709,7 +1709,7 @@ pub const SemanticAnalyzer = struct {
     };
 
     fn derive_attribute(sema: *SemanticAnalyzer, location: Parser.Location, old: Span.Attributes, overlay: AttribOverrides) !Span.Attributes {
-        comptime std.debug.assert(@typeInfo(Span.Attributes).@"struct".fields.len == @typeInfo(AttribOverrides).@"struct".fields.len);
+        comptime std.debug.assert(@typeInfo(Span.Attributes).@"struct".field_names.len == @typeInfo(AttribOverrides).@"struct".field_names.len);
 
         var new = old;
         if (overlay.lang) |lang| {
@@ -2352,22 +2352,26 @@ pub const SemanticAnalyzer = struct {
 
     fn get_attributes(sema: *SemanticAnalyzer, node: Parser.Node, comptime Attrs: type) error{ OutOfMemory, BadAttributes }!Attrs {
         const Fields = std.meta.FieldEnum(Attrs);
-        const fields = @typeInfo(Attrs).@"struct".fields;
+        const info = @typeInfo(Attrs).@"struct";
 
-        var required: std.EnumSet(Fields) = .initEmpty();
+        var required: std.EnumSet(Fields) = .empty;
 
         var attrs: Attrs = undefined;
-        inline for (fields) |fld| {
-            if (fld.default_value_ptr) |default_value_ptr| {
-                @field(attrs, fld.name) = @as(*const fld.type, @ptrCast(@alignCast(default_value_ptr))).*;
+        inline for (
+            info.field_names,
+            info.field_types,
+            info.field_attrs,
+        ) |fld_name, fld_type, fld_attrs| {
+            if (fld_attrs.default_value_ptr) |_| {
+                @field(attrs, fld_name) = fld_attrs.defaultValue(fld_type).?;
             } else {
-                @field(attrs, fld.name) = undefined;
-                required.insert(@field(Fields, fld.name));
+                @field(attrs, fld_name) = undefined;
+                required.insert(@field(Fields, fld_name));
             }
         }
 
         var any_invalid = false;
-        var found: std.EnumSet(Fields) = .initEmpty();
+        var found: std.EnumSet(Fields) = .empty;
         for (node.attributes.items) |attrib| {
             const key = attrib.name.text;
 
