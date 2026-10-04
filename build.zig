@@ -38,7 +38,7 @@ const www_dir: std.Build.InstallDir = .{ .custom = "www" };
 pub fn build(b: *std.Build) void {
     // Options:
     const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{ .preferred_optimize_mode = .ReleaseSafe });
+    const optimize = b.standardOptimizeOption(.{ .preferred_optimize_mode = .safe });
 
     // Targets:
     const run_step = b.step("run", "Run the app");

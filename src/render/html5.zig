@@ -928,7 +928,7 @@ fn formatIsoDate(value: hdoc.Date, buffer: []u8) RenderError![]const u8 {
 }
 
 fn writeTimeZone(writer: *std.Io.Writer, timezone: hdoc.TimeZoneOffset) RenderError!void {
-    const minutes = @intFromEnum(timezone);
+    const minutes = @backingInt(timezone);
     if (minutes == 0) {
         try writer.writeByte('Z');
         return;

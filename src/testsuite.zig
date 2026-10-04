@@ -1091,11 +1091,11 @@ test "Time.parse accepts ISO times with zones" {
 
     const fractional_hint = try hdoc.Time.parse("22:30:46.136", try .parse("+01:30"));
     try std.testing.expectEqual(@as(u20, 136_000), fractional_hint.microsecond);
-    try std.testing.expectEqual(@as(hdoc.TimeZoneOffset, @enumFromInt(90)), fractional_hint.timezone);
+    try std.testing.expectEqual(@as(hdoc.TimeZoneOffset, @fromBackingInt(90)), fractional_hint.timezone);
 
     const nanos = try hdoc.Time.parse("21:30:46.136797358-05:30", null);
     try std.testing.expectEqual(@as(u20, 136_797), nanos.microsecond);
-    try std.testing.expectEqual(@as(hdoc.TimeZoneOffset, @enumFromInt(-330)), nanos.timezone);
+    try std.testing.expectEqual(@as(hdoc.TimeZoneOffset, @fromBackingInt(-330)), nanos.timezone);
 
     try std.testing.expectError(error.InvalidValue, hdoc.Time.parse("21:30:46,1Z", null));
     try std.testing.expectError(error.MissingTimezone, hdoc.Time.parse("22:30:46", null));
@@ -1114,7 +1114,7 @@ test "DateTime.parse accepts ISO date-time" {
     try std.testing.expectEqual(@as(u6, 31), datetime.time.minute);
     try std.testing.expectEqual(@as(u6, 50), datetime.time.second);
     try std.testing.expectEqual(@as(u20, 130_000), datetime.time.microsecond);
-    try std.testing.expectEqual(@as(hdoc.TimeZoneOffset, @enumFromInt(60)), datetime.time.timezone);
+    try std.testing.expectEqual(@as(hdoc.TimeZoneOffset, @fromBackingInt(60)), datetime.time.timezone);
 
     try std.testing.expectError(error.InvalidValue, hdoc.DateTime.parse("2025-12-25 22:31:50Z", null));
 }

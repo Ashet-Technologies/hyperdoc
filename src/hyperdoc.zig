@@ -459,7 +459,7 @@ pub const TimeZoneOffset = enum(i32) {
         if (minute >= 60)
             return error.InvalidValue;
 
-        return @enumFromInt(@as(i32, sign) * (hour_pos * @as(i32, 60) + minute));
+        return @fromBackingInt(@as(i32, sign) * (hour_pos * @as(i32, 60) + minute));
     }
 
     pub fn parse(timezone: []const u8) error{InvalidValue}!TimeZoneOffset {
@@ -490,7 +490,7 @@ pub const TimeZoneOffset = enum(i32) {
         const zone_total: u16 = @as(u16, zone_hour) * 60 + zone_minute;
         const offset_minutes: i32 = sign * @as(i32, zone_total);
 
-        return @enumFromInt(offset_minutes);
+        return @fromBackingInt(offset_minutes);
     }
 };
 
@@ -2173,7 +2173,7 @@ pub const SemanticAnalyzer = struct {
         if (value.microsecond > 0) {
             writer.print(".{d:0>6}", .{value.microsecond}) catch unreachable;
         }
-        const minutes = @intFromEnum(value.timezone);
+        const minutes = @backingInt(value.timezone);
         if (minutes == 0) {
             writer.writeByte('Z') catch unreachable;
         } else {
@@ -2756,7 +2756,7 @@ pub const SemanticAnalyzer = struct {
 
     /// Computes the next index number for a heading of the given level:
     fn compute_next_heading(sema: *SemanticAnalyzer, node: Parser.Node, level: Block.Heading.Level) !Block.Heading.Index {
-        const index = @intFromEnum(level);
+        const index = @backingInt(level);
 
         const missing_parent: ?Block.Heading.Level = switch (level) {
             .h1 => null,
